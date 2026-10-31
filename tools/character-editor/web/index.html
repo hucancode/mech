@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Character editor</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <!-- Odin's wasm runtime and WebGPU bindings, from build/ (make web) -->
+  <script src="/odin.js"></script>
+  <script src="/wgpu.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</head>
+<body>
+  <header id="header"></header>
+  <aside id="sidebar"></aside>
+  <main id="stage">
+    <canvas id="canvas" tabindex="0" oncontextmenu="return false"></canvas>
+    <div id="status"></div>
+    <div id="viewport-tools"></div>
+  </main>
+  <aside id="inspector"></aside>
+  <section id="dock"></section>
+</body>
+</html>
