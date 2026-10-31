@@ -41,9 +41,13 @@ To put a character in the game, export it and copy the file into `assets/charact
 | dock span toggles (right end of the dock bar) | let the timeline or pose test run under the left panel, the right panel, or both; remembered |
 | Esc | clear the selection: the inspector shows the character's settings (Model, Rig) |
 | drag / scroll in the view | orbit / zoom |
+| click in the view (model, rig) | select the part and shape under the pointer |
+| W, E, R, T (model tab), or the tool buttons at the top right of the view | the view's handles: move, turn, size the selected shape; bolt the part onto its parent |
 
 - Number fields: type a value, use the arrow keys (shift for 10×), or drag the x/y/z label
   (shift for fine, alt for coarse).
+- Angles are shown and typed in **degrees**: shape rotations, and the ranges, driver ends and
+  pose values of channels a joint turns by. Files keep radians.
 - Exports are written by the engine's own writer, so copying one over an asset only diffs where
   you changed something.
 - Warnings from the engine (a key naming a channel the model lacks, and so on) collect under ⚠
@@ -54,20 +58,44 @@ To put a character in the game, export it and copy the file into `assets/charact
 - **Character settings** show in the inspector when nothing is selected (Esc clears the
   selection): name, stand-on-the-ground, and the materials joint hardware is painted in.
 - **Parts**: the part tree.
-  - **+ child** adds a part under the selection; **+ root** adds a free-standing one.
+  - **+ child** adds a part under the selection, bolted to the bottom face of its first shape and
+    sized from it; **+ root** adds a free-standing one.
+  - **⇋ mirror** copies the selected part's limb (from the topmost `l_`/`r_` part, or
+    `left`/`right`) to the other side of the body, replacing what is there. The copy gets the
+    other side's names and channels (made when missing), its drivers and legs, and keeps its rest
+    orientation (a left foot pointing ahead gives a right foot pointing ahead). Wedges, cones and
+    part cylinders that are not symmetric across the limb may need turning by hand.
+  - **kit** adds any part of any character (this one, those saved here and those in assets/),
+    with what hangs from it, under the selection: its joints, materials, channels, drivers and
+    legs come along, it can be scaled on the way in, and it bolts onto the face that best matches
+    where it hung before.
   - ⧉ duplicates a part without its children; ✕ deletes it and everything under it.
   - Drag a part onto another to hang it there, or onto "make root". The tree stays parents first.
 - **The selected part**:
-  - name (renaming updates its children) and parent
-  - its **joint** (a joint from the list, or fixed) and pivot-on-the-socket
+  - name (renaming updates its children), **scale** (grows or shrinks its shapes, its mount and
+    where its children bolt on, in one step) and parent
+  - its **joint** (a joint from the list, a **new** one from a preset sized to the parent's shape,
+    or fixed) and pivot-on-the-socket
   - its **socket** (a face on the parent, where the joint bolts on) and **mount** (its own face on
-    the joint), each a position plus normal and forward picked from the six axes
-  - its **shapes**: primitive, taper or top radius, material, position, rotation (radians) and
+    the joint), each a position plus normal and forward picked from the six axes. **snap to**
+    puts the socket on one of the six faces of a parent shape (the one it sits on is lit);
+    **inset** moves the next snap in toward the shape's centre.
+  - its **shapes**: primitive, taper or top radius, material, position, rotation (degrees) and
     size (the full extent; for round shapes x and z are the diameter)
-- **Joints**: the hardware joining parts. Kind (the axes it turns about are listed), and only the
-  fields that kind uses. Renaming carries through to the parts.
+- **Joints**: the hardware joining parts. **+** adds a hinge sized to the selected part. A
+  **preset** (hinge, elbow, shoulder, wrist, knuckle, ball, spin) sets the kind and proportions;
+  **size** scales every dimension at once; the raw fields are under "details". Renaming carries
+  through to the parts.
 - **Materials**: colour, metallic, roughness, emissive. Renaming carries through to shapes and
   hardware.
+
+**Handles in the view** edit the selected shape and part directly; a drag is one undo step:
+- **move** (W): arrows along the part's axes. Shift snaps to 0.01.
+- **turn** (E): rings about the part's axes. Shift turns in 15° steps.
+- **size** (R): boxes along the shape's own axes size it both ways from its centre; the middle box
+  sizes it all (drag right or up). Shift snaps to 0.01.
+- **socket** (T): a dot on each face of the parent's shapes that faces you; click one to bolt the
+  part there. The socket's face is lit, and a ring marks the socket.
 
 The view shows the character at rest; this tab has no dock. The selected part's shapes are
 outlined (the selected shape in white), with its frame drawn as RGB axes.
@@ -81,7 +109,7 @@ saved.
 
 - **A part**: a **bind** per axis its joint turns about (the joint is set in the Model tab). Pick a
   channel, and ±1 mirrors it on this side.
-- **Channels**: name, slider range (radians for angles), and the parts using it. Renaming carries
+- **Channels**: name, slider range (degrees for channels a joint turns by), and the parts using it. Renaming carries
   through the model and the open animation.
 - **Drivers**: target, source, the source range and what it maps to, clamp, with a preview of the
   mapping.
@@ -121,6 +149,6 @@ and is never saved.
 
 ## Not there yet
 
-- Picking parts in the 3D view, and rotate gizmos on joints.
+- Turning joints by dragging in the view (the pose test's sliders do it).
 - Onion skin and motion paths in the view (`trajectory` queries already answer them).
 - A graph editor for curves (they are read-only).

@@ -42,7 +42,12 @@ const ICONS = {
   export: `<path d="M12 15V3M7 8l5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>`,
   promote: `<path d="M12 3l3 3h-2v5h-2V6H9z" class="F"/><path d="M7 14h10l-5 7z"/>`,
   demote: `<path d="M12 21l3-3h-2v-5h-2v5H9z" class="F"/><path d="M7 10h10l-5-7z"/>`,
-  paint: `<path d="M12 3c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.5 12 3z"/>`,
+  move: `<path d="M12 3v18M3 12h18"/><path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>`,
+  rotate: `<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4h-4"/>`,
+  kit: `<rect x="3" y="8" width="18" height="12" rx="2"/><path d="M8 8V5h8v3M3 13h18M11 13v2h2v-2"/>`,
+  scale: `<rect x="4" y="11" width="9" height="9" rx="1"/><path d="M13 4h7v7M20 4l-8 8"/>`,
+  snap: `<rect x="4" y="12" width="16" height="8" rx="1"/><path d="M12 3v6M9 6l3 3 3-3"/>`,
+    paint: `<path d="M12 3c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0C6 10.6 8.5 7.5 12 3z"/>`,
   // the primitives
   BOX: `<path d="M12 4l7 4v8l-7 4-7-4V8z"/><path d="M12 12l7-4M12 12v8M12 12L5 8"/>`,
   WEDGE: `<path d="M3 18h18v-4L3 7z"/><path d="M3 18V7"/>`,

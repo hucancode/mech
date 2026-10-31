@@ -75,3 +75,17 @@ test_euler_round_trip :: proc(t: ^testing.T) {
     testing.expectf(t, d > 0.99999, "euler %v does not round-trip", e)
   }
 }
+
+// A shape's faces sit half its size out along its own (turned) axes.
+@(test)
+test_shape_faces :: proc(t: ^testing.T) {
+  s := Shape{position = {1, 2, 3}, size = {2, 4, 6}, rotation = {0, 0, math.PI / 2}}
+  f := shape_faces(s)
+  near :: proc(a, b: [3]f32) -> bool {return abs(a.x - b.x) + abs(a.y - b.y) + abs(a.z - b.z) < 1e-4}
+  // turned 90° about z, the shape's +x points along +y
+  testing.expect(t, near(f[0].normal, {0, 1, 0}))
+  testing.expect(t, near(f[0].position, {1, 3, 3}))
+  testing.expect(t, near(f[3].position, {3, 2, 3})) // -y side: 2 out along +x
+  testing.expect(t, near(f[4].position, {1, 2, 6}))
+}
+

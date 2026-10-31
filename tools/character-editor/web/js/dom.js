@@ -62,11 +62,18 @@ export function btn(label, onclick, o = {}) {
   return h("button", { class: `btn ${o.kind ?? ""} ${o.on ? "on" : ""}`, title: o.title, "aria-label": o.title, disabled: o.disabled, onclick }, label);
 }
 
+const DEG = 180 / Math.PI;
+
+/** radians kept to 5 places, as the files hold them @param {number} v */
+const rad = (v) => Math.round((v / DEG) * 1e5) / 1e5;
+
 /**
- * A number field: type a value (arrow keys step it), or drag the label to scrub.
- * @param {{value?: number, step?: number, min?: number, max?: number, label?: string, color?: string, digits?: number, onchange: (v: number) => void}} o
+ * A number field: type a value (arrow keys step it), or drag the label to scrub. With `deg`, the
+ * value is radians shown and typed in degrees (step, min and max are then in degrees too).
+ * @param {{value?: number, step?: number, min?: number, max?: number, label?: string, color?: string, digits?: number, deg?: boolean, onchange: (v: number) => void}} o
  */
 export function num(o) {
+  if (o.deg) return num({ ...o, deg: false, value: (o.value ?? 0) * DEG, step: o.step ?? 5, digits: o.digits ?? 2, onchange: (v) => o.onchange(rad(v)) });
   const step = o.step ?? 0.01;
   const digits = o.digits ?? 3;
   let value = o.value ?? 0;
@@ -128,14 +135,14 @@ const AXES = [
   ["z", "#5b9be5"],
 ];
 
-/** @param {{value?: number[], step?: number, digits?: number, onchange: (v: number[]) => void}} o */
+/** @param {{value?: number[], step?: number, digits?: number, deg?: boolean, onchange: (v: number[]) => void}} o */
 export function vec3(o) {
   const v = [...(o.value ?? [0, 0, 0])];
   return h(
     "div",
     { class: "vec3" },
     AXES.map(([label, color], i) =>
-      num({ label, color, step: o.step, digits: o.digits, value: v[i], onchange: (x) => ((v[i] = x), o.onchange([...v])) }),
+      num({ label, color, step: o.step, digits: o.digits, deg: o.deg, value: v[i], onchange: (x) => ((v[i] = x), o.onchange([...v])) }),
     ),
   );
 }
@@ -183,8 +190,9 @@ export function text(o) {
   return el;
 }
 
-/** A range with a number beside it. @param {{value?: number, min: number, max: number, onchange: (v: number) => void}} o */
+/** A range with a number beside it; `deg` as for num (min and max stay radians). @param {{value?: number, min: number, max: number, deg?: boolean, onchange: (v: number) => void}} o */
 export function slider(o) {
+  if (o.deg) return slider({ value: (o.value ?? 0) * DEG, min: o.min * DEG, max: o.max * DEG, onchange: (v) => o.onchange(rad(v)) });
   const step = (o.max - o.min) / 400;
   const range = /** @type {HTMLInputElement} */ (h("input", { type: "range", min: o.min, max: o.max, step, value: o.value ?? 0 }));
   const box = h("div", { class: "slider" }, range);

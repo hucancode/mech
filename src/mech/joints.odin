@@ -54,28 +54,18 @@ joint_mounts :: proc(j: Joint) -> (a, b: geometry.Face) {
   return {{0, reach(j), 0}, Y, X}, {{0, -reach(j), 0}, NEG_Y, X}
 }
 
-// joint_build bolts `j` onto `socket` of `parent`, adds a bone per degree of freedom bound to
-// `binds`, and returns the frame the child's `mount` face sits in.
-@(private)
-joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint, centered: bool, binds: [3]int, signs: [3]f32, mount: geometry.Face) -> Frame {
-  a, m := joint_mounts(j)
-  if centered do a.position, m.position = {}, {}
-  frame := Frame{parent.bone, geometry.transform_mul(parent.place, geometry.seat(socket, a))}
-  #partial switch j.kind {
-  case .HINGE, .HINGE_TWIST, .WRIST:
-    hinge_female(b, frame, j, j.disc_f)
-  case .PIN:
-    hinge_pin(b, frame, j)
-  case .BALL:
-    ball_female(b, frame, j)
-  }
-  dofs: [3]struct {
-    axis:   u8,
-    offset: [3]f32,
-    rest:   quaternion128,
-  }
+// Dof is one of a joint's degrees of freedom: a bone at `offset` in the previous one's frame (the
+// joint's frame for the first), turned by `rest`, then about its `axis` (0 x, 1 y, 2 z).
+Dof :: struct {
+  axis:   u8,
+  offset: [3]f32,
+  rest:   quaternion128,
+}
+
+// joint_dofs are a joint's degrees of freedom, in bind order.
+joint_dofs :: proc(j: Joint) -> (dofs: [3]Dof, count: int) {
   for &d in dofs do d.rest = linalg.QUATERNIONF32_IDENTITY
-  count := 1
+  count = 1
   switch j.kind {
   case .FIXED:
     count = 0
@@ -93,6 +83,25 @@ joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint,
   case .BALL:
     dofs[1].axis, dofs[2].axis, count = 1, 2, 3
   }
+  return
+}
+
+// joint_build bolts `j` onto `socket` of `parent`, adds a bone per degree of freedom bound to
+// `binds`, and returns the frame the child's `mount` face sits in.
+@(private)
+joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint, centered: bool, binds: [3]int, signs: [3]f32, mount: geometry.Face) -> Frame {
+  a, m := joint_mounts(j)
+  if centered do a.position, m.position = {}, {}
+  frame := Frame{parent.bone, geometry.transform_mul(parent.place, geometry.seat(socket, a))}
+  #partial switch j.kind {
+  case .HINGE, .HINGE_TWIST, .WRIST:
+    hinge_female(b, frame, j, j.disc_f)
+  case .PIN:
+    hinge_pin(b, frame, j)
+  case .BALL:
+    ball_female(b, frame, j)
+  }
+  dofs, count := joint_dofs(j)
   if count == 0 do return {parent.bone, geometry.transform_mul(frame.place, geometry.seat(m, mount))}
   bones: [3]int
   for d, i in dofs[:count] {

@@ -4,7 +4,7 @@
 import { btn, check, h, list, num, row, section, select, text } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { DOFS, renameChannel, uniqueName } from "../model.js";
+import { angularChannels, DOFS, renameChannel, uniqueName } from "../model.js";
 import { partTree } from "./partTree.js";
 
 /** @param {any} kind @param {number} i */
@@ -91,6 +91,7 @@ export function rigInspector() {
   const channels = (m.channels ?? []).map((/** @type {any} */ c) => c.name);
   /** @param {() => void} change @param {string} [key] */
   const edit = (change, key) => editor.edit("model", change, key);
+  const angular = angularChannels(m);
 
   if (editor.inspect === "part" && m.parts?.[editor.part]) {
     const part = m.parts[editor.part];
@@ -121,16 +122,23 @@ export function rigInspector() {
 
   if (editor.inspect === "channel" && m.channels?.[editor.channel]) {
     const c = m.channels[editor.channel];
+    const deg = angular.has(c.name);
     const users = (m.parts ?? []).filter((/** @type {any} */ p) => p.binds?.some((/** @type {any} */ b) => b.channel === c.name)).map((/** @type {any} */ p) => p.name);
     return section("Channel", [
       row("name", text({ value: c.name, onchange: (v) => editor.edit("both", () => (renameChannel(m, editor.anim, c.name, v), (c.name = v))) }), "renames carry through the model and the open animation"),
-      row("slider range", [num({ value: c.min ?? 0, step: 0.05, digits: 4, onchange: (v) => edit(() => (c.min = v), "min") }), num({ value: c.max ?? 0, step: 0.05, digits: 4, onchange: (v) => edit(() => (c.max = v), "max") })]),
+      row(
+        "slider range",
+        [num({ value: c.min ?? 0, step: deg ? 5 : 0.05, digits: 4, deg, onchange: (v) => edit(() => (c.min = v), "min") }), num({ value: c.max ?? 0, step: deg ? 5 : 0.05, digits: 4, deg, onchange: (v) => edit(() => (c.max = v), "max") })],
+        deg ? "degrees (a joint turns by it)" : "channel units (nothing binds it to a joint)",
+      ),
       row("used by", h("span", { class: "tag" }, users.join(", ") || "nothing")),
     ]);
   }
 
   if (editor.inspect === "driver" && m.drivers?.[editor.driver]) {
     const d = m.drivers[editor.driver];
+    const degFrom = angular.has(d.source);
+    const degTo = angular.has(d.target);
     /** @param {"from" | "to"} key @param {number} k @param {number} v */
     const setPair = (key, k, v) => edit(() => ((d[key] ??= [0, 1]), (d[key][k] = v)), key);
     return section(
@@ -138,8 +146,8 @@ export function rigInspector() {
       [
         row("target", select({ value: d.target, none: "(none)", options: channels, onchange: (v) => edit(() => (d.target = v)) })),
         row("source", select({ value: d.source, none: "(none)", options: channels, onchange: (v) => edit(() => (d.source = v)) })),
-        row("source from", [num({ value: d.from?.[0] ?? 0, step: 0.05, onchange: (v) => setPair("from", 0, v) }), num({ value: d.from?.[1] ?? 1, step: 0.05, onchange: (v) => setPair("from", 1, v) })]),
-        row("maps to", [num({ value: d.to?.[0] ?? 0, step: 0.05, digits: 4, onchange: (v) => setPair("to", 0, v) }), num({ value: d.to?.[1] ?? 1, step: 0.05, digits: 4, onchange: (v) => setPair("to", 1, v) })]),
+        row("source from", [0, 1].map((k) => num({ value: d.from?.[k] ?? k, step: degFrom ? 5 : 0.05, digits: 4, deg: degFrom, onchange: (v) => setPair("from", k, v) }))),
+        row("maps to", [0, 1].map((k) => num({ value: d.to?.[k] ?? k, step: degTo ? 5 : 0.05, digits: 4, deg: degTo, onchange: (v) => setPair("to", k, v) }))),
         row("", check({ value: d.clamp, label: "clamp to the ends", onchange: (v) => edit(() => (d.clamp = v)) })),
         driverCurve(d),
       ],

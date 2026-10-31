@@ -158,14 +158,16 @@ class Editor {
 
   /**
    * edit changes the model, the animation or both in `change`. Edits with the same `coalesce`
-   * key in quick succession (a drag, a slider) make one undo step.
+   * key in quick succession (a drag, a slider) make one undo step; a key starting "drag:" makes
+   * one step however slow the drag (give each drag its own key).
    * @param {"model" | "anim" | "both"} what
    * @param {() => void} change
    * @param {string} [coalesce]
    */
   edit(what, change, coalesce = "") {
     const now = performance.now();
-    if (!coalesce || coalesce !== this.lastEdit.key || now - this.lastEdit.at > 1000) {
+    const same = !!coalesce && coalesce === this.lastEdit.key && (coalesce.startsWith("drag:") || now - this.lastEdit.at <= 1000);
+    if (!same) {
       this.undoStack.push(this.snapshot());
       if (this.undoStack.length > 300) this.undoStack.shift();
       this.redoStack = [];
@@ -275,6 +277,23 @@ class Editor {
       this.emit("time");
     }
     requestAnimationFrame(() => this.tick());
+  }
+
+  /**
+   * ask puts the latest data in the viewer and asks it a query (src/viewer/query.odin); null
+   * without a viewer or on an error.
+   * @param {Record<string, any>} q
+   */
+  ask(q) {
+    if (!this.viewer) return null;
+    this.sync();
+    const answer = this.viewer.query(q);
+    return answer?.error ? null : answer;
+  }
+
+  /** faces of each of a part's shapes, in its frame (the "faces" query) @param {string} part @returns {import("./model.js").Face[][]} */
+  faces(part) {
+    return this.ask({ q: "faces", part })?.shapes ?? [];
   }
 
   // shown is the channels as the viewer shows them now (after drivers and leg IK).

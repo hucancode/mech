@@ -3,11 +3,13 @@
 // game's own code in wasm (see viewer.js). This file lays out the page and wires the shortcuts:
 //   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 tabs
 //   Esc back to the character's settings (model and rig tabs)    H isolate the selected part (model tab)    I show/hide the inspector
+//   W E R T move, rotate, scale a shape, place the socket (model tab; see gizmo.js)    click the view to pick
 //   space play/pause   Delete delete keys  Cmd/Ctrl-C/V/D copy, paste, duplicate keys   F frame
 import { btn, h, ui } from "./dom.js";
 import { icon } from "./icons.js";
 import { inspectorButton, refit, toggleInspector } from "./layout.js";
 import { editor } from "./editor.js";
+import { gizmo, install as installGizmo, setMode } from "./gizmo.js";
 import { animInspector, animSidebar } from "./panels/animation.js";
 import { modelInspector, modelSidebar } from "./panels/model.js";
 import { poseTest } from "./panels/poseTest.js";
@@ -150,6 +152,15 @@ editor.on((what) => {
   render();
 });
 
+/** @type {Record<string, import("./gizmo.js").Mode>} */
+const GIZMO_KEYS = { w: "move", e: "rotate", r: "scale", t: "socket" };
+const GIZMO_TOOLS = /** @type {[import("./gizmo.js").Mode, string, string][]} */ ([
+  ["move", "move", "Move the shape (W)"],
+  ["rotate", "rotate", "Turn the shape (E)"],
+  ["scale", "scale", "Size the shape (R)"],
+  ["socket", "snap", "Bolt the part onto a face of its parent (T)"],
+]);
+
 window.addEventListener("keydown", (e) => {
   const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement;
   const cmd = e.metaKey || e.ctrlKey;
@@ -178,6 +189,9 @@ window.addEventListener("keydown", (e) => {
     viewportTools();
   } else if (!cmd && key === "h" && editor.tab === "model") {
     editor.toggleIsolate();
+  } else if (!cmd && editor.tab === "model" && GIZMO_KEYS[key]) {
+    setMode(GIZMO_KEYS[key]);
+    viewportTools();
   } else if (!cmd && key === "f") {
     editor.viewer?.frame();
   } else if (editor.tab === "animation") {
@@ -221,6 +235,13 @@ function explodeSlider() {
 function viewportTools() {
   $("viewport-tools").replaceChildren(
     h("div", { style: { display: "contents" } }, editor.tab === "model" && [
+      h(
+        "div",
+        { class: "tool-group" },
+        GIZMO_TOOLS.map(([mode, ic, title]) =>
+          btn(icon(ic), () => (setMode(mode), viewportTools()), { on: gizmo.mode === mode, title }),
+        ),
+      ),
       editor.isolate && explodeSlider(),
       btn(icon("isolate"), () => editor.toggleIsolate(), {
         on: editor.isolate,
@@ -233,6 +254,7 @@ function viewportTools() {
 }
 viewportTools();
 render();
+installGizmo();
 editor.start();
 // for the browser console: editor.viewer.query({q: "info"}) and so on
 /** @type {any} */ (window).editor = editor;

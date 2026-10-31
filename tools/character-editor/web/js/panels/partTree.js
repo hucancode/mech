@@ -4,7 +4,8 @@
 import { btn, h, section } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { clone, depth, newPart, partIndex, reparent, subtreeEnd, uniqueName } from "../model.js";
+import { clone, depth, mirrorName, mirrorRoot, mirrorSubtree, newPart, partIndex, reparent, subtreeEnd, uniqueName } from "../model.js";
+import { openKit } from "../kit.js";
 
 /** @param {string} title */
 export function partTree(title) {
@@ -20,16 +21,32 @@ export function partTree(title) {
       editor.inspect = "part";
     });
   /** @param {boolean} child */
-  const add = (child) =>
+  const add = (child) => {
+    const parent = child && editor.part >= 0 ? m.parts[editor.part] : undefined;
+    const faces = parent ? editor.faces(parent.name)[0] : undefined;
     editor.edit("model", () => {
       m.parts ??= [];
-      const parent = child && editor.part >= 0 ? m.parts[editor.part] : undefined;
       const at = parent ? subtreeEnd(m, editor.part) : m.parts.length;
-      m.parts.splice(at, 0, newPart(m, parent));
+      m.parts.splice(at, 0, newPart(m, parent, faces));
       editor.part = at;
       editor.shape = 0;
       editor.inspect = "part";
     });
+  };
+  const root = editor.part >= 0 ? mirrorRoot(m, editor.part) : -1;
+  const mirror = () => {
+    const i = root;
+    const other = mirrorName(parts[i].name);
+    const there = other ? partIndex(m, other) : -1;
+    if (there >= 0 && !confirm(`Replace ${other} and the ${subtreeEnd(m, there) - there - 1} parts under it with a mirror of ${parts[i].name}?`)) return;
+    const joints = editor.ask({ q: "joints" });
+    if (!joints) return editor.flash(`Could not mirror ${parts[i].name}: the viewer has no model`);
+    editor.edit("model", () => {
+      editor.part = mirrorSubtree(m, i, joints);
+      editor.inspect = "part";
+    });
+    editor.flash(`Mirrored ${parts[i].name} to ${m.parts[editor.part].name}`);
+  };
   const duplicate = () =>
     editor.edit("model", () => {
       const i = editor.part;
@@ -86,6 +103,12 @@ export function partTree(title) {
     actions: [
       btn(icon("child"), () => add(true), { kind: "icon", title: "Add a part under the selection" }),
       btn(icon("plus"), () => add(false), { kind: "icon", title: "Add a root part" }),
+      btn(icon("mirror"), mirror, {
+        kind: "icon",
+        title: root >= 0 ? `Mirror ${parts[root].name} and what hangs from it to the other side (replaces ${mirrorName(parts[root].name)})` : "Mirror to the other side: select a part named l_… or r_… (left/right)",
+        disabled: root < 0,
+      }),
+      btn(icon("kit"), () => openKit(), { kind: "icon", title: "Add parts from a kit: any part of any character, with what hangs from it" }),
       btn(icon("copy"), duplicate, { kind: "icon", title: "Duplicate the selected part", disabled: editor.part < 0 }),
       btn(icon("trash"), remove, { kind: "icon", title: "Delete the selected part and what hangs from it", disabled: editor.part < 0 || parts.length <= 1 }),
     ],

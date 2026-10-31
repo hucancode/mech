@@ -205,6 +205,21 @@ euler :: proc(r: [3]f32) -> quaternion128 {
   return linalg.normalize(qx * qy * qz)
 }
 
+// shape_faces are the centres of a shape's six faces with their outward normals, in its part's
+// frame: +x, -x, +y, -y, +z, -z of the shape's own axes. Round shapes use their bounding box.
+// Editors snap sockets to them.
+shape_faces :: proc(s: Shape) -> (faces: [6]geometry.Face) {
+  q := euler(s.rotation)
+  for &f, i in faces {
+    axis: [3]f32
+    axis[i / 2] = 1 if i % 2 == 0 else -1
+    n := linalg.quaternion_mul_vector3(q, axis)
+    f.position = s.position + n * s.size[i / 2] / 2
+    f.normal = n
+  }
+  return
+}
+
 // euler_from is euler's inverse, in radians.
 euler_from :: proc(q: quaternion128) -> [3]f32 {
   m := linalg.matrix3_from_quaternion_f32(q)

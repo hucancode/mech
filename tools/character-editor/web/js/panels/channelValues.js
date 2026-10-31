@@ -5,7 +5,7 @@
 import { btn, h, select, slider } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { channelRange, drivenChannels, groupChannels } from "../model.js";
+import { angularChannels, channelRange, drivenChannels, groupChannels } from "../model.js";
 
 /** @type {Set<string>} groups the user folded */
 const folded = new Set();
@@ -17,6 +17,7 @@ const folded = new Set();
 export function channelValues(values, o) {
   const channels = editor.model.channels ?? [];
   const driven = drivenChannels(editor.model);
+  const angular = angularChannels(editor.model);
   const shown = o.full ? channels.filter((/** @type {any} */ c) => !driven.has(c.name)) : channels.filter((/** @type {any} */ c) => values && c.name in values);
   const out = [];
   for (const [group, list] of groupChannels(shown)) {
@@ -29,7 +30,7 @@ export function channelValues(values, o) {
           "div",
           { class: "channel", style: o.onremove ? undefined : { gridTemplateColumns: "110px 1fr" } },
           h("span", { class: "name", title: c.name }, c.name),
-          slider({ value: values?.[c.name] ?? 0, min: lo, max: hi, onchange: (v) => o.onset(c.name, v) }),
+          slider({ value: values?.[c.name] ?? 0, min: lo, max: hi, deg: angular.has(c.name), onchange: (v) => o.onset(c.name, v) }),
           o.onremove && btn(icon("x", 14), () => o.onremove?.(c.name), { kind: "icon", title: "Remove from this key" }),
         );
       }),

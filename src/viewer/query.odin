@@ -7,6 +7,8 @@ import "core:math"
 import "core:strings"
 import "../character"
 import "../mech"
+import "../mjolnir/geometry"
+import "../mjolnir/render"
 
 // Queries let the page ask the engine questions: what a clip gives at any time, where parts would
 // be, what the model holds. A query is JSON in, JSON out; every answer comes from the same code the
@@ -26,6 +28,20 @@ import "../mech"
 //     a part's world position over a clip: motion paths, foot slide
 //   {"q": "bounds", "clip": .., "time": ..}
 //     the box around the posed model
+//   {"q": "faces", "part": "torso"}
+//     the six faces of each of the part's shapes ({position, normal} in the part's frame, model
+//     units; +x, -x, +y, -y, +z, -z of the shape's axes), for snapping sockets
+//   {"q": "project", "points": [[x, y, z], ..]}
+//     where world points show on the canvas (CSS pixels from its corner), null behind the
+//     camera: {points: [[x, y] | null, ..]}, for drawing over the view
+//   {"q": "pick", "x": 120, "y": 80}
+//     the nearest shown piece under a point of the canvas (CSS pixels from its corner):
+//     {part, shape} as indices, shape -1 for joint hardware, both -1 for nothing
+//   {"q": "joints"}
+//     each joint's geometry, by name ("" is no joint, FIXED): the face it bolts to the socket with
+//     (female) and the face the part's mount bolts to (male), in the joint's frame, and its
+//     degrees of freedom in bind order: {axis: 0 x | 1 y | 2 z, offset, rest: [x, y, z, w]},
+//     each bone placed in the previous one's frame (the joint's for the first)
 //   {"q": "info"}
 //     counts, clips, and channels nothing moves
 // Units: channel values as they are (radians for angles), world positions in metres, rotations as
@@ -42,6 +58,8 @@ Query :: struct {
   part:     string,
   parts:    []string,
   solved:   bool,
+  x, y:     f32,
+  points:   [][3]f32,
 }
 
 query :: proc(text: []u8, allocator := context.allocator) -> string {
@@ -54,6 +72,17 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
   }
   if q.q == "state" {
     state(&b)
+    return strings.to_string(b)
+  }
+  if q.q == "project" {
+    strings.write_string(&b, `{"points":[`)
+    for p, i in q.points {
+      if i > 0 do strings.write_byte(&b, ',')
+      at, ok := render.world_to_screen(&app.renderer, p)
+      if ok do fmt.sbprintf(&b, "[%v,%v]", at.x, at.y)
+      else do strings.write_string(&b, "null")
+    }
+    strings.write_string(&b, "]}")
     return strings.to_string(b)
   }
   if q.q == "info" {
@@ -145,6 +174,33 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       fmt.sbprintf(&b, "[%v,%v,%v]", pos.x, pos.y, pos.z)
     }
     strings.write_string(&b, "]}")
+  case "pick":
+    part, shape := pick({q.x, q.y})
+    fmt.sbprintf(&b, `{{"part":%d,"shape":%d}}`, part, shape)
+  case "faces":
+    part := mech.model_part(m, q.part)
+    if part < 0 do return fail(&b, "no part %s", q.part)
+    strings.write_string(&b, `{"shapes":[`)
+    for s, k in m.parts[part].shapes {
+      if k > 0 do strings.write_byte(&b, ',')
+      strings.write_byte(&b, '[')
+      for f, i in mech.shape_faces(s) {
+        if i > 0 do strings.write_byte(&b, ',')
+        p, n := f.position, f.normal
+        fmt.sbprintf(&b, `{{"position":[%v,%v,%v],"normal":[%v,%v,%v]}}`, p.x, p.y, p.z, n.x, n.y, n.z)
+      }
+      strings.write_byte(&b, ']')
+    }
+    strings.write_string(&b, "]}")
+  case "joints":
+    strings.write_byte(&b, '{')
+    for j, k in m.joints {
+      if k > 0 do strings.write_byte(&b, ',')
+      write_joint(&b, j.name, j)
+    }
+    if len(m.joints) > 0 do strings.write_byte(&b, ',')
+    write_joint(&b, "", {}) // no joint: FIXED
+    strings.write_byte(&b, '}')
   case "bounds":
     solve_at(clip, q.time, values)
     lo, hi := mech.rig_bounds(rig)
@@ -201,6 +257,37 @@ pick_channels :: proc(names: []string) -> (picked: []int, ok: bool) {
 contains :: proc(list: []string, s: string) -> bool {
   for x in list do if x == s do return true
   return false
+}
+
+@(private = "file")
+write_joint :: proc(b: ^strings.Builder, name: string, j: mech.Joint) {
+  female, male := mech.joint_mounts(j)
+  fmt.sbprintf(b, `%q:{{"female":`, name)
+  write_face(b, female)
+  strings.write_string(b, `,"male":`)
+  write_face(b, male)
+  strings.write_string(b, `,"dofs":[`)
+  dofs, count := mech.joint_dofs(j)
+  for &d, i in dofs[:count] {
+    if i > 0 do strings.write_byte(b, ',')
+    r := d.rest
+    fmt.sbprintf(b, `{{"axis":%d,"offset":`, d.axis)
+    write_floats(b, d.offset[:])
+    fmt.sbprintf(b, `,"rest":[%v,%v,%v,%v]}}`, r.x, r.y, r.z, r.w)
+  }
+  strings.write_string(b, "]}")
+}
+
+@(private = "file")
+write_face :: proc(b: ^strings.Builder, f: geometry.Face) {
+  p, n, w := f.position, f.normal, f.forward
+  fmt.sbprintf(b, `{{"position":`)
+  write_floats(b, p[:])
+  strings.write_string(b, `,"normal":`)
+  write_floats(b, n[:])
+  strings.write_string(b, `,"forward":`)
+  write_floats(b, w[:])
+  strings.write_byte(b, '}')
 }
 
 @(private = "file")

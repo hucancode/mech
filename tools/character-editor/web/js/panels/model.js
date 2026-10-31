@@ -3,7 +3,26 @@
 import { btn, check, color, face, h, list, num, row, section, select, slider, text, vec3 } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { clone, DOFS, JOINT_KINDS, partIndex, PRIMITIVES, renameJoint, renameMaterial, renamePart, uniqueName } from "../model.js";
+import {
+  clone,
+  DOFS,
+  FACE_NAMES,
+  JOINT_KINDS,
+  JOINT_PRESETS,
+  jointPreset,
+  jointSize,
+  jointSizeFor,
+  partIndex,
+  PRIMITIVES,
+  renameJoint,
+  renameMaterial,
+  renamePart,
+  scaleJoint,
+  scalePart,
+  snapSocket,
+  socketFace,
+  uniqueName,
+} from "../model.js";
 import { partTree } from "./partTree.js";
 
 /** @param {number[] | undefined} c */
@@ -27,6 +46,21 @@ const BALL_FIELDS = [
   ["flange_t", "flange thickness"],
 ];
 
+/** addPreset adds a joint from a preset, sized (0: as the preset is), and returns its index. @param {any} m @param {string} preset @param {number} size */
+function addPreset(m, preset, size) {
+  m.joints ??= [];
+  const name = uniqueName(preset, (n) => m.joints.some((/** @type {any} */ x) => x.name === n));
+  m.joints.push({ name, ...jointPreset(preset, size) });
+  return m.joints.length - 1;
+}
+
+const PRESET_NAMES = Object.keys(JOINT_PRESETS);
+
+/** the inset of the last snap, 0 (on the face) to 1 (at the shape's centre) */
+let snapInset = 0;
+/** the slider's factor already applied while scaling a part */
+let scaled = 1;
+
 export function modelSidebar() {
   const m = editor.model;
   const addMaterial = () =>
@@ -38,10 +72,7 @@ export function modelSidebar() {
     });
   const addJoint = () =>
     editor.edit("model", () => {
-      m.joints ??= [];
-      const name = uniqueName("joint", (n) => m.joints.some((/** @type {any} */ x) => x.name === n));
-      m.joints.push({ name, kind: "HINGE", jaw: 0.12, lug_t: 0.06, lug_d: 0.24, shank: 0.12, flange_t: 0.16, pin_r: 0.05, clr: 0.01 });
-      editor.joint = m.joints.length - 1;
+      editor.joint = addPreset(m, "hinge", jointSizeFor(m.parts?.[editor.part]));
       editor.inspect = "joint";
     });
   return [
@@ -89,21 +120,35 @@ export function modelInspector() {
   if (editor.inspect === "joint" && m.joints?.[editor.joint]) {
     const j = m.joints[editor.joint];
     const fields = j.kind === "BALL" ? BALL_FIELDS : j.kind && j.kind !== "FIXED" && j.kind !== "SPIN" ? HINGE_FIELDS : [];
+    const size = jointSize(j);
+    const users = (m.parts ?? []).filter((/** @type {any} */ p) => p.joint === j.name).map((/** @type {any} */ p) => p.name);
     return [
       section("Joint", [
         row("name", text({ value: j.name, onchange: (v) => edit(() => (renameJoint(m, j.name, v), (j.name = v))) })),
+        row(
+          "preset",
+          select({ value: "", none: "(set from a preset…)", options: PRESET_NAMES, onchange: (v) => v && edit(() => Object.assign(j, Object.fromEntries(Object.keys(j).filter((k) => k !== "name").map((k) => [k, undefined])), jointPreset(v, size))) }),
+          "the preset's kind and proportions, at this joint's size",
+        ),
+        size > 0 &&
+          row(
+            "size",
+            slider({ value: size, min: 0.02, max: Math.max(1, size * 2), onchange: (v) => edit(() => scaleJoint(j, v / jointSize(j)), "joint-size") }),
+            j.kind === "BALL" ? "the ball's diameter; every size follows" : j.kind === "PIN" ? "the gap the pin spans; every size follows" : "the lugs' diameter; every size follows",
+          ),
         row("kind", select({ value: j.kind ?? "FIXED", options: JOINT_KINDS, onchange: (v) => edit(() => (j.kind = v)) })),
         row("axes", h("span", null, DOFS[j.kind ?? "FIXED"].join(", ") || "none")),
+        row("used by", h("span", { class: "tag" }, users.join(", ") || "nothing")),
       ]),
       fields.length > 0 &&
-        section(j.kind === "BALL" ? "Ball" : "Hinge", [
+        section(j.kind === "BALL" ? "Ball details" : "Hinge details", [
           fields.map(([key, hint]) => row(key, num({ value: j[key] ?? 0, min: 0, step: key === "clr" || key === "pin_out" ? 0.002 : 0.01, onchange: (v) => edit(() => (j[key] = v), key) }), hint)),
           j.kind !== "BALL" && [
             row("", check({ value: j.tang, label: "solid male lug (tang)", onchange: (v) => edit(() => (j.tang = v)) })),
             row("", check({ value: j.disc_f, label: "round female base", onchange: (v) => edit(() => (j.disc_f = v)) })),
             row("", check({ value: j.disc_m, label: "round male base", onchange: (v) => edit(() => (j.disc_m = v)) })),
           ],
-        ]),
+        ], { open: false }),
     ];
   }
 
@@ -122,6 +167,7 @@ export function modelInspector() {
   }
 
   const i = editor.part;
+  scaled = 1;
   const shapes = part.shapes ?? [];
   const shape = shapes[editor.shape];
   /** @param {(s: any) => void} change @param {string} [key] */
@@ -143,6 +189,20 @@ export function modelInspector() {
     section("Part", [
       row("name", text({ value: part.name, onchange: (v) => edit(() => (renamePart(m, part.name, v), (part.name = v))) })),
       row(
+        "scale",
+        slider({
+          value: 1,
+          min: 0.25,
+          max: 2,
+          onchange: (v) =>
+            edit(() => {
+              scalePart(m, i, v / scaled);
+              scaled = v;
+            }, "scale-part"),
+        }),
+        "grow or shrink the part: its shapes, its mount and where its children bolt on",
+      ),
+      row(
         "parent",
         select({ value: part.parent, none: "(root)", options: m.parts.slice(0, i).map((/** @type {any} */ p) => p.name), onchange: (v) => edit(() => (v ? (part.parent = v) : delete part.parent)) }),
         "parts hang from earlier parts; drag in the tree to move a part anywhere",
@@ -151,12 +211,26 @@ export function modelInspector() {
   ];
   out.push(
     section("Joint", [
-      row("joint", select({ value: part.joint, none: "(fixed, no hardware)", options: (m.joints ?? []).map((/** @type {any} */ j) => j.name), onchange: (v) => edit(() => (v ? (part.joint = v) : delete part.joint)) })),
+      row(
+        "joint",
+        select({
+          value: part.joint,
+          none: "(fixed, no hardware)",
+          options: [["joints", (m.joints ?? []).map((/** @type {any} */ j) => j.name)], ["new joint for this part", PRESET_NAMES.map((n) => `new ${n}`)]],
+          onchange: (v) =>
+            edit(() => {
+              if (v.startsWith("new ")) part.joint = m.joints[addPreset(m, v.slice(4), jointSizeFor(m.parts[partIndex(m, part.parent)]) || jointSizeFor(part))].name;
+              else if (v) part.joint = v;
+              else delete part.joint;
+            }),
+        }),
+        "a new joint is sized to the parent's shape",
+      ),
       partIndex(m, part.parent) >= 0 && row("", check({ value: part.centered, label: "pivot on the socket", onchange: (v) => edit(() => (part.centered = v)) })),
     ]),
   );
   if (partIndex(m, part.parent) >= 0) {
-    out.push(section("Socket (on the parent)", face({ value: part.socket, onchange: (f) => edit(() => (part.socket = f), "socket") })));
+    out.push(section("Socket (on the parent)", [snapRow(part), face({ value: part.socket, onchange: (f) => edit(() => (part.socket = f), "socket") })]));
     out.push(section("Mount (this part's face)", face({ value: part.mount, onchange: (f) => edit(() => (part.mount = f), "mount") })));
   }
   const fields = shape
@@ -168,7 +242,7 @@ export function modelInspector() {
           row(shape.primitive === "WEDGE" ? "taper" : "top radius", slider({ value: shape.param, min: 0, max: 1, onchange: (v) => setShape((s) => (s.param = v), "param") })),
         row("material", select({ value: shape.material, options: names, onchange: (v) => setShape((s) => (s.material = v)) })),
         row("position", vec3({ value: shape.position, onchange: (v) => setShape((s) => (s.position = v), "position") })),
-        row("rotation", vec3({ value: shape.rotation, step: 0.05, digits: 4, onchange: (v) => setShape((s) => (s.rotation = v), "rotation") }), "radians: x, then y, then z"),
+        row("rotation", vec3({ value: shape.rotation, step: 1, deg: true, onchange: (v) => setShape((s) => (s.rotation = v), "rotation") }), "degrees: x, then y, then z"),
         row("size", vec3({ value: shape.size, onchange: (v) => setShape((s) => (s.size = v), "size") }), "full extent; round shapes: x and z are the diameter"),
       )
     : null;
@@ -201,4 +275,47 @@ export function modelInspector() {
     ),
   );
   return out;
+}
+
+/**
+ * snapRow puts the socket on a face of one of the parent's shapes: pick the shape, then the face;
+ * "inset" moves it in toward the shape's centre. The face it sits on now is lit.
+ * @param {any} part
+ */
+function snapRow(part) {
+  const m = editor.model;
+  const parent = m.parts[partIndex(m, part.parent)];
+  const all = editor.faces(parent.name);
+  if (!all.length) return null;
+  let at = all.findIndex((faces) => socketFace(part.socket, faces) >= 0);
+  const shape = { k: Math.max(0, at) };
+  const pick = (/** @type {number} */ f) =>
+    editor.edit("model", () => {
+      const s = parent.shapes[shape.k];
+      part.socket = snapSocket(part.socket, all[shape.k][f], s.position ?? [0, 0, 0], snapInset);
+    });
+  const faces = h("div", { class: "snap" });
+  const fill = () =>
+    faces.replaceChildren(
+      ...FACE_NAMES.map((name, f) =>
+        btn(name, () => pick(f), { on: at === shape.k && socketFace(part.socket, all[shape.k]) === f, title: `Put the socket on the ${name} face of ${parent.name}'s shape ${shape.k + 1}` }),
+      ),
+    );
+  fill();
+  return [
+    row(
+      "snap to",
+      [
+        all.length > 1 &&
+          select({
+            value: String(shape.k + 1),
+            options: all.map((_, k) => String(k + 1)),
+            onchange: (v) => ((shape.k = +v - 1), fill()),
+          }),
+        faces,
+      ],
+      `a face of ${parent.name}'s shape${all.length > 1 ? " (pick which)" : ""}`,
+    ),
+    row("inset", slider({ value: snapInset, min: 0, max: 1, onchange: (v) => (snapInset = v) }), "used by the next snap: 0 on the face, 1 at the shape's centre"),
+  ];
 }

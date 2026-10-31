@@ -358,6 +358,42 @@ outline :: proc() {
   }
 }
 
+// pick is the nearest piece under the cursor (CSS pixels from the canvas corner), of those
+// shown: its part, and its shape (-1 for joint hardware); -1, -1 when nothing is there. Pieces
+// are hit as their boxes.
+pick :: proc(cursor: [2]f32) -> (part, shape: int) {
+  part, shape = -1, -1
+  if !app.has_mech do return
+  ray, ok := render.cursor_ray(&app.renderer, cursor)
+  if !ok do return
+  rig := character.mech_rig(&app.mech)
+  s := app.asset.model.scale
+  best := f32(math.F32_MAX)
+  for p, i in rig.pieces {
+    if isolating() && !isolated(p) do continue
+    x := piece_shown(rig, i)
+    half := mech.primitive_corners(p.primitive)[7] * x.scale * s
+    // the ray in the box's frame, then the slabs
+    inv := linalg.quaternion_inverse(x.rotation)
+    o := linalg.quaternion_mul_vector3(inv, ray.origin - x.position * s)
+    d := linalg.quaternion_mul_vector3(inv, ray.direction)
+    near, far := f32(0), best
+    for k in 0 ..< 3 {
+      if abs(d[k]) < 1e-8 {
+        if abs(o[k]) > half[k] do near = far + 1
+        continue
+      }
+      t0, t1 := (-half[k] - o[k]) / d[k], (half[k] - o[k]) / d[k]
+      near, far = max(near, min(t0, t1)), min(far, max(t0, t1))
+    }
+    if near <= far && near < best {
+      best = near
+      part, shape = p.part, p.shape
+    }
+  }
+  return
+}
+
 // format_character is the shown character as file text.
 format_character :: proc() -> string {
   return mech.character_format(app.asset.model, app.asset.anim)
