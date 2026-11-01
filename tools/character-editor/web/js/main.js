@@ -1,16 +1,19 @@
 // @ts-check
-// The character editor: a model, its rig and its animation, edited in the browser and shown by the
-// game's own code in wasm (see viewer.js). This file lays out the page and wires the shortcuts:
-//   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 tabs
-//   Esc back to the character's settings (model and rig tabs)    H isolate the selected part (model tab)    I show/hide the inspector
-//   W E R T move, rotate, scale a shape, place the socket (model tab; see gizmo.js)    click the view to pick
+// The character editor: a model (its parts, and the assembly placing them), its rig and its
+// animation, edited in the browser and shown by the game's own code in wasm (see viewer.js). This
+// file lays out the page and wires the shortcuts:
+//   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 4 tabs
+//   Esc back to the character's settings (assemble and rig tabs)    I show/hide the inspector
+//   W E R T move, rotate, scale a shape, place slots (model tab; see gizmo.js)    click the view to pick
 //   space play/pause   Delete delete keys  Cmd/Ctrl-C/V/D copy, paste, duplicate keys   F frame
-import { btn, h, ui } from "./dom.js";
+import { btn, h, segmented, ui } from "./dom.js";
 import { icon } from "./icons.js";
 import { inspectorButton, refit, toggleInspector } from "./layout.js";
 import { editor } from "./editor.js";
 import { gizmo, install as installGizmo, setMode } from "./gizmo.js";
+import { install as installViewGizmo } from "./viewGizmo.js";
 import { animInspector, animSidebar } from "./panels/animation.js";
+import { assembleInspector, assembleSidebar } from "./panels/assemble.js";
 import { modelInspector, modelSidebar } from "./panels/model.js";
 import { poseTest } from "./panels/poseTest.js";
 import { rigInspector, rigSidebar } from "./panels/rig.js";
@@ -25,8 +28,9 @@ const status = $("status");
 const timeline = new Timeline();
 const TABS = /** @type {const} */ ([
   ["model", "Model"],
+  ["assemble", "Assemble"],
   ["rig", "Rig"],
-  ["animation", "Animation"],
+  ["animation", "Animate"],
 ]);
 
 let pending = false;
@@ -44,6 +48,9 @@ function render() {
   if (editor.tab === "model") {
     sidebar.replaceChildren(...[modelSidebar()].flat());
     inspector.replaceChildren(...[modelInspector()].flat().filter(Boolean));
+  } else if (editor.tab === "assemble") {
+    sidebar.replaceChildren(...[assembleSidebar()].flat());
+    inspector.replaceChildren(...[assembleInspector()].flat().filter(Boolean));
   } else if (editor.tab === "rig") {
     sidebar.replaceChildren(...[rigSidebar()].flat());
     inspector.replaceChildren(...[rigInspector()].flat().filter(Boolean));
@@ -79,14 +86,14 @@ function renderDock() {
     document.body.dataset.tab = editor.tab;
     refit();
   }
-  if (editor.tab === "model") return;
+  if (editor.tab === "model" || editor.tab === "assemble") return; // no dock: nothing to pose here
   if (editor.tab === "animation") {
-    if (dockTab !== "animation") dock.replaceChildren(resizer(), ...timeline.el);
+    if (dockTab !== "animation") dock.replaceChildren(...timeline.el);
     timeline.refresh();
   } else {
-    // the pose test's sliders hold their own state: rebuild them only when the model changes
-    const stamp = `${editor.tab}:${JSON.stringify(editor.model.channels ?? [])}:${JSON.stringify(editor.model.drivers ?? [])}:${Object.keys(editor.test).length}`;
-    if (dockTab !== stamp) dock.replaceChildren(resizer(), ...poseTest());
+    // the pose test (rig tab) keeps its sliders' state: rebuild it only when the model changes
+    const stamp = `pose:${JSON.stringify(editor.model.drivers ?? [])}:${Object.keys(editor.test).length}`;
+    if (dockTab !== stamp) dock.replaceChildren(...poseTest());
     dockTab = stamp;
     return;
   }
@@ -126,23 +133,6 @@ function renderHeader() {
   );
 }
 
-// a handle on the dock's top edge to resize it
-function resizer() {
-  const el = h("div", { class: "resize" });
-  el.addEventListener("pointerdown", (e) => {
-    el.setPointerCapture(e.pointerId);
-    const y0 = e.clientY;
-    const h0 = dock.getBoundingClientRect().height;
-    const move = (/** @type {PointerEvent} */ m) => {
-      document.body.style.setProperty("--dock", `${Math.max(120, Math.min(window.innerHeight - 200, h0 - (m.clientY - y0)))}px`);
-      refit();
-    };
-    el.addEventListener("pointermove", move);
-    el.addEventListener("pointerup", () => el.removeEventListener("pointermove", move), { once: true });
-  });
-  return el;
-}
-
 editor.on((what) => {
   if (what === "time") return timeline.tick();
   if (what === "status") {
@@ -153,12 +143,13 @@ editor.on((what) => {
 });
 
 /** @type {Record<string, import("./gizmo.js").Mode>} */
-const GIZMO_KEYS = { w: "move", e: "rotate", r: "scale", t: "socket" };
+const GIZMO_KEYS = { w: "move", e: "rotate", r: "scale", t: "slot", j: "joint" };
 const GIZMO_TOOLS = /** @type {[import("./gizmo.js").Mode, string, string][]} */ ([
   ["move", "move", "Move the shape (W)"],
   ["rotate", "rotate", "Turn the shape (E)"],
   ["scale", "scale", "Size the shape (R)"],
-  ["socket", "snap", "Bolt the part onto a face of its parent (T)"],
+  ["slot", "snap", "Place the part's slots on its shapes' faces (T)"],
+  ["joint", "rig", "Try the joints the part hangs by: drag a ring (J)"],
 ]);
 
 window.addEventListener("keydown", (e) => {
@@ -177,23 +168,29 @@ window.addEventListener("keydown", (e) => {
   } else if (cmd && key === "y") {
     e.preventDefault();
     editor.redo();
-  } else if (!cmd && ["1", "2", "3"].includes(key)) {
+  } else if (!cmd && ["1", "2", "3", "4"].includes(key)) {
     editor.setTab(TABS[Number(key) - 1][0]);
   } else if (key === "escape" && editor.tab !== "animation") {
     editor.select(() => {
-      editor.part = editor.shape = -1;
-      editor.inspect = "character";
+      if (editor.tab === "model") (editor.shape = editor.slot = -1), (editor.also = []);
+      else editor.part = -1;
+      editor.inspect = editor.tab === "model" ? "part" : "character";
     });
   } else if (!cmd && key === "i") {
     toggleInspector();
     viewportTools();
-  } else if (!cmd && key === "h" && editor.tab === "model") {
-    editor.toggleIsolate();
   } else if (!cmd && editor.tab === "model" && GIZMO_KEYS[key]) {
     setMode(GIZMO_KEYS[key]);
     viewportTools();
   } else if (!cmd && key === "f") {
     editor.viewer?.frame();
+  } else if (editor.tab === "model" && cmd && key === "a") {
+    e.preventDefault();
+    editor.selectAllShapes();
+  } else if (editor.tab === "model" && cmd && key === "c") {
+    editor.copyShapes();
+  } else if (editor.tab === "model" && cmd && key === "v") {
+    editor.pasteShapes();
   } else if (editor.tab === "animation") {
     if (key === " ") {
       e.preventDefault();
@@ -216,7 +213,7 @@ window.addEventListener("beforeunload", (e) => {
 });
 
 status.textContent = editor.status;
-// explodeSlider pushes the isolated part's shapes apart; it talks to the viewer directly so a drag
+// explodeSlider pushes the part's shapes apart (the model tab); it talks to the viewer directly so a drag
 // doesn't redraw the panels
 function explodeSlider() {
   const range = /** @type {HTMLInputElement} */ (h("input", { type: "range", min: 0, max: 1, step: 0.01, value: editor.explode }));
@@ -232,29 +229,50 @@ function explodeSlider() {
   return h("label", { class: "explode", title: "Explode the part's shapes apart (double-click to put them back)" }, icon("explode"), range);
 }
 
+/** @type {["hidden" | "point" | "label", string, string][]} how IK targets and poles show in the view */
+const IK_SHOW = [
+  ["hidden", "targetHidden", "Hide IK targets and poles"],
+  ["point", "targetPoint", "Show IK targets and poles as points"],
+  ["label", "targetLabel", "Show IK targets and poles as points with their names"],
+];
+
 function viewportTools() {
+  // replaceChildren would print a bare `false` as text, so the tab-dependent tools are filtered
   $("viewport-tools").replaceChildren(
+    ...[
     h("div", { style: { display: "contents" } }, editor.tab === "model" && [
-      h(
-        "div",
-        { class: "tool-group" },
-        GIZMO_TOOLS.map(([mode, ic, title]) =>
-          btn(icon(ic), () => (setMode(mode), viewportTools()), { on: gizmo.mode === mode, title }),
-        ),
-      ),
-      editor.isolate && explodeSlider(),
-      btn(icon("isolate"), () => editor.toggleIsolate(), {
-        on: editor.isolate,
-        title: editor.isolate ? "Show the whole character (H)" : "Show only the selected part (H)",
+      segmented({
+        value: gizmo.mode,
+        options: GIZMO_TOOLS.map(([mode, ic, title]) => ({ value: mode, label: icon(ic), title })),
+        onchange: (mode) => (setMode(mode), viewportTools()),
+      }),
+      explodeSlider(),
+      btn(icon("mirror"), () => (editor.setMirrored(!editor.mirrored), viewportTools()), {
+        on: editor.mirrored,
+        title: editor.mirrored ? "Back to the part as modelled (the left side)" : "Preview the part mirrored, as the right side shows it (gizmos hide)",
       }),
     ]),
-    btn(icon("frame"), () => editor.viewer?.frame(), { title: "Frame the character (F)" }),
+    (editor.tab === "rig" || editor.tab === "animation") &&
+      segmented({
+        value: editor.ikShow,
+        options: IK_SHOW.map(([show, ic, title]) => ({ value: show, label: icon(ic), title })),
+        onchange: (show) => {
+          editor.ikShow = show;
+          localStorage.setItem("ikShow", show);
+          // a hidden target can't stay selected
+          if (show === "hidden" && editor.handle !== "root") editor.handle = "";
+          viewportTools();
+        },
+      }),
+    btn(icon("frame"), () => editor.viewer?.frame(), { title: editor.tab === "model" ? "Frame the part (F)" : "Frame the character (F)" }),
     inspectorButton(viewportTools),
+    ].filter(Boolean),
   );
 }
 viewportTools();
 render();
 installGizmo();
+installViewGizmo();
 editor.start();
 // for the browser console: editor.viewer.query({q: "info"}) and so on
 /** @type {any} */ (window).editor = editor;

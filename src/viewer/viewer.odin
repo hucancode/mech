@@ -36,23 +36,58 @@ App :: struct {
   // what to show; the page sets these
   show:       character.Show,
   clip:       int,
-  pose:       int,
-  values:     [dynamic]f32, // for Show.VALUES, one per channel
+  values:     [dynamic]f32, // for Show.VALUES, one per driver
   time:       f32,
   playing:    bool,
   speed:      f32,
   loops:      bool,
   part:       int, // the selection to outline, -1 for none
   shape:      int,
-  isolate:    bool, // show only the selected part's shapes
+  isolate:    bool, // show only the selected part (its shapes and joint hardware), without the floor
   explode:    f32, // while isolating: 0 assembled, 1 the shapes pushed out by the part's size
   exploded:   bool, // pieces were moved out last frame
   frame_next: bool, // frame the camera once the mech is built
+  view:       View, // the side the camera looks from; turning returns it to FREE
+  fov:        f32, // the main camera's perspective field of view, kept while a view is orthographic
+  ortho:      f32, // an axis view's height over what the perspective view shows at the orbit's distance
+  floor:      world.NodeHandle,
   messages:   [dynamic]string, // warnings and errors since the last "state" query
   heap:       mem.Allocator, // what messages are cloned with
 }
 
 app: ^App
+
+// View is where the camera looks from: FREE orbits in perspective; the others look at the
+// character from one side along an axis (it faces +Z, its left is +X) with a parallel projection.
+View :: enum i32 {
+  FREE,
+  POS_X,
+  NEG_X,
+  POS_Y,
+  NEG_Y,
+  POS_Z,
+  NEG_Z,
+}
+
+// The orbit yaw and pitch of each axis view (render.Orbit).
+@(private = "file")
+VIEW_ANGLES := [View][2]f32 {
+  .FREE  = {},
+  .POS_X = {0, 0},
+  .NEG_X = {math.PI, 0},
+  .POS_Y = {math.PI / 2, math.PI / 2},
+  .NEG_Y = {math.PI / 2, -math.PI / 2},
+  .POS_Z = {math.PI / 2, 0},
+  .NEG_Z = {-math.PI / 2, 0},
+}
+
+// How far an axis view's camera stands back past the orbit, so zooming only narrows the view.
+@(private = "file")
+VIEW_BACK :: 100
+
+// How tall an axis view frames the shown pieces, over their size.
+@(private = "file")
+VIEW_FRAME :: 1.2
 
 // viewer_logger prints and keeps warnings for the page; set it as context.logger before
 // viewer_init, since the loop keeps the context it starts with.
@@ -93,8 +128,9 @@ setup :: proc(app: ^App) -> mjolnir.Setup {
   if !render.ready(r) do return .WAIT
   sun := render.light_create(r, render.make_directional_light())
   mjolnir.spawn(&app.scene, r, sun, rotation = linalg.quaternion_from_forward_and_up([3]f32{-0.4, -1, -0.3}, [3]f32{0, 1, 0}))
-  mjolnir.spawn(&app.scene, r, render.primitive(r, .QUAD_XZ, .GRAY, no_shadow = true), scale = 16)
+  app.floor = mjolnir.spawn(&app.scene, r, render.primitive(r, .QUAD_XZ, .GRAY, no_shadow = true), scale = 16)
   app.orbit = render.make_orbit({1.5, 1.6, 4}, {0, 0.9, 0})
+  if p, ok := render.main_camera(r).projection.(render.PerspectiveProjection); ok do app.fov = p.fov
   app.ready = true
   rebuild()
   return .READY
@@ -114,7 +150,7 @@ shutdown :: proc(app: ^App) {
 update :: proc(app: ^App, dt: f32) {
   render.lock(&app.renderer)
   platform.read_input(&app.platform, &app.input)
-  mjolnir.orbit_drag(&app.orbit, render.main_camera(&app.renderer), &app.input)
+  place_camera()
   if app.has_mech {
     if app.frame_next {
       frame_camera()
@@ -128,7 +164,7 @@ update :: proc(app: ^App, dt: f32) {
         app.time = math.mod(app.time, d) if app.loops else min(app.time, d)
       }
       character.mech_seek(&app.mech, app.time)
-    case .POSE, .VALUES:
+    case .VALUES:
       character.character_update(&app.mech, 0)
     }
     isolate()
@@ -153,7 +189,7 @@ rebuild :: proc() {
     return
   }
   app.mech, app.has_mech = c, true
-  resize(&app.values, len(app.asset.model.channels))
+  resize(&app.values, mech.model_channels(app.asset.model))
   apply_show()
 }
 
@@ -164,8 +200,6 @@ apply_show :: proc() {
   case .CLIP:
     character.mech_play_clip(&app.mech, app.clip, app.loops)
     character.mech_seek(&app.mech, app.time)
-  case .POSE:
-    character.mech_show_pose(&app.mech, app.pose)
   case .VALUES:
     character.mech_show_values(&app.mech, app.values[:])
   }
@@ -228,7 +262,7 @@ set_animation :: proc(text: []u8) -> bool {
   return true
 }
 
-// set_values shows explicit channel values: a JSON object of channel name to value; channels it
+// set_values shows explicit driver values: a JSON object of driver name to value; drivers it
 // leaves out are 0.
 set_values :: proc(text: []u8) -> bool {
   if !app.has_asset do return false
@@ -239,8 +273,8 @@ set_values :: proc(text: []u8) -> bool {
     return false
   }
   m := app.asset.model
-  resize(&app.values, len(m.channels))
-  for c, i in m.channels do app.values[i] = values[c.name] or_else 0
+  resize(&app.values, mech.model_channels(m))
+  for &v, i in app.values do v = values[mech.channel_name(m, i)] or_else 0
   app.show = .VALUES
   apply_show()
   return true
@@ -252,20 +286,65 @@ frame_camera :: proc() {
   center := (lo + hi) / 2
   size := max(linalg.length(hi - lo), 0.5)
   app.orbit = render.make_orbit(center + linalg.normalize([3]f32{0.6, 0.35, 1}) * size * 1.4, center)
+  if app.view == .FREE do return
+  app.orbit.yaw, app.orbit.pitch = VIEW_ANGLES[app.view][0], VIEW_ANGLES[app.view][1]
+  app.ortho = size * VIEW_FRAME / perspective_height()
+}
+
+// perspective_height is how tall the perspective view is at the orbit's distance.
+@(private = "file")
+perspective_height :: proc() -> f32 {
+  return 2 * app.orbit.distance * math.tan(app.fov / 2)
+}
+
+// set_view looks along view's axis at the character, framed; FREE goes back to the orbit's
+// perspective.
+set_view :: proc(view: View) {
+  app.view = view
+  frame_camera()
+}
+
+// place_camera steers the orbit from this tick's input and puts the main camera on it. An axis
+// view is orthographic, its height following the orbit's distance so scrolling zooms it;
+// turning it goes back to FREE.
+@(private = "file")
+place_camera :: proc() {
+  cam := render.main_camera(&app.renderer)
+  if cam == nil do return
+  if p, ok := cam.projection.(render.PerspectiveProjection); ok do app.fov = p.fov
+  turned := !app.input.mouse_captured && input.mouse_down(&app.input, .LEFT) && app.input.mouse_delta != {}
+  if turned do app.view = .FREE
+  mjolnir.orbit_drag(&app.orbit, cam, &app.input)
+  if app.view == .FREE {
+    cam.projection = render.PerspectiveProjection{app.fov}
+    return
+  }
+  back := app.orbit
+  back.distance += VIEW_BACK
+  render.camera_orbit(cam, back)
+  cam.projection = render.OrthographicProjection{app.ortho * perspective_height()}
 }
 
 isolating :: proc() -> bool {
   return app.isolate && app.part >= 0
 }
 
-// isolated reports whether piece `p` shows while isolating: the selected part's shapes.
+// isolated reports whether piece `p` shows while isolating: the selected part's shapes and the
+// hardware of the joints it hangs by.
 @(private = "file")
 isolated :: proc(p: mech.Piece) -> bool {
-  return p.part == app.part && p.shape >= 0
+  return p.part == app.part
 }
 
-// isolate hides every piece but the selected part's shapes while isolating, and explodes those:
-// each moves out from the middle of the part along the line from there to its centre.
+// exploded reports whether piece `p` moves out while exploding: the selected part's shapes; its
+// joint hardware stays where the part hangs.
+@(private = "file")
+exploded :: proc(p: mech.Piece) -> bool {
+  return isolated(p) && p.shape >= 0
+}
+
+// isolate hides every piece but the selected part's, and the floor, while isolating, and explodes
+// its shapes: each moves out from the middle of the part along the line from there to its centre.
 @(private = "file")
 isolate :: proc() {
   rig := character.mech_rig(&app.mech)
@@ -275,11 +354,12 @@ isolate :: proc() {
   // place pieces while exploded, and once more to put them back
   place := explode > 0 || app.exploded
   app.exploded = explode > 0
+  world.set_visible(&app.scene, app.floor, !on)
   for p in rig.pieces {
     world.set_visible(&app.scene, p.node, !on || isolated(p))
     if !place do continue
     at := p.place.position
-    if explode > 0 && isolated(p) do at += explode_offset(p, middle, reach, explode)
+    if explode > 0 && exploded(p) do at += explode_offset(p, middle, reach, explode)
     world.transform(&app.scene, p.node).position = at
   }
 }
@@ -289,13 +369,13 @@ isolate :: proc() {
 @(private = "file")
 part_middle :: proc(rig: ^mech.Rig) -> (middle: [3]f32, reach: f32) {
   n: f32
-  for p in rig.pieces do if isolated(p) {
+  for p in rig.pieces do if exploded(p) {
     middle += p.place.position
     n += 1
   }
   if n == 0 do return
   middle /= n
-  for p in rig.pieces do if isolated(p) {
+  for p in rig.pieces do if exploded(p) {
     reach = max(reach, linalg.length(p.place.position - middle) + linalg.length(p.place.scale) / 2)
   }
   return
@@ -332,7 +412,7 @@ shown_bounds :: proc() -> (lo, hi: [3]f32) {
 @(private = "file")
 piece_shown :: proc(rig: ^mech.Rig, i: int) -> geometry.Transform {
   p := rig.pieces[i]
-  if isolating() && app.explode > 0 && isolated(p) {
+  if isolating() && app.explode > 0 && exploded(p) {
     middle, reach := part_middle(rig)
     p.place.position += explode_offset(p, middle, reach, app.explode)
   }
@@ -340,6 +420,7 @@ piece_shown :: proc(rig: ^mech.Rig, i: int) -> geometry.Transform {
 }
 
 // outline draws the selected part's shapes (the selected shape in white) and its frame's axes.
+// While isolating the part shows alone, so only the selected shape is outlined.
 @(private = "file")
 outline :: proc() {
   if app.part < 0 do return
@@ -347,6 +428,7 @@ outline :: proc() {
   s := app.asset.model.scale
   for p, i in rig.pieces {
     if p.part != app.part || p.shape < 0 do continue
+    if app.isolate && p.shape != app.shape do continue
     x := piece_shown(rig, i)
     half := mech.primitive_corners(p.primitive)[7] * x.scale * s
     selected := p.shape == app.shape

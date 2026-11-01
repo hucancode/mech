@@ -31,12 +31,12 @@ calls exports between frames (`src/viewer/web.odin`):
 | --- | --- |
 | `viewer_set_model(text)` | parse a model and rebuild the mech |
 | `viewer_set_animation(text)` | parse an animation and recompile the clips (after every edit) |
-| `viewer_set_values({name: value})` | hold explicit channel values (the pose test) |
+| `viewer_set_values({name: value})` | hold explicit driver values (the pose test) |
 | `viewer_play(clip, time, playing, speed, loops)` | show a clip |
-| `viewer_show_pose(pose)` | show a pose |
 | `viewer_select(part, shape, isolate)` | outline a part's shapes and draw its frame; `isolate` hides the rest |
 | `viewer_explode(amount)` | push the isolated part's shapes apart (0 to 1) |
 | `viewer_frame()` | frame the camera on the character |
+| `viewer_view(view)` | look from a side, framed and orthographic: 1 +x, 2 -x, 3 +y, 4 -y, 5 +z, 6 -z; 0 the free perspective orbit (turning the view goes back to it) |
 | `viewer_time()` | the playhead |
 | `viewer_format_character()` | the character file's text, as the game's tools write it |
 | `viewer_query(json)` | answer a question (below) |
@@ -53,13 +53,14 @@ to know something the engine computes.
 
 | query | answers |
 | --- | --- |
-| `{"q":"state"}` | the clock, every channel as shown (after drivers and leg IK), warnings since last asked |
-| `{"q":"sample","clip":"walk","channels":[..],"n":60,"solved":true}` | channel values over a clip (or at `"times"`); `solved` applies drivers and leg IK |
-| `{"q":"pose","clip":"attack","time":0.4}` or `{"q":"pose","pose":"ready"}` | every channel at one moment, `raw` and `solved` |
-| `{"q":"parts","clip":..,"time":..,"parts":[..]}` | parts' frames in the world (metres, quaternions) |
-| `{"q":"trajectory","clip":"walk","part":"l_foot","n":60}` | a part's path over a clip (foot slide, motion paths) |
+| `{"q":"state"}` | the clock, every driver as shown, warnings since last asked |
+| `{"q":"sample","clip":"walk","drivers":[..],"n":60}` | driver values over a clip (or at `"times"`) |
+| `{"q":"pose","clip":"attack","time":0.4}` | every driver at one moment, `drivers` |
+| `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions); `rest`: every driver 0 |
+| `{"q":"trajectory","clip":"walk","part":"l_foot","n":60}` | an instance's path over a clip (foot slide, motion paths) |
 | `{"q":"bounds","clip":..,"time":..}` | the box around the posed character |
-| `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips, channels nothing moves |
+| `{"q":"camera"}` | the main camera's rotation and the view it is in (the view gizmo) |
+| `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips, drivers that move nothing |
 
 From the browser console: `editor.viewer.query({q: "trajectory", clip: "walk", part: "l_foot", n: 8})`.
 

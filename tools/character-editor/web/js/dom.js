@@ -3,6 +3,8 @@
 // rebuild their DOM when data changes; while a field is being dragged or typed in, the editor is
 // "busy" and rebuilds wait until it is done, so the field under the pointer never goes away.
 
+import { icon } from "./icons.js";
+
 /** @typedef {Node | string | number | null | undefined | false} Child */
 
 /**
@@ -55,11 +57,25 @@ function holdWhileFocused(el) {
 /**
  * A button showing text or an icon (see icons.js); the tooltip says what it does.
  * @param {string | Node} label
- * @param {() => void} onclick
+ * @param {(e: MouseEvent) => void} onclick
  * @param {{title?: string, kind?: string, disabled?: boolean, on?: boolean}} [o]
  */
 export function btn(label, onclick, o = {}) {
   return h("button", { class: `btn ${o.kind ?? ""} ${o.on ? "on" : ""}`, title: o.title, "aria-label": o.title, disabled: o.disabled, onclick }, label);
+}
+
+/**
+ * A segmented control: one of several choices, its buttons joined into one bar and the chosen one
+ * filled. Each choice's `label` is text or an icon. `fill` stretches it across its row.
+ * @template T
+ * @param {{value: T, options: {value: T, label: any, title?: string}[], onchange: (v: T) => void, fill?: boolean}} o
+ */
+export function segmented(o) {
+  return h(
+    "div",
+    { class: `segmented${o.fill ? " fill" : ""}`, role: "radiogroup" },
+    o.options.map((x) => btn(x.label, () => o.onchange(x.value), { on: x.value === o.value, title: x.title })),
+  );
 }
 
 const DEG = 180 / Math.PI;
@@ -90,7 +106,7 @@ export function num(o) {
   };
   holdWhileFocused(input);
   input.addEventListener("change", () => {
-    const v = parseFloat(input.value);
+    const v = evaluate(input.value, value);
     Number.isNaN(v) ? (input.value = fmt(value)) : set(v);
   });
   input.addEventListener("keydown", (e) => {
@@ -129,21 +145,72 @@ export function num(o) {
   return box;
 }
 
+/**
+ * evaluate reads a typed number: arithmetic (`0.3*2`, `(0.4+0.1)/2`), or an operation on the
+ * value now when it starts with one (`*2`, `/2`, `+0.05`; a leading `-` is a negative number).
+ * NaN when it is not one.
+ * @param {string} text @param {number} now
+ */
+export function evaluate(text, now) {
+  const t = text.trim();
+  const src = /^[*/+]/.test(t) ? `${now}${t}` : t;
+  const tokens = src.match(/\d*\.?\d+(?:e[-+]?\d+)?|[-+*/()]|\S/gi) ?? [];
+  let k = 0;
+  /** @returns {number} */
+  const atom = () => {
+    const x = tokens[k++];
+    if (x === "-") return -atom();
+    if (x === "+") return atom();
+    if (x === "(") {
+      const v = sum();
+      return tokens[k++] === ")" ? v : NaN;
+    }
+    return x !== undefined && /^[\d.]/.test(x) ? parseFloat(x) : NaN;
+  };
+  const product = () => {
+    let v = atom();
+    while (tokens[k] === "*" || tokens[k] === "/") v = tokens[k++] === "*" ? v * atom() : v / atom();
+    return v;
+  };
+  const sum = () => {
+    let v = product();
+    while (tokens[k] === "+" || tokens[k] === "-") v = tokens[k++] === "+" ? v + product() : v - product();
+    return v;
+  };
+  const v = sum();
+  return k === tokens.length && Number.isFinite(v) ? v : NaN;
+}
+
 const AXES = [
   ["x", "#e5675b"],
   ["y", "#7fc35b"],
   ["z", "#5b9be5"],
 ];
 
-/** @param {{value?: number[], step?: number, digits?: number, deg?: boolean, onchange: (v: number[]) => void}} o */
+/** whether vec3 fields with a lock scale all three together; remembered for the session */
+let locked = false;
+
+/**
+ * Three numbers, x y z. With `lock`, a toggle beside them makes a change to one scale all three
+ * by as much (sizes in proportion).
+ * @param {{value?: number[], step?: number, digits?: number, deg?: boolean, lock?: boolean, onchange: (v: number[]) => void}} o
+ */
 export function vec3(o) {
   const v = [...(o.value ?? [0, 0, 0])];
+  /** @param {number} i @param {number} x */
+  const change = (i, x) => {
+    if (o.lock && locked && v[i]) {
+      const f = x / v[i];
+      for (let k = 0; k < 3; k++) v[k] = Math.round(v[k] * f * 1e5) / 1e5;
+    } else v[i] = x;
+    o.onchange([...v]);
+  };
+  const lock = o.lock && btn(icon("link"), (e) => ((locked = !locked), /** @type {HTMLElement} */ (e.currentTarget).classList.toggle("on", locked)), { kind: "icon", on: locked, title: "Lock: change all three in proportion" });
   return h(
     "div",
     { class: "vec3" },
-    AXES.map(([label, color], i) =>
-      num({ label, color, step: o.step, digits: o.digits, deg: o.deg, value: v[i], onchange: (x) => ((v[i] = x), o.onchange([...v])) }),
-    ),
+    AXES.map(([label, color], i) => num({ label, color, step: o.step, digits: o.digits, deg: o.deg, value: v[i], onchange: (x) => change(i, x) })),
+    lock,
   );
 }
 
@@ -177,13 +244,13 @@ export function select(o) {
   return el;
 }
 
-/** A text field that commits on Enter or blur. @param {{value?: string, placeholder?: string, onchange: (v: string) => void}} o */
+/** A text field that commits on Enter or blur; emptied, it reverts unless `empty` (it commits ""). @param {{value?: string, placeholder?: string, empty?: boolean, onchange: (v: string) => void}} o */
 export function text(o) {
   const el = /** @type {HTMLInputElement} */ (h("input", { type: "text", value: o.value ?? "", placeholder: o.placeholder }));
   holdWhileFocused(el);
   el.addEventListener("change", () => {
     const v = el.value.trim();
-    if (v && v !== o.value) o.onchange(v);
+    if ((v || o.empty) && v !== o.value) o.onchange(v);
     else el.value = o.value ?? "";
   });
   el.addEventListener("keydown", (e) => e.key === "Enter" && el.blur());
@@ -232,6 +299,10 @@ export function color(o) {
 /** @type {Map<string, boolean>} */
 const opened = new Map();
 
+/** The fold caret's glyph: ▶ (U+25B6) with U+FE0E, which asks for the text glyph, not an emoji.
+ * Styled and turned down when open by `.caret` (style.css). */
+export const CARET = "\u25B6\uFE0E";
+
 /**
  * A collapsible section; it remembers whether it is open by title.
  * @param {string} title
@@ -241,7 +312,7 @@ const opened = new Map();
 export function section(title, body, o = {}) {
   const open = opened.get(title) ?? o.open ?? true;
   const bodyEl = h("div", { class: "body", style: open ? undefined : { display: "none" } }, body);
-  const caret = h("span", { class: `caret ${open ? "open" : ""}` }, "▸");
+  const caret = h("span", { class: `caret ${open ? "open" : ""}` }, CARET);
   const toggle = () => {
     const now = bodyEl.style.display === "none";
     opened.set(title, now);
@@ -292,12 +363,12 @@ export function face(o) {
  * @param {T[]} items
  * @param {(item: T, i: number) => Child[]} content
  * @param {(i: number) => boolean} isOn
- * @param {(i: number) => void} onpick
+ * @param {(i: number, e: MouseEvent) => void} onpick
  */
 export function list(items, content, isOn, onpick) {
   return h(
     "div",
     { class: "list" },
-    items.map((it, i) => h("button", { class: `item ${isOn(i) ? "on" : ""}`, onclick: () => onpick(i) }, content(it, i))),
+    items.map((it, i) => h("button", { class: `item ${isOn(i) ? "on" : ""}`, onclick: (/** @type {MouseEvent} */ e) => onpick(i, e) }, content(it, i))),
   );
 }

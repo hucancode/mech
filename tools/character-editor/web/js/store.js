@@ -81,6 +81,7 @@ export function blankCharacter(name) {
       materials: [{ name: "paint", color: [0.7, 0.72, 0.76], metallic: 0.2, roughness: 0.5 }],
       hardware: { female: "paint", male: "paint", metal: "paint" },
       parts: [{ name: "body", shapes: [{ material: "paint", size: [1, 1, 1] }] }],
+      assembly: [{ name: "body", part: "body" }],
     },
     anim: {},
   };

@@ -5,7 +5,7 @@ import "core:log"
 import "core:strings"
 
 // A character file (assets/characters/<name>.json) holds one character: its model and its animation.
-//   {"model": {..}, "animation": {"poses": [..], "clips": [..]}}
+//   {"model": {..}, "animation": {"clips": [..]}}
 // In memory they stay a Model and an Animation, parsed and freed on their own.
 
 // character_parse reads a character file's text into its model and animation.

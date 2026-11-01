@@ -22,141 +22,594 @@
       {"name": "charcoal", "color": [0.22, 0.28, 0.31], "metallic": 0.2, "roughness": 0.45}
     ],
     "hardware": {"female": "charcoal", "male": "slate", "metal": "cream"},
-    "joints": [
-      {
-        "name": "spine",
-        "kind": "BALL",
-        "flange_t": 0.12,
-        "ball_r": 0.26,
-        "socket_t": 0.09,
-        "stud_len": 0.14,
-        "flange_w": 0.8
-      },
-      {
-        "name": "spine2",
-        "kind": "BALL",
-        "flange_t": 0.12,
-        "ball_r": 0.24,
-        "socket_t": 0.08,
-        "stud_len": 0.13,
-        "flange_w": 0.7
-      },
+    "drivers": [
       {
         "name": "jaw",
-        "kind": "HINGE",
-        "jaw": 0.4,
-        "lug_t": 0.1,
-        "lug_d": 0.32,
-        "shank": 0.216,
-        "flange_t": 0.16,
-        "pin_r": 0.09,
-        "clr": 0.03,
-        "pin_out": 0.05
+        "max": 0.7854,
+        "drives": [
+          {"part": "jaw", "joint": "jaw", "from": [0, 1], "to": [0, 1]}
+        ]
       },
       {
-        "name": "shoulder",
-        "kind": "DISC_HINGE",
-        "jaw": 0.1,
-        "lug_t": 0.055,
-        "lug_d": 0.22,
-        "shank": 0.204,
-        "flange_t": 0.16,
-        "pin_r": 0.045,
-        "clr": 0.03,
-        "pin_out": 0.05
+        "name": "segment_1_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_1", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
       },
       {
-        "name": "hip",
-        "kind": "DISC_HINGE",
-        "jaw": 0.12,
-        "lug_t": 0.065,
-        "lug_d": 0.26,
-        "shank": 0.228,
-        "flange_t": 0.16,
-        "pin_r": 0.055,
-        "clr": 0.03,
-        "pin_out": 0.05
+        "name": "segment_1_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_1",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
       },
       {
-        "name": "elbow",
-        "kind": "HINGE",
-        "jaw": 0.14,
-        "lug_t": 0.07,
-        "lug_d": 0.28,
-        "shank": 0.18,
-        "flange_t": 0.16,
-        "pin_r": 0.06,
-        "clr": 0.03,
-        "pin_out": 0.05
+        "name": "segment_1_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_1",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
       },
       {
-        "name": "knee",
-        "kind": "HINGE",
-        "jaw": 0.16,
-        "lug_t": 0.075,
-        "lug_d": 0.3,
-        "shank": 0.192,
-        "flange_t": 0.16,
-        "pin_r": 0.07,
-        "clr": 0.03,
-        "pin_out": 0.05
+        "name": "segment_2_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_2", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "segment_2_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_2",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_2_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_2",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_3_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_3", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "segment_3_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_3",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_3_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_3",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_4_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_4", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "segment_4_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_4",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_4_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_4",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_5_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_5", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "segment_5_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_5",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_5_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_5",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_6_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "segment_6", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "segment_6_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_6",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "segment_6_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "segment_6",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_1_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "taper_1", "joint": "spine", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "taper_1_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_1",
+            "joint": "spine",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_1_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_1",
+            "joint": "spine",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_2_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "taper_2", "joint": "spine2", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "taper_2_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_2",
+            "joint": "spine2",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_2_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_2",
+            "joint": "spine2",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_3_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "taper_3", "joint": "spine2", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "taper_3_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_3",
+            "joint": "spine2",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_3_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_3",
+            "joint": "spine2",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_4_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "taper_4", "joint": "spine2", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "taper_4_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_4",
+            "joint": "spine2",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "taper_4_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "taper_4",
+            "joint": "spine2",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "tail_pitch",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {"part": "tail", "joint": "spine2", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "tail_yaw",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "tail",
+            "joint": "spine2",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "tail_roll",
+        "min": -0.7854,
+        "max": 0.7854,
+        "drives": [
+          {
+            "part": "tail",
+            "joint": "spine2",
+            "axis": "Z",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "l_arm_swing",
+        "min": -3.1416,
+        "max": 3.1416,
+        "drives": [
+          {
+            "part": "l_upper_arm",
+            "joint": "disc",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "l_arm_out",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {"part": "l_upper_arm", "joint": "shoulder", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "l_arm_twist",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {
+            "part": "l_upper_arm",
+            "joint": "twist",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "l_elbow",
+        "min": -0.1745,
+        "max": 1.5708,
+        "drives": [
+          {"part": "l_forearm", "joint": "elbow", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "r_arm_swing",
+        "min": -3.1416,
+        "max": 3.1416,
+        "drives": [
+          {
+            "part": "r_upper_arm",
+            "joint": "disc",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "r_arm_out",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {"part": "r_upper_arm", "joint": "shoulder", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "r_arm_twist",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {
+            "part": "r_upper_arm",
+            "joint": "twist",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "r_elbow",
+        "min": -0.1745,
+        "max": 1.5708,
+        "drives": [
+          {"part": "r_forearm", "joint": "elbow", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "l_leg_swing",
+        "min": -3.1416,
+        "max": 3.1416,
+        "drives": [
+          {
+            "part": "l_thigh",
+            "joint": "disc",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "l_leg_out",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {"part": "l_thigh", "joint": "hip", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "l_leg_twist",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {
+            "part": "l_thigh",
+            "joint": "twist",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "l_knee",
+        "min": -0.1745,
+        "max": 1.5708,
+        "drives": [
+          {"part": "l_shin", "joint": "knee", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "r_leg_swing",
+        "min": -3.1416,
+        "max": 3.1416,
+        "drives": [
+          {
+            "part": "r_thigh",
+            "joint": "disc",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "r_leg_out",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {"part": "r_thigh", "joint": "hip", "from": [0, 1], "to": [0, 1]}
+        ]
+      },
+      {
+        "name": "r_leg_twist",
+        "min": -1.5708,
+        "max": 1.5708,
+        "drives": [
+          {
+            "part": "r_thigh",
+            "joint": "twist",
+            "axis": "Y",
+            "from": [0, 1],
+            "to": [0, 1]
+          }
+        ]
+      },
+      {
+        "name": "r_knee",
+        "min": -0.1745,
+        "max": 1.5708,
+        "drives": [
+          {"part": "r_shin", "joint": "knee", "from": [0, 1], "to": [0, 1]}
+        ]
       }
-    ],
-    "channels": [
-      {"name": "jaw", "max": 0.7854},
-      {"name": "segment_1_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_1_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_1_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_2_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_2_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_2_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_3_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_3_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_3_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_4_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_4_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_4_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_5_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_5_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_5_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_6_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_6_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "segment_6_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_1_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_1_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_1_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_2_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_2_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_2_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_3_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_3_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_3_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_4_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_4_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "taper_4_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "tail_pitch", "min": -0.7854, "max": 0.7854},
-      {"name": "tail_yaw", "min": -0.7854, "max": 0.7854},
-      {"name": "tail_roll", "min": -0.7854, "max": 0.7854},
-      {"name": "l_arm_swing", "min": -3.1416, "max": 3.1416},
-      {"name": "l_arm_out", "min": -1.5708, "max": 1.5708},
-      {"name": "l_arm_twist", "min": -1.5708, "max": 1.5708},
-      {"name": "l_elbow", "min": -0.1745, "max": 1.5708},
-      {"name": "r_arm_swing", "min": -3.1416, "max": 3.1416},
-      {"name": "r_arm_out", "min": -1.5708, "max": 1.5708},
-      {"name": "r_arm_twist", "min": -1.5708, "max": 1.5708},
-      {"name": "r_elbow", "min": -0.1745, "max": 1.5708},
-      {"name": "l_leg_swing", "min": -3.1416, "max": 3.1416},
-      {"name": "l_leg_out", "min": -1.5708, "max": 1.5708},
-      {"name": "l_leg_twist", "min": -1.5708, "max": 1.5708},
-      {"name": "l_knee", "min": -0.1745, "max": 1.5708},
-      {"name": "r_leg_swing", "min": -3.1416, "max": 3.1416},
-      {"name": "r_leg_out", "min": -1.5708, "max": 1.5708},
-      {"name": "r_leg_twist", "min": -1.5708, "max": 1.5708},
-      {"name": "r_knee", "min": -0.1745, "max": 1.5708}
     ],
     "parts": [
       {
         "name": "head",
+        "slots": [
+          {"name": "jaw", "position": [0, -0.154, 1.06], "normal": [0, -1, 0], "forward": [1, 0, 0]},
+          {"name": "segment_1", "normal": [0, 0, -1], "forward": [0, 1, 0]}
+        ],
         "shapes": [
           {"material": "orange", "position": [0, 0, 0.78], "size": [1.2, 0.7, 1]},
           {"material": "brown", "position": [0, 0.26, 1.48], "size": [1.2, 0.18, 0.4]},
@@ -314,618 +767,390 @@
       },
       {
         "name": "jaw",
-        "parent": "head",
-        "socket": {"position": [0, -0.53, 1.06], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-        "joint": "jaw",
-        "centered": true,
-        "binds": [
-          {"channel": "jaw", "sign": 1},
-          {},
-          {}
+        "joints": [
+          {
+            "name": "jaw",
+            "kind": "HINGE",
+            "size": 0.6,
+            "jaw": 0.66667,
+            "lug_t": 0.16667,
+            "lug_d": 0.53333,
+            "shank": 0.36,
+            "flange_t": 0.26667,
+            "pin_r": 0.15,
+            "clr": 0.05,
+            "pin_out": 0.08333
+          }
         ],
-        "mount": {"normal": [0, 1, 0], "forward": [1, 0, 0]},
         "shapes": [
-          {"material": "orange", "position": [0, -0.24, 0.625], "size": [0.66, 0.22, 1.55]},
-          {"material": "slate", "position": [-0.2178, -0.06, 1.15], "size": [0.07, 0.14, 0.07]},
-          {"material": "slate", "position": [0, -0.06, 1.15], "size": [0.07, 0.14, 0.07]},
-          {"material": "slate", "position": [0.2178, -0.06, 1.15], "size": [0.07, 0.14, 0.07]},
+          {"material": "orange", "position": [0, 0.136, 0.625], "size": [0.66, 0.22, 1.55]},
+          {"material": "slate", "position": [-0.2178, 0.316, 1.15], "size": [0.07, 0.14, 0.07]},
+          {"material": "slate", "position": [0, 0.316, 1.15], "size": [0.07, 0.14, 0.07]},
+          {"material": "slate", "position": [0.2178, 0.316, 1.15], "size": [0.07, 0.14, 0.07]},
           {
             "primitive": "WEDGE",
             "param": 0.5,
             "material": "slate",
-            "position": [0.37, -0.2, 0.62],
+            "position": [0.37, 0.176, 0.62],
             "size": [0.08, 0.2, 0.93]
           },
           {
             "primitive": "WEDGE",
             "param": 0.5,
             "material": "slate",
-            "position": [-0.37, -0.2, 0.62],
+            "position": [-0.37, 0.176, 0.62],
             "size": [0.08, 0.2, 0.93]
           }
         ]
       },
       {
-        "name": "segment_1",
-        "parent": "head",
-        "socket": {"normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_1_pitch", "sign": 1},
-          {"channel": "segment_1_yaw", "sign": 1},
-          {"channel": "segment_1_roll", "sign": 1}
+        "name": "segment",
+        "joints": [
+          {
+            "name": "spine",
+            "kind": "BALL",
+            "size": 0.52,
+            "flange_t": 0.23077,
+            "ball_r": 0.5,
+            "socket_t": 0.17308,
+            "stud_len": 0.26923,
+            "flange_w": 1.53846
+          }
         ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
+        "slots": [
+          {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
+        ],
         "shapes": [
           {
             "primitive": "HALF_CYLINDER",
             "material": "green",
-            "position": [0, 0.5, 0.675],
-            "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
+            "span": [
+              "next",
+              ""
+            ],
+            "rotation": [3.14159, 1.57079, 0],
+            "size": [1, 0, 1]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -1.125, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.675, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.225, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, -0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, -0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.45, -0.945, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.45, -0.405, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           }
         ]
       },
       {
-        "name": "segment_2",
-        "parent": "segment_1",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_2_pitch", "sign": 1},
-          {"channel": "segment_2_yaw", "sign": 1},
-          {"channel": "segment_2_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
+        "name": "segment_limbs",
+        "joints": [
           {
-            "primitive": "HALF_CYLINDER",
-            "material": "green",
-            "position": [0, 0.5, 0.675],
-            "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
+            "name": "spine",
+            "kind": "BALL",
+            "size": 0.52,
+            "flange_t": 0.23077,
+            "ball_r": 0.5,
+            "socket_t": 0.17308,
+            "stud_len": 0.26923,
+            "flange_w": 1.53846
           }
-        ]
-      },
-      {
-        "name": "segment_3",
-        "parent": "segment_2",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_3_pitch", "sign": 1},
-          {"channel": "segment_3_yaw", "sign": 1},
-          {"channel": "segment_3_roll", "sign": 1}
         ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
+        "slots": [
+          {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
+          {"name": "l_limb", "position": [0, -0.675, -0.6], "normal": [0, 0, -1], "forward": [0, 1, 0]},
+          {"name": "r_limb", "position": [0, -0.675, 0.6], "normal": [0, 0, 1], "forward": [0, -1, 0]}
+        ],
         "shapes": [
           {
             "primitive": "HALF_CYLINDER",
             "material": "green",
-            "position": [0, 0.5, 0.675],
+            "span": [
+              "next",
+              ""
+            ],
+            "rotation": [3.14159, 1.57079, 0],
+            "size": [1, 0, 1]
+          },
+          {
+            "primitive": "HALF_CYLINDER",
+            "material": "yellow",
+            "position": [0, -1.125, 0],
+            "rotation": [0, -1.57079, 0],
+            "size": [0.94, 0.38, 0.94]
+          },
+          {
+            "primitive": "HALF_CYLINDER",
+            "material": "yellow",
+            "position": [0, -0.675, 0],
+            "rotation": [0, -1.57079, 0],
+            "size": [0.94, 0.38, 0.94]
+          },
+          {
+            "primitive": "HALF_CYLINDER",
+            "material": "yellow",
+            "position": [0, -0.225, 0],
+            "rotation": [0, -1.57079, 0],
+            "size": [0.94, 0.38, 0.94]
+          },
+          {"material": "yellow", "position": [0, -0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, -0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {
+            "primitive": "QUARTER_CYLINDER",
+            "material": "charcoal",
+            "position": [0.45, -0.945, 0],
             "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
             "size": [0.76, 0.12, 0.76]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          }
-        ]
-      },
-      {
-        "name": "segment_4",
-        "parent": "segment_3",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_4_pitch", "sign": 1},
-          {"channel": "segment_4_yaw", "sign": 1},
-          {"channel": "segment_4_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "green",
-            "position": [0, 0.5, 0.675],
+            "position": [0.45, -0.405, 0],
             "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          }
-        ]
-      },
-      {
-        "name": "segment_5",
-        "parent": "segment_4",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_5_pitch", "sign": 1},
-          {"channel": "segment_5_yaw", "sign": 1},
-          {"channel": "segment_5_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "green",
-            "position": [0, 0.5, 0.675],
-            "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          }
-        ]
-      },
-      {
-        "name": "segment_6",
-        "parent": "segment_5",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "segment_6_pitch", "sign": 1},
-          {"channel": "segment_6_yaw", "sign": 1},
-          {"channel": "segment_6_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.5, 1.35], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "green",
-            "position": [0, 0.5, 0.675],
-            "rotation": [-1.5708, 0, 0],
-            "size": [1, 1.35, 1]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.225],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 0.675],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "yellow",
-            "position": [0, 0.5, 1.125],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.94, 0.38, 0.94]
-          },
-          {"material": "yellow", "position": [0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [-0.55, 0.5, 0.675], "size": [0.1, 0.475, 1.161]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.405],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.76, 0.12, 0.76]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.95, 0.945],
-            "rotation": [0, 0, 1.5708],
             "size": [0.76, 0.12, 0.76]
           }
         ]
       },
       {
         "name": "taper_1",
-        "parent": "segment_6",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine",
-        "binds": [
-          {"channel": "taper_1_pitch", "sign": 1},
-          {"channel": "taper_1_yaw", "sign": 1},
-          {"channel": "taper_1_roll", "sign": 1}
+        "joints": [
+          {
+            "name": "spine",
+            "kind": "BALL",
+            "size": 0.52,
+            "flange_t": 0.23077,
+            "ball_r": 0.5,
+            "socket_t": 0.17308,
+            "stud_len": 0.26923,
+            "flange_w": 1.53846
+          }
         ],
-        "mount": {"position": [0, 0.5, 1.15], "normal": [0, 0, 1], "forward": [0, 1, 0]},
+        "slots": [
+          {"name": "taper_2", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
+        ],
         "shapes": [
           {
             "primitive": "CONE",
             "param": 1.19,
             "material": "lime",
-            "position": [0, 0.5, 0.575],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.84, 1.15, 0.84]
+            "span": [
+              "taper_2",
+              ""
+            ],
+            "rotation": [0, -1.57079, 0],
+            "size": [0.84, 0, 0.84]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "navy",
-            "position": [0, 0.894, 0.345],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.394, -0.805, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.68, 0.12, 0.68]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "navy",
-            "position": [0, 0.926, 0.805],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.426, -0.345, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.68, 0.12, 0.68]
           }
         ]
       },
       {
-        "name": "taper_2",
-        "parent": "taper_1",
-        "socket": {"position": [0, 0.5, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine2",
-        "binds": [
-          {"channel": "taper_2_pitch", "sign": 1},
-          {"channel": "taper_2_yaw", "sign": 1},
-          {"channel": "taper_2_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.42, 1.15], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
+        "name": "taper",
+        "joints": [
           {
-            "primitive": "CONE",
-            "param": 1.235,
-            "material": "slate",
-            "position": [0, 0.42, 0.575],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.68, 1.15, 0.68]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.734, 0.345],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.6, 0.12, 0.6]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.766, 0.805],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.6, 0.12, 0.6]
+            "name": "spine2",
+            "kind": "BALL",
+            "size": 0.48,
+            "flange_t": 0.25,
+            "ball_r": 0.5,
+            "socket_t": 0.16667,
+            "stud_len": 0.27083,
+            "flange_w": 1.45833
           }
-        ]
-      },
-      {
-        "name": "taper_3",
-        "parent": "taper_2",
-        "socket": {"position": [0, 0.42, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine2",
-        "binds": [
-          {"channel": "taper_3_pitch", "sign": 1},
-          {"channel": "taper_3_yaw", "sign": 1},
-          {"channel": "taper_3_roll", "sign": 1}
         ],
-        "mount": {"position": [0, 0.42, 1.15], "normal": [0, 0, 1], "forward": [0, 1, 0]},
+        "slots": [
+          {"name": "next", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
+        ],
         "shapes": [
           {
             "primitive": "CONE",
             "param": 1.235,
             "material": "slate",
-            "position": [0, 0.42, 0.575],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.68, 1.15, 0.68]
+            "span": [
+              "next",
+              ""
+            ],
+            "rotation": [0, -1.57079, 0],
+            "size": [0.68, 0, 0.68]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0, 0.734, 0.345],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.314, -0.805, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.6, 0.12, 0.6]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0, 0.766, 0.805],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.6, 0.12, 0.6]
-          }
-        ]
-      },
-      {
-        "name": "taper_4",
-        "parent": "taper_3",
-        "socket": {"position": [0, 0.42, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine2",
-        "binds": [
-          {"channel": "taper_4_pitch", "sign": 1},
-          {"channel": "taper_4_yaw", "sign": 1},
-          {"channel": "taper_4_roll", "sign": 1}
-        ],
-        "mount": {"position": [0, 0.42, 1.15], "normal": [0, 0, 1], "forward": [0, 1, 0]},
-        "shapes": [
-          {
-            "primitive": "CONE",
-            "param": 1.235,
-            "material": "slate",
-            "position": [0, 0.42, 0.575],
-            "rotation": [1.5708, 0, 0],
-            "size": [0.68, 1.15, 0.68]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.734, 0.345],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.6, 0.12, 0.6]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "charcoal",
-            "position": [0, 0.766, 0.805],
-            "rotation": [0, 0, 1.5708],
+            "position": [0.346, -0.345, 0],
+            "rotation": [-1.5708, 0, 0],
             "size": [0.6, 0.12, 0.6]
           }
         ]
       },
       {
         "name": "tail",
-        "parent": "taper_4",
-        "socket": {"position": [0, 0.42, 0], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-        "joint": "spine2",
-        "binds": [
-          {"channel": "tail_pitch", "sign": 1},
-          {"channel": "tail_yaw", "sign": 1},
-          {"channel": "tail_roll", "sign": 1}
+        "joints": [
+          {
+            "name": "spine2",
+            "kind": "BALL",
+            "size": 0.48,
+            "flange_t": 0.25,
+            "ball_r": 0.5,
+            "socket_t": 0.16667,
+            "stud_len": 0.27083,
+            "flange_w": 1.45833
+          }
         ],
-        "mount": {"position": [0, 0.34, 1.3], "normal": [0, 0, 1], "forward": [0, 1, 0]},
         "shapes": [
           {
             "primitive": "CYLINDER",
             "material": "teal",
-            "position": [0, 0.34, 0.13],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -1.17, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.374, 0.2, 0.374]
           },
           {
             "primitive": "CYLINDER",
             "material": "orange",
-            "position": [0, 0.34, 0.39],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.91, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.442, 0.2, 0.442]
           },
           {
             "primitive": "CYLINDER",
             "material": "pink",
-            "position": [0, 0.34, 0.65],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.65, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.51, 0.2, 0.51]
           },
           {
             "primitive": "CYLINDER",
             "material": "teal",
-            "position": [0, 0.34, 0.91],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.39, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.578, 0.2, 0.578]
           },
           {
             "primitive": "CYLINDER",
             "material": "slate",
-            "position": [0, 0.34, 1.17],
-            "rotation": [1.5708, 0, 0],
+            "position": [0, -0.13, 0],
+            "rotation": [0, -1.57079, 0],
             "size": [0.646, 0.2, 0.646]
           },
           {
             "primitive": "CONE",
             "material": "pink",
-            "position": [0, 0.34, -0.67],
-            "rotation": [-1.5708, 0, 0],
+            "position": [0, -1.97, 0],
+            "rotation": [3.14159, 1.57079, 0],
             "size": [0.34, 1.4, 0.34]
           }
         ]
       },
       {
-        "name": "l_upper_arm",
-        "parent": "segment_2",
-        "socket": {"position": [-0.6, 0.5, 0.675], "normal": [-1, 0, 0], "forward": [0, 0, 1]},
-        "joint": "shoulder",
-        "binds": [
-          {"channel": "l_arm_swing", "sign": 1},
-          {"channel": "l_arm_out", "sign": 1},
-          {"channel": "l_arm_twist", "sign": 1}
+        "name": "upper_arm",
+        "joints": [
+          {"name": "disc", "kind": "SPIN"},
+          {
+            "name": "shoulder",
+            "kind": "HINGE",
+            "size": 0.21,
+            "bend": 1.5707964,
+            "jaw": 0.47619,
+            "lug_t": 0.2619,
+            "lug_d": 1.04762,
+            "shank": 0.97143,
+            "flange_t": 0.7619,
+            "pin_r": 0.21429,
+            "clr": 0.14286,
+            "pin_out": 0.2381,
+            "tang": true,
+            "disc_f": true,
+            "disc_m": true
+          },
+          {"name": "twist", "kind": "SPIN"}
         ],
-        "mount": {"normal": [0, 1, 0], "forward": [0, 0, 1]},
+        "slots": [
+          {"name": "forearm", "position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
+        ],
         "shapes": [
-          {"material": "sky", "position": [0, -0.225, 0], "size": [0.38, 0.45, 0.42]},
+          {
+            "material": "sky",
+            "span": [
+              "forearm",
+              ""
+            ],
+            "rotation": [0, 1.5708, 0],
+            "size": [0.38, 0, 0.42]
+          },
           {
             "primitive": "WEDGE",
             "param": 0.5,
             "material": "brown",
-            "position": [0, -0.18, 0.24],
+            "position": [0.24, -0.18, 0],
+            "rotation": [0, 1.5708, 0],
             "size": [0.3192, 0.27, 0.08]
           }
         ]
       },
       {
-        "name": "l_forearm",
-        "parent": "l_upper_arm",
-        "socket": {"position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-        "joint": "elbow",
-        "binds": [
-          {"channel": "l_elbow", "sign": 1},
-          {},
-          {}
+        "name": "forearm",
+        "joints": [
+          {
+            "name": "elbow",
+            "kind": "HINGE",
+            "size": 0.28,
+            "jaw": 0.5,
+            "lug_t": 0.25,
+            "lug_d": 1,
+            "shank": 0.64286,
+            "flange_t": 0.57143,
+            "pin_r": 0.21429,
+            "clr": 0.10714,
+            "pin_out": 0.17857
+          }
         ],
-        "mount": {"normal": [0, 1, 0], "forward": [1, 0, 0]},
         "shapes": [
           {"material": "yellow", "position": [0, -0.2, 0], "size": [0.3, 0.4, 0.34]},
           {
@@ -980,234 +1205,161 @@
         ]
       },
       {
-        "name": "r_upper_arm",
-        "parent": "segment_2",
-        "socket": {"position": [0.6, 0.5, 0.675], "normal": [1, 0, 0], "forward": [0, 0, -1]},
-        "joint": "shoulder",
-        "binds": [
-          {"channel": "r_arm_swing", "sign": -1},
-          {"channel": "r_arm_out", "sign": 1},
-          {"channel": "r_arm_twist", "sign": -1}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [0, 0, 1]},
-        "shapes": [
-          {"material": "sky", "position": [0, -0.225, 0], "size": [0.38, 0.45, 0.42]},
+        "name": "thigh",
+        "joints": [
+          {"name": "disc", "kind": "SPIN"},
           {
-            "primitive": "WEDGE",
-            "param": 0.5,
-            "material": "brown",
-            "position": [0, -0.18, 0.24],
-            "size": [0.3192, 0.27, 0.08]
+            "name": "hip",
+            "kind": "HINGE",
+            "size": 0.25,
+            "bend": 1.5707964,
+            "jaw": 0.48,
+            "lug_t": 0.26,
+            "lug_d": 1.04,
+            "shank": 0.912,
+            "flange_t": 0.64,
+            "pin_r": 0.22,
+            "clr": 0.12,
+            "pin_out": 0.2,
+            "tang": true,
+            "disc_f": true,
+            "disc_m": true
+          },
+          {"name": "twist", "kind": "SPIN"}
+        ],
+        "slots": [
+          {"name": "shin", "position": [0, -0.5, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
+        ],
+        "shapes": [
+          {
+            "material": "orange",
+            "span": [
+              "shin",
+              ""
+            ],
+            "rotation": [0, 1.5708, 0],
+            "size": [0.46, 0, 0.54]
           }
         ]
+      },
+      {
+        "name": "shin",
+        "joints": [
+          {
+            "name": "knee",
+            "kind": "HINGE",
+            "size": 0.31,
+            "jaw": 0.51613,
+            "lug_t": 0.24194,
+            "lug_d": 0.96774,
+            "shank": 0.61935,
+            "flange_t": 0.51613,
+            "pin_r": 0.22581,
+            "clr": 0.09677,
+            "pin_out": 0.16129
+          }
+        ],
+        "shapes": [
+          {"material": "navy", "position": [0, -0.225, 0], "size": [0.34, 0.45, 0.4]},
+          {
+            "primitive": "CYLINDER",
+            "material": "lime",
+            "position": [0, -0.5, 0],
+            "rotation": [0, 0, -1.5708],
+            "size": [0.26, 0.4, 0.26]
+          },
+          {"material": "charcoal", "position": [0, -0.55, 0.055], "size": [0.46, 0.2, 0.35]},
+          {
+            "primitive": "QUARTER_CYLINDER",
+            "material": "sky",
+            "position": [-0.14, -0.65, 0.2],
+            "rotation": [0, 0, 1.5708],
+            "size": [0.56, 0.08, 0.56]
+          },
+          {
+            "primitive": "QUARTER_CYLINDER",
+            "material": "sky",
+            "position": [0, -0.65, 0.2],
+            "rotation": [0, 0, 1.5708],
+            "size": [0.56, 0.08, 0.56]
+          },
+          {
+            "primitive": "QUARTER_CYLINDER",
+            "material": "sky",
+            "position": [0.14, -0.65, 0.2],
+            "rotation": [0, 0, 1.5708],
+            "size": [0.56, 0.08, 0.56]
+          }
+        ]
+      }
+    ],
+    "assembly": [
+      {"name": "head", "part": "head"},
+      {"name": "jaw", "part": "jaw", "parent": "head", "parent_slot": "jaw"},
+      {"name": "segment_1", "part": "segment", "parent": "head", "parent_slot": "segment_1"},
+      {"name": "segment_2", "part": "segment_limbs", "parent": "segment_1", "parent_slot": "next"},
+      {"name": "segment_3", "part": "segment", "parent": "segment_2", "parent_slot": "next"},
+      {"name": "segment_4", "part": "segment", "parent": "segment_3", "parent_slot": "next"},
+      {"name": "segment_5", "part": "segment_limbs", "parent": "segment_4", "parent_slot": "next"},
+      {"name": "segment_6", "part": "segment", "parent": "segment_5", "parent_slot": "next"},
+      {"name": "taper_1", "part": "taper_1", "parent": "segment_6", "parent_slot": "next"},
+      {"name": "taper_2", "part": "taper", "parent": "taper_1", "parent_slot": "taper_2"},
+      {"name": "taper_3", "part": "taper", "parent": "taper_2", "parent_slot": "next"},
+      {"name": "taper_4", "part": "taper", "parent": "taper_3", "parent_slot": "next"},
+      {"name": "tail", "part": "tail", "parent": "taper_4", "parent_slot": "next"},
+      {"name": "l_upper_arm", "part": "upper_arm", "parent": "segment_2", "parent_slot": "l_limb"},
+      {"name": "l_forearm", "part": "forearm", "parent": "l_upper_arm", "parent_slot": "forearm"},
+      {
+        "name": "r_upper_arm",
+        "part": "upper_arm",
+        "parent": "segment_2",
+        "parent_slot": "r_limb",
+        "mirror": true
       },
       {
         "name": "r_forearm",
+        "part": "forearm",
         "parent": "r_upper_arm",
-        "socket": {"position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-        "joint": "elbow",
-        "binds": [
-          {"channel": "r_elbow", "sign": 1},
-          {},
-          {}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [1, 0, 0]},
-        "shapes": [
-          {"material": "yellow", "position": [0, -0.2, 0], "size": [0.3, 0.4, 0.34]},
-          {
-            "primitive": "WEDGE",
-            "param": 0.5,
-            "material": "yellow",
-            "position": [0, -0.18, 0.19],
-            "size": [0.24, 0.26, 0.08]
-          },
-          {
-            "primitive": "CYLINDER",
-            "material": "green",
-            "position": [0, -0.45, 0],
-            "rotation": [0, 0, -1.5708],
-            "size": [0.24, 0.36, 0.24]
-          },
-          {"material": "slate", "position": [0, -0.62, 0.02], "size": [0.34, 0.24, 0.3]},
-          {"material": "slate", "position": [-0.14, -0.8, 0.06], "size": [0.09, 0.16, 0.11]},
-          {"material": "cream", "position": [-0.14, -0.94303, 0.09045], "rotation": [-0.45, 0, 0], "size": [0.08, 0.14, 0.1]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "yellow",
-            "position": [-0.14, -1.0098, 0.06717],
-            "rotation": [-0.45, 0, -1.5708],
-            "size": [0.6, 0.08, 0.6]
-          },
-          {"material": "slate", "position": [0, -0.8, 0.06], "size": [0.09, 0.16, 0.11]},
-          {"material": "cream", "position": [0, -0.94303, 0.09045], "rotation": [-0.45, 0, 0], "size": [0.08, 0.14, 0.1]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "yellow",
-            "position": [0, -1.0098, 0.06717],
-            "rotation": [-0.45, 0, -1.5708],
-            "size": [0.6, 0.08, 0.6]
-          },
-          {"material": "slate", "position": [0.14, -0.8, 0.06], "size": [0.09, 0.16, 0.11]},
-          {"material": "cream", "position": [0.14, -0.94303, 0.09045], "rotation": [-0.45, 0, 0], "size": [0.08, 0.14, 0.1]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "yellow",
-            "position": [0.14, -1.0098, 0.06717],
-            "rotation": [-0.45, 0, -1.5708],
-            "size": [0.6, 0.08, 0.6]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "cream",
-            "position": [0.25, -0.7, -0.06],
-            "rotation": [0, 0, -1.5708],
-            "size": [0.42, 0.08, 0.42]
-          }
-        ]
+        "parent_slot": "forearm",
+        "mirror": true
       },
-      {
-        "name": "l_thigh",
-        "parent": "segment_5",
-        "socket": {"position": [-0.6, 0.5, 0.675], "normal": [-1, 0, 0], "forward": [0, 0, 1]},
-        "joint": "hip",
-        "binds": [
-          {"channel": "l_leg_swing", "sign": 1},
-          {"channel": "l_leg_out", "sign": 1},
-          {"channel": "l_leg_twist", "sign": 1}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [0, 0, 1]},
-        "shapes": [
-          {"material": "orange", "position": [0, -0.25, 0], "size": [0.46, 0.5, 0.54]}
-        ]
-      },
-      {
-        "name": "l_shin",
-        "parent": "l_thigh",
-        "socket": {"position": [0, -0.5, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-        "joint": "knee",
-        "binds": [
-          {"channel": "l_knee", "sign": 1},
-          {},
-          {}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [1, 0, 0]},
-        "shapes": [
-          {"material": "navy", "position": [0, -0.225, 0], "size": [0.34, 0.45, 0.4]},
-          {
-            "primitive": "CYLINDER",
-            "material": "lime",
-            "position": [0, -0.5, 0],
-            "rotation": [0, 0, -1.5708],
-            "size": [0.26, 0.4, 0.26]
-          },
-          {"material": "charcoal", "position": [0, -0.55, 0.055], "size": [0.46, 0.2, 0.35]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [-0.14, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [0, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [0.14, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          }
-        ]
-      },
+      {"name": "l_thigh", "part": "thigh", "parent": "segment_5", "parent_slot": "l_limb"},
+      {"name": "l_shin", "part": "shin", "parent": "l_thigh", "parent_slot": "shin"},
       {
         "name": "r_thigh",
+        "part": "thigh",
         "parent": "segment_5",
-        "socket": {"position": [0.6, 0.5, 0.675], "normal": [1, 0, 0], "forward": [0, 0, -1]},
-        "joint": "hip",
-        "binds": [
-          {"channel": "r_leg_swing", "sign": -1},
-          {"channel": "r_leg_out", "sign": 1},
-          {"channel": "r_leg_twist", "sign": -1}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [0, 0, 1]},
-        "shapes": [
-          {"material": "orange", "position": [0, -0.25, 0], "size": [0.46, 0.5, 0.54]}
-        ]
+        "parent_slot": "r_limb",
+        "mirror": true
       },
       {
         "name": "r_shin",
+        "part": "shin",
         "parent": "r_thigh",
-        "socket": {"position": [0, -0.5, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-        "joint": "knee",
-        "binds": [
-          {"channel": "r_knee", "sign": 1},
-          {},
-          {}
-        ],
-        "mount": {"normal": [0, 1, 0], "forward": [1, 0, 0]},
-        "shapes": [
-          {"material": "navy", "position": [0, -0.225, 0], "size": [0.34, 0.45, 0.4]},
-          {
-            "primitive": "CYLINDER",
-            "material": "lime",
-            "position": [0, -0.5, 0],
-            "rotation": [0, 0, -1.5708],
-            "size": [0.26, 0.4, 0.26]
-          },
-          {"material": "charcoal", "position": [0, -0.55, 0.055], "size": [0.46, 0.2, 0.35]},
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [-0.14, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [0, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          },
-          {
-            "primitive": "QUARTER_CYLINDER",
-            "material": "sky",
-            "position": [0.14, -0.65, 0.2],
-            "rotation": [0, 0, 1.5708],
-            "size": [0.56, 0.08, 0.56]
-          }
-        ]
+        "parent_slot": "shin",
+        "mirror": true
       }
     ]
   },
   "animation": {
-    "poses": [
-      {
-        "name": "rest",
-        "values": {
-          "jaw": 0.2094,
-          "l_arm_swing": 0.5236,
-          "l_elbow": 0.7854,
-          "l_knee": 0.6109,
-          "l_leg_swing": -0.4363,
-          "r_arm_swing": 0.5236,
-          "r_elbow": 0.7854,
-          "r_knee": 0.6109,
-          "r_leg_swing": -0.4363
-        }
-      }
-    ],
     "clips": [
       {
         "name": "idle",
         "duration": 2.4,
         "keys": [
-          {"pose": "rest"}
+          {
+            "values": {
+              "jaw": 0.2094,
+              "l_arm_swing": 0.5236,
+              "l_elbow": 0.7854,
+              "l_knee": 0.6109,
+              "l_leg_swing": -0.4363,
+              "r_arm_swing": 0.5236,
+              "r_elbow": 0.7854,
+              "r_knee": 0.6109,
+              "r_leg_swing": -0.4363
+            }
+          }
         ]
       }
     ]

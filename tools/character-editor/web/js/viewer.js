@@ -74,7 +74,7 @@ export class Viewer {
     return this.withText(JSON.stringify(anim), (p, n) => this.x.viewer_set_animation(p, n)) !== 0;
   }
 
-  /** showValues holds the mech in these channel values (channel units); others are 0. @param {Record<string, number>} values */
+  /** showValues holds the mech in these driver values; others are 0. @param {Record<string, number>} values */
   showValues(values) {
     return this.withText(JSON.stringify(values), (p, n) => this.x.viewer_set_values(p, n)) !== 0;
   }
@@ -82,11 +82,6 @@ export class Viewer {
   /** @param {number} clip @param {number} time @param {boolean} playing @param {number} speed @param {boolean} loops */
   play(clip, time, playing, speed = 1, loops = true) {
     this.x.viewer_play(clip, time, playing ? 1 : 0, speed, loops ? 1 : 0);
-  }
-
-  /** @param {number} pose */
-  showPose(pose) {
-    this.x.viewer_show_pose(pose);
   }
 
   /** @param {number} part @param {number} shape @param {boolean} isolate hide the rest of the character */
@@ -101,6 +96,11 @@ export class Viewer {
 
   frame() {
     this.x.viewer_frame();
+  }
+
+  /** look from a view, framed: 0 free (perspective orbit), then from +x, -x, +y, -y, +z, -z (orthographic) @param {number} view */
+  view(view) {
+    this.x.viewer_view(view);
   }
 
   time() {

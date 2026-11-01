@@ -60,7 +60,7 @@ viewer_set_animation :: proc "contextless" (p: [^]u8, n: int) -> bool {
   return set_animation(p[:n])
 }
 
-// viewer_set_values shows channel values: a JSON object of channel name to value.
+// viewer_set_values shows driver values: a JSON object of driver name to value.
 @(export)
 viewer_set_values :: proc "contextless" (p: [^]u8, n: int) -> bool {
   context = ctx
@@ -75,16 +75,8 @@ viewer_play :: proc "contextless" (clip: i32, time: f32, playing: bool, speed: f
   apply_show()
 }
 
-// viewer_show_pose shows pose `pose` of the animation.
-@(export)
-viewer_show_pose :: proc "contextless" (pose: i32) {
-  context = ctx
-  app.show, app.pose, app.playing = .POSE, int(pose), false
-  apply_show()
-}
-
 // viewer_select outlines part `part`'s shapes, shape `shape` in white; -1 for none. With
-// `isolate`, the rest of the character is hidden.
+// `isolate`, the rest of the character and the floor are hidden (the editor's Model tab).
 @(export)
 viewer_select :: proc "contextless" (part, shape: i32, isolate: bool) {
   app.part, app.shape, app.isolate = int(part), int(shape), isolate
@@ -100,6 +92,14 @@ viewer_explode :: proc "contextless" (amount: f32) {
 viewer_frame :: proc "contextless" () {
   context = ctx
   frame_camera()
+}
+
+// viewer_view looks at the character from a View: 0 free (perspective orbit), then from +x, -x,
+// +y, -y, +z, -z (orthographic, framed). Dragging to turn goes back to free.
+@(export)
+viewer_view :: proc "contextless" (view: i32) {
+  context = ctx
+  if view >= i32(min(View)) && view <= i32(max(View)) do set_view(View(view))
 }
 
 @(export)
