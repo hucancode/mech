@@ -21,7 +21,7 @@ read :: proc(t: ^testing.T, name: string) -> []u8 {
 // real changes in a diff.
 @(test)
 test_files_round_trip :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon"}) {
+  for name in ([]string{"mech", "dragon", "strider"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)

@@ -137,3 +137,10 @@ arm → fist, each link firing in turn.
   legs -0.44, knees 0.61 radians) as an `idle` clip. The example's motion (riding a spline loop, limbs
   swinging in strokes, the fly-in assembly) is code in that example and still has to be authored
   here. Its spine drivers (`segment_*_pitch/yaw/roll` and so on) are in place for that.
+- `assets/characters/strider.json`: every clip a reverse-jointed body needs, authored for it. Both
+  legs reach with IK in every key, their poles behind the knees. `walk` and `run` are sampled
+  gaits (16 keys a loop, `LINEAR` between them): each foot slides straight back along the ground
+  through its stance and swings forward lifting, while the root bobs twice a cycle and the pelvis,
+  hull and cannons counter-swing. `attack` is a cannon ram: the left foot steps in, then the
+  pelvis, hull, right shoulder and cannon each fire in turn. `cast` is a missile salvo: brace low
+  and wide, tip the rack forward, three launches jolt the rack and root, then settle back.

@@ -330,6 +330,13 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   centred hinge. Its joint hardware uses this engine's kit, so the lugs and sockets look a little
   different from the example's. Piece colours keep the example's palette hashing, with a fixed
   seed.
+- `assets/characters/strider.json`: a heavy reverse-jointed walker, built on the same engine
+  with a different body. A wide hull on a ball waist, a visor `sensor` on a neck, a missile
+  `rack` hinged on its back (`rack_pitch`), and arms that end in guns: the `cannon` part is the
+  forearm, no hand. Each leg is four links, `thigh` (the mech's hip stack), `shin` (`knee`),
+  `hock` (`ankle`) and a broad, solid `foot` (`toe`); their hinges' `bend`s give the rest pose its
+  zigzag (thigh back, shin forward, hock back, foot level), so the knees point backwards at
+  every driver 0 and their ranges keep them there. Right limbs mirror the left limbs' parts.
 
 ## Not supported yet
 
