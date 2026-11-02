@@ -33,7 +33,7 @@ character-editor: web
 	node $(EDITOR)/server.mjs
 
 test:
-	odin test src/mech
+	odin test src/mech -out:bin/mech_test
 
 # Type-check everything without building.
 check:

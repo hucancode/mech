@@ -7,7 +7,7 @@
 import { btn, CARET, h, select, slider, vec3 } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { angularDrivers, driverRange, groupDrivers, vectors } from "../model.js";
+import { driverRange, groupDrivers, vectors } from "../model.js";
 
 /** @type {Set<string>} groups the user folded */
 const folded = new Set();
@@ -17,11 +17,10 @@ const folded = new Set();
  * @param {{full?: boolean, onset: (name: string, v: number) => void, onremove?: (name: string) => void}} o
  */
 export function driverValues(values, o) {
-  const drivers = editor.model.drivers ?? [];
-  const root = editor.rootChannels();
-  const angular = new Set([...angularDrivers(editor.model), ...root.turn]);
-  /** @type {Map<string, any>} every channel by name: the drivers, then the root's */
-  const channels = new Map([...drivers, ...[...root.move, ...root.turn].map((name) => ({ name }))].map((c) => [c.name, c]));
+  const all = editor.channels();
+  const angular = new Set(all.filter((c) => c.angle).map((c) => c.name));
+  /** @type {Map<string, any>} every channel by name, in the engine's order */
+  const channels = new Map(all.map((c) => [c.name, c]));
   const entries = vectors([...channels.keys()]);
   const held = (/** @type {import("../model.js").Entry} */ e) => e.names.some((n) => values && n in values);
   const shown = o.full ? entries : entries.filter(held);

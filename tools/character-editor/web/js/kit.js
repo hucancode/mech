@@ -72,9 +72,8 @@ export function insertKit(m, src, i, parent, scale = 1) {
   }
   for (const ik of src.iks ?? []) {
     if (!names.has(ik.root) || !names.has(ik.tip)) continue;
-    const range = (/** @type {string} */ x) => (src.drivers ?? []).find((/** @type {any} */ c) => c.name === ik.name + x) ?? {};
-    const mid = ["_x", "_y", "_z"].map((k) => ((((range(k).max ?? 0) + (range(k).min ?? 0)) / 2) * scale));
-    addIk(m, ik.name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)), mid, (((range("_x").max ?? 0) - (range("_x").min ?? 0)) / 2) * scale);
+    const k = addIk(m, ik.name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)));
+    for (const f of ["hold", "pole"]) if (ik[f]) m.iks[k][f] = true;
   }
 
   m.assembly ??= [];

@@ -144,7 +144,7 @@ export function modelInspector() {
   const out = [
     section("Part", [
       row("name", text({ value: part.name, onchange: (v) => edit(() => (renamePart(m, part.name, v), (part.name = v))) })),
-      jointsRows(part, part),
+      jointsRows(part),
     ]),
     slotsSection(part),
   ];
@@ -253,7 +253,6 @@ function slotsSection(part) {
         slots,
         (s) => [
           h("span", { class: "name", style: { flex: "1" } }, s.name),
-          s.joints?.length > 0 && h("span", { class: "tag", title: "joints it exposes" }, s.joints.map((/** @type {any} */ j) => j.name).join(" · ")),
         ],
         (k) => k === editor.slot,
         (k) => editor.select(() => (editor.slot = k === editor.slot ? -1 : k)),
@@ -265,7 +264,6 @@ function slotsSection(part) {
           row("name", text({ value: slot.name, onchange: (v) => edit(() => (renameSlot(m, part.name, slot.name, v), (slot.name = v))) }), "renames carry to the instances matched on it"),
           snapRow(part, slot),
           face({ value: slot, onchange: (f) => edit(() => Object.assign(slot, f), "slot") }),
-          jointsRows(part, slot),
         ),
     ],
     {
@@ -282,26 +280,25 @@ function slotsSection(part) {
 }
 
 /**
- * jointsRows edits the joints a slot exposes (`slot` the part itself: its default slot, the
- * origin): what the part moves by when it hangs by the slot, listed from the parent's side, each
- * on the one before. Each is named (drivers move it by name), has a kind and its parameters, and
- * may twist about the slot's normal first. They live on the part, so every instance of it shares
- * them. None: the part bolts on rigid.
- * @param {any} part @param {any} slot
+ * jointsRows edits the joints a part moves by, listed from its parent's slot down to its origin,
+ * each on the one before. Each is named (drivers move it by name), has a kind and its parameters,
+ * and may twist about its socket's normal first. They live on the part, so every instance of it
+ * shares them. None: the part bolts on rigid.
+ * @param {any} part
  */
-function jointsRows(part, slot) {
+function jointsRows(part) {
   const m = editor.model;
-  const joints = slot.joints ?? [];
+  const joints = part.joints ?? [];
   // the view hangs the part by these joints, so they can be tried
-  const shown = joints.length > 0 && editor.hangJoints() === joints;
+  const shown = joints.length > 0;
   /** @param {() => void} change @param {string} [key] */
   const edit = (change, key) => editor.edit("model", change, key);
-  const taken = (/** @type {string} */ n) => [part, ...(part.slots ?? [])].some((/** @type {any} */ s) => (s.joints ?? []).some((/** @type {any} */ j) => j.name === n));
+  const taken = (/** @type {string} */ n) => joints.some((/** @type {any} */ j) => j.name === n);
   // a size that suits the face the joints sit on (the members they join), else the first shape
-  const fit = (/** @type {string} */ kind) => fitJoint(part, slot, kind, editor.faces(part.name)) || jointSizeFor(part);
+  const fit = (/** @type {string} */ kind) => fitJoint(part, kind, editor.faces(part.name)) || jointSizeFor(part);
   const add = () => {
     const size = fit("HINGE");
-    edit(() => (slot.joints ??= []).push(setJointKind({ name: uniqueName("hinge", taken) }, "HINGE", size)));
+    edit(() => (part.joints ??= []).push(setJointKind({ name: uniqueName("hinge", taken) }, "HINGE", size)));
   };
   /** @param {number} k @param {number} d */
   const move = (k, d) => edit(() => joints.splice(k + d, 0, ...joints.splice(k, 1)));
@@ -314,7 +311,7 @@ function jointsRows(part, slot) {
         btn(icon("plus"), add, { kind: "icon", title: "Add a joint on the end of the stack" }),
         shown && btn(icon("reset"), () => editor.resetTries(), { kind: "icon", title: "Put the tried joints back at rest" }),
       ],
-      `${slot === part ? "at its origin, the default slot; " : ""}${joints.length ? "from the parent's side; drivers move them by name (Rig tab)" : "none: bolted rigid when it hangs by this slot"}`,
+      joints.length ? "from the parent's side to its origin; drivers move them by name (Rig tab)" : "none: bolted rigid",
     ),
     joints.map((/** @type {any} */ j, /** @type {number} */ k) => {
       const size = jointSize(j);
@@ -323,7 +320,7 @@ function jointsRows(part, slot) {
         "div",
         { class: shown && editor.joint === k ? "joint-item on" : "joint-item" },
         row(`${k + 1}`, [
-          text({ value: j.name, onchange: (v) => edit(() => (renamePartJoint(m, part.name, j.name, v), (j.name = v))) }),
+          text({ value: j.name, onchange: (v) => editor.edit("both", () => (renamePartJoint(m, editor.anim, part.name, j.name, v), (j.name = v))) }),
           select({
             value: j.kind ?? "HINGE",
             options: JOINT_KINDS,
@@ -333,7 +330,7 @@ function jointsRows(part, slot) {
             },
           }),
           btn("↑", () => move(k, -1), { kind: "icon", title: "Earlier in the stack (nearer the parent)", disabled: k === 0 }),
-          btn(icon("x"), () => edit(() => (joints.splice(k, 1), joints.length || delete slot.joints)), { kind: "icon", title: "Remove this joint" }),
+          btn(icon("x"), () => edit(() => (joints.splice(k, 1), joints.length || delete part.joints)), { kind: "icon", title: "Remove this joint" }),
         ]),
         row(
           "twist",
@@ -342,7 +339,7 @@ function jointsRows(part, slot) {
             quarters(j, "twist", edit),
             h("span", { class: "tag", title: "the axes it turns about" }, jointAxes(j).join(" ")),
           ],
-          "degrees about the slot's normal before the joint",
+          "degrees about the socket's normal before the joint",
         ),
         row("bend", [num({ value: j.bend ?? 0, deg: true, step: 15, onchange: (v) => edit(() => (v ? (j.bend = v) : delete j.bend), "bend") }), quarters(j, "bend", edit)], "turns the first axis at rest, in degrees"),
         rangeRows(j, edit),

@@ -40,7 +40,6 @@ export function assembleInspector() {
   const part = partOf(m, i);
   const on = partOf(m, parent);
   const slots = (on?.slots ?? []).map((/** @type {any} */ s) => s.name);
-  const own = (part?.slots ?? []).map((/** @type {any} */ s) => s.name);
   /** the options of a slot select, keeping a name the part lacks so it shows @param {string[]} names @param {string | undefined} v */
   const keep = (names, v) => (!v || names.includes(v) ? names : [...names, v]);
   const joints = exposedJoints(m, i);
@@ -52,7 +51,7 @@ export function assembleInspector() {
           value: inst.name,
           placeholder: inst.part,
           empty: true, // empty: the part's name
-          onchange: (v) => edit(() => ((v ||= inst.part), renameInstance(m, inst.name, v), (inst.name = v))),
+          onchange: (v) => editor.edit("both", () => ((v ||= inst.part), renameInstance(m, editor.anim, inst.name, v), (inst.name = v))),
         }),
       ),
       row(
@@ -69,16 +68,9 @@ export function assembleInspector() {
                 inst.part = p.name;
               } else if (v) inst.part = v;
               else delete inst.part;
-              // keep the slot it hangs by when the new part has one of that name, else its origin
-              if (!(partOf(m, i)?.slots ?? []).some((/** @type {any} */ s) => s.name === inst.slot)) delete inst.slot;
             }),
         }),
         "edit parts in the Model tab",
-      ),
-      row(
-        "slot",
-        select({ value: inst.slot, none: "(its origin)", options: keep(own, inst.slot), onchange: (v) => edit(() => (v ? (inst.slot = v) : delete inst.slot)) }),
-        part ? `the slot of ${part.name} it hangs by, with the joints that slot exposes; its origin brings the part's own joints` : "the instance places no part",
       ),
       row(
         "parent",

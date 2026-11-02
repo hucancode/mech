@@ -43,20 +43,14 @@ export function partUsers(m, name) {
   return (m.assembly ?? []).filter((/** @type {any} */ x) => x.part === name);
 }
 
-/** the instances matched on slot `slot` of library part `part`: those hanging from it, and those of the part hanging by it @param {any} m @param {string} part @param {string} slot */
+/** the instances hanging from slot `slot` of library part `part` @param {any} m @param {string} part @param {string} slot */
 export function slotUsers(m, part, slot) {
-  return (m.assembly ?? []).filter((/** @type {any} */ x) => (x.parent_slot === slot && m.assembly[instanceIndex(m, x.parent)]?.part === part) || (x.part === part && x.slot === slot));
+  return (m.assembly ?? []).filter((/** @type {any} */ x) => x.parent_slot === slot && m.assembly[instanceIndex(m, x.parent)]?.part === part);
 }
 
-/** the slot instance i hangs by, on its own part @param {any} m @param {number} i */
-export function hangSlot(m, i) {
-  const x = m.assembly?.[i];
-  return partOf(m, i)?.slots?.find((/** @type {any} */ s) => s.name === x?.slot);
-}
-
-/** the joints instance i exposes: those of the slot it hangs by, the part's own for its default slot (the origin) @param {any} m @param {number} i @returns {any[]} */
+/** the joints instance i moves by: its part's @param {any} m @param {number} i @returns {any[]} */
 export function exposedJoints(m, i) {
-  return (m.assembly?.[i]?.slot ? hangSlot(m, i) : partOf(m, i))?.joints ?? [];
+  return partOf(m, i)?.joints ?? [];
 }
 
 /** the axes a joint turns about @param {any} j @returns {string[]} */
@@ -143,13 +137,6 @@ export function uniqueName(base, taken) {
 /** The axes of a joint's frame a drive turns about. */
 export const AXES = ["X", "Y", "Z"];
 
-/** The drivers that turn some joint: their values are angles (shown in degrees). @param {any} m @returns {Set<string>} */
-export function angularDrivers(m) {
-  const out = new Set();
-  for (const d of m.drivers ?? []) if ((d.drives ?? []).length) out.add(d.name);
-  return out;
-}
-
 /** a new driver named from `base`, ranged over `range` (a joint's, jointRange), else a quarter turn each way @param {any} m @param {string} base @param {number[]} [range] */
 export function newDriver(m, base, range) {
   m.drivers ??= [];
@@ -159,67 +146,34 @@ export function newDriver(m, base, range) {
   return d;
 }
 
+/**
+ * the channel turning joint `j` of instance `inst` about `axis`: `inst.joint`, or `inst.joint.x`
+ * for a joint with several axes (a ball). The engine names them so (mech.channel_name); clips key
+ * them like drivers.
+ * @param {string} inst @param {any} j @param {string} axis
+ */
+export const jointChannel = (inst, j, axis) => (jointAxes(j).length > 1 ? `${inst}.${j.name}.${axis.toLowerCase()}` : `${inst}.${j.name}`);
+
 // ---- IK targets ------------------------------------------------------------------------------------
 
-/** an IK target's drivers, by its name: the target's x, y, z (model units) and the weight */
+/** an IK target's channels, after its name: the target's x, y, z (model units) and the weight */
 export const IK_SUFFIXES = ["_x", "_y", "_z", "_weight"];
-/** an IK target's pole, when it has one: x, y, z (model units), the point its chain bends toward */
+/** an IK target's pole's, when it has one: x, y, z (model units), the point its chain bends toward */
 export const POLE_SUFFIXES = ["_pole_x", "_pole_y", "_pole_z"];
 const ALL_IK_SUFFIXES = [...IK_SUFFIXES, ...POLE_SUFFIXES];
 
-/** the IK target driver `name` belongs to (its pole's too), or undefined @param {any} m @param {string} name */
-export function ikOf(m, name) {
-  return (m.iks ?? []).find((/** @type {any} */ ik) => ALL_IK_SUFFIXES.some((x) => ik.name + x === name));
-}
-
-/** whether IK target `ik` has a pole (all three of its drivers) @param {any} m @param {any} ik */
-export const hasPole = (m, ik) => POLE_SUFFIXES.every((x) => (m.drivers ?? []).some((/** @type {any} */ c) => c.name === ik.name + x));
-
-/**
- * addPole gives IK target `ik` a pole: its three drivers, ranged `reach` either side of `at`. The
- * chain then bends toward it (the knee, the elbow).
- * @param {any} m @param {any} ik @param {number[]} at @param {number} reach
- */
-export function addPole(m, ik, at, reach) {
-  m.drivers ??= [];
-  POLE_SUFFIXES.forEach((x, i) => m.drivers.some((/** @type {any} */ c) => c.name === ik.name + x) || m.drivers.push({ name: ik.name + x, min: r5(at[i] - reach), max: r5(at[i] + reach) }));
-}
-
-/** removePole takes IK target `ik`'s pole away: its drivers @param {any} m @param {any} ik */
-export function removePole(m, ik) {
-  m.drivers = (m.drivers ?? []).filter((/** @type {any} */ c) => !POLE_SUFFIXES.some((x) => c.name === ik.name + x));
-}
-
-/**
- * addIk adds an IK target reaching instance `tip`'s frame by turning the chain from `root`, with
- * its four drivers: x, y, z ranged `reach` either side of `at` (where the tip is now), and the
- * weight 0 to 1. Returns its index.
- * @param {any} m @param {string} name @param {string} root @param {string} tip @param {number[]} at @param {number} reach
- */
-export function addIk(m, name, root, tip, at, reach) {
+/** addIk adds an IK target reaching instance `tip`'s frame by turning the chain from `root`. Returns its index. @param {any} m @param {string} name @param {string} root @param {string} tip */
+export function addIk(m, name, root, tip) {
   m.iks ??= [];
-  m.drivers ??= [];
-  name = uniqueName(name, (n) => m.iks.some((/** @type {any} */ x) => x.name === n) || IK_SUFFIXES.some((x) => m.drivers.some((/** @type {any} */ c) => c.name === n + x)));
+  name = uniqueName(name, (n) => m.iks.some((/** @type {any} */ x) => x.name === n));
   m.iks.push({ name, root, tip });
-  ["x", "y", "z"].forEach((k, i) => m.drivers.push({ name: `${name}_${k}`, min: r5(at[i] - reach), max: r5(at[i] + reach) }));
-  m.drivers.push({ name: `${name}_weight`, max: 1 });
   return m.iks.length - 1;
 }
 
-/** renameIk renames an IK target and its drivers (its pole's too), through the open animation too @param {any} m @param {any} a @param {any} ik @param {string} to */
-export function renameIk(m, a, ik, to) {
-  for (const x of ALL_IK_SUFFIXES) {
-    const c = (m.drivers ?? []).find((/** @type {any} */ c) => c.name === ik.name + x);
-    if (c) (renameDriver(a, c.name, to + x), (c.name = to + x));
-  }
+/** renameIk renames an IK target, and its channels through the open animation @param {any} a @param {any} ik @param {string} to */
+export function renameIk(a, ik, to) {
+  for (const x of ALL_IK_SUFFIXES) renameDriver(a, ik.name + x, to + x);
   ik.name = to;
-}
-
-/** removeIk deletes an IK target and its drivers (its pole's too) @param {any} m @param {number} i */
-export function removeIk(m, i) {
-  const ik = m.iks[i];
-  m.drivers = (m.drivers ?? []).filter((/** @type {any} */ c) => !ALL_IK_SUFFIXES.some((x) => c.name === ik.name + x));
-  m.iks.splice(i, 1);
 }
 
 const LIMBS = [
@@ -241,7 +195,7 @@ export function groupOf(name) {
   else if (name.startsWith("r_")) [side, rest] = ["Right ", name.slice(2)];
   // limbs come in sides; an unsided name (hip_level) belongs to the body
   if (side) for (const [limb, words] of LIMBS) if (/** @type {string[]} */ (words).some((w) => rest.startsWith(w))) return cap(`${side}${limb}`);
-  const chain = /^([a-z]+)_\d+_/.exec(rest);
+  const chain = /^([a-z]+)_\d+[_.]/.exec(rest);
   if (chain) return cap(chain[1]);
   return side ? `${side.trim()} side` : "Body";
 }
@@ -277,8 +231,9 @@ export function vectors(names) {
   const done = new Set();
   for (const n of names) {
     if (done.has(n)) continue;
-    const stem = /^(.*)_[xyz]$/.exec(n)?.[1];
-    const three = stem !== undefined ? ["x", "y", "z"].map((a) => `${stem}_${a}`) : [];
+    // `_x` (an IK target's, the root's) or `.x` (a ball joint's)
+    const [, stem, sep] = /^(.*)([_.])[xyz]$/.exec(n) ?? [];
+    const three = stem !== undefined ? ["x", "y", "z"].map((a) => `${stem}${sep}${a}`) : [];
     if (three.length && three.every((x) => has.has(x))) {
       three.forEach((x) => done.add(x));
       out.push({ name: /** @type {string} */ (stem), names: three });
@@ -288,14 +243,14 @@ export function vectors(names) {
 }
 
 /**
- * A driver's slider range. Files leave out zero fields, so a missing bound is 0; with no range at
- * all it is a half turn each way.
+ * A channel's slider range (the "channels" query's min and max). Equal ends (a free joint, a
+ * driver without a range) give a half turn each way.
  * @param {any} c @returns {[number, number]}
  */
 export function driverRange(c) {
   const lo = c.min ?? 0;
   const hi = c.max ?? 0;
-  if (lo === 0 && hi === 0) return [-Math.PI, Math.PI];
+  if (lo === hi) return [-Math.PI, Math.PI];
   return lo < hi ? [lo, hi] : [lo, lo + 1];
 }
 
@@ -304,8 +259,9 @@ export const clone = (v) => JSON.parse(JSON.stringify(v));
 
 // ---- renames, carried through everything that names the thing --------------------------------
 
-/** an instance's rename, carried to its children, the drives moving it and the IK targets on it @param {any} m @param {string} from @param {string} to */
-export function renameInstance(m, from, to) {
+/** an instance's rename, carried to its children, the drives moving it, the IK targets on it, and its joints' channels in the open animation `a` @param {any} m @param {any} a @param {string} from @param {string} to */
+export function renameInstance(m, a, from, to) {
+  renameChannels(a, (n) => (n.startsWith(`${from}.`) ? to + n.slice(from.length) : undefined));
   for (const p of m.assembly ?? []) if (p.parent === from) p.parent = to;
   for (const d of m.drivers ?? []) for (const x of d.drives ?? []) if (x.part === from) x.part = to;
   for (const ik of m.iks ?? []) {
@@ -322,14 +278,16 @@ export function renamePart(m, from, to) {
 /** slot `from` of library part `part` renamed, carried to the instances matched on it and the part's shapes spanning it @param {any} m @param {string} part @param {string} from @param {string} to */
 export function renameSlot(m, part, from, to) {
   for (const s of m.parts?.[partIndex(m, part)]?.shapes ?? []) if (s.span) s.span = s.span.map((/** @type {string} */ x) => (x === from ? to : x));
-  for (const x of slotUsers(m, part, from)) {
-    if (x.part === part && x.slot === from) x.slot = to;
-    if (x.parent_slot === from && m.assembly[instanceIndex(m, x.parent)]?.part === part) x.parent_slot = to;
-  }
+  for (const x of slotUsers(m, part, from)) x.parent_slot = to;
 }
 
-/** joint `from` of library part `part` (on any of its slots) renamed, carried to the drives moving it @param {any} m @param {string} part @param {string} from @param {string} to */
-export function renamePartJoint(m, part, from, to) {
+/** joint `from` of library part `part` renamed, carried to the drives moving it and its channels in the open animation `a` @param {any} m @param {any} a @param {string} part @param {string} from @param {string} to */
+export function renamePartJoint(m, a, part, from, to) {
+  for (const x of m.assembly ?? []) {
+    if (x.part !== part) continue;
+    const was = `${x.name}.${from}`;
+    renameChannels(a, (n) => (n === was || n.startsWith(`${was}.`) ? `${x.name}.${to}${n.slice(was.length)}` : undefined));
+  }
   for (const d of m.drivers ?? []) for (const x of d.drives ?? []) if (x.joint === from && m.assembly?.[instanceIndex(m, x.part)]?.part === part) x.joint = to;
 }
 
@@ -341,14 +299,16 @@ export function renameMaterial(m, from, to) {
 
 /** A driver rename moves the open animation's values (the driver itself is renamed by the caller). @param {any} a @param {string} from @param {string} to */
 export function renameDriver(a, from, to) {
-  /** @param {Record<string, number> | undefined} values */
-  const move = (values) => {
-    if (values && from in values) {
-      values[to] = values[from];
-      delete values[from];
+  renameChannels(a, (n) => (n === from ? to : undefined));
+}
+
+/** renameChannels renames the open animation's keyed channels: `rename` gives a name's new one, or undefined to keep it @param {any} a @param {(name: string) => string | undefined} rename */
+export function renameChannels(a, rename) {
+  for (const c of a?.clips ?? [])
+    for (const k of c.keys ?? []) {
+      if (!k.values) continue;
+      k.values = Object.fromEntries(Object.entries(k.values).map(([n, v]) => [rename(n) ?? n, v]));
     }
-  };
-  for (const c of a.clips ?? []) for (const k of c.keys ?? []) move(k.values);
 }
 
 /**
@@ -578,11 +538,11 @@ export function newPart(m, base = "part") {
   return { name: uniqueName(base, (n) => partIndex(m, n) >= 0), shapes: [{ material: m.materials?.[0]?.name, position: [0, -0.15, 0], size: [0.2, 0.3, 0.2] }] };
 }
 
-/** the first slot of instance i's part nothing is matched on (neither a child nor i itself), or "" @param {any} m @param {number} i */
+/** the first slot of instance i's part no child is matched on, or "" @param {any} m @param {number} i */
 export function freeSlot(m, i) {
   const part = partOf(m, i);
   const kids = (m.assembly ?? []).filter((/** @type {any} */ x) => x.parent === m.assembly[i].name);
-  return part?.slots?.find((/** @type {any} */ s) => s.name !== m.assembly[i].slot && !kids.some((/** @type {any} */ x) => x.parent_slot === s.name))?.name ?? "";
+  return part?.slots?.find((/** @type {any} */ s) => !kids.some((/** @type {any} */ x) => x.parent_slot === s.name))?.name ?? "";
 }
 
 /**
@@ -627,11 +587,11 @@ export function newInstance(m, parent, faces) {
 
 /**
  * scalePart scales a library part about its own frame: its shapes and its slots, and with
- * `joints` the hardware of the joints it hangs by (its own and its slots').
+ * `joints` the hardware of the joints it hangs by.
  * @param {any} part @param {number} f @param {boolean} [joints]
  */
 export function scalePart(part, f, joints = false) {
-  if (joints) for (const s of [part, ...(part.slots ?? [])]) for (const j of s.joints ?? []) scaleJoint(j, f);
+  if (joints) for (const j of part.joints ?? []) scaleJoint(j, f);
   /** @param {number[] | undefined} v */
   const mul = (v) => v && round(v.map((c) => c * f));
   for (const s of part.shapes ?? []) {
@@ -672,8 +632,6 @@ export function scaleJoint(j, f) {
   if (j.size) j.size = r5(j.size * f);
 }
 
-/** the driver the model tab tries joint `joint`'s axis with (editor.tries) @param {string} joint @param {string} axis */
-export const tryDriver = (joint, axis) => `try:${joint}:${axis}`;
 
 /** joint j's range on axis "X", "Y" or "Z" (its stops, radians), undefined when free @param {any} j @param {string} axis */
 export function jointRange(j, axis) {
@@ -721,15 +679,15 @@ export function jointSizeFor(part) {
 const JOINT_FILL = { HINGE: 0.9, BALL: 0.65, SPIN: 0.9 };
 
 /**
- * fitJoint is a size for a `kind` joint that suits the face of the part's shapes where slot
- * `slot` sits (the part itself: its origin, facing +y toward its joints): the face nearest it
- * that faces the same way, its narrower width times the kind's fill. Joints are sized by the
- * members they join, as a clevis is by its link. 0 when no face faces that way.
- * @param {any} part @param {any} slot @param {string} kind @param {Face[][]} faces the part's ("faces" query)
+ * fitJoint is a size for a `kind` joint that suits the face of the part's shapes at its origin
+ * (facing +y toward its joints): the face nearest it that faces the same way, its narrower width
+ * times the kind's fill. Joints are sized by the members they join, as a clevis is by its link.
+ * 0 when no face faces that way.
+ * @param {any} part @param {string} kind @param {Face[][]} faces the part's ("faces" query)
  */
-export function fitJoint(part, slot, kind, faces) {
-  const at = slot === part ? [0, 0, 0] : (slot.position ?? [0, 0, 0]);
-  const normal = slot === part ? [0, 1, 0] : (slot.normal ?? [0, -1, 0]);
+export function fitJoint(part, kind, faces) {
+  const at = [0, 0, 0];
+  const normal = [0, 1, 0];
   let best = null;
   let near = Infinity;
   for (const f of faces.flat()) {
@@ -888,12 +846,9 @@ export function mirrorSubtree(m, i, lateral) {
     if (!names.has(ik.root) || !names.has(ik.tip)) continue;
     const name = mirrorName(ik.name) ?? `${ik.name}_mirror`;
     const at = m.iks.findIndex((/** @type {any} */ x) => x.name === name);
-    if (at >= 0) removeIk(m, at);
-    const range = (/** @type {string} */ x) => m.drivers.find((/** @type {any} */ c) => c.name === ik.name + x) ?? {};
-    const x = range("_x");
-    const reach = ((x.max ?? 0) - (x.min ?? 0)) / 2;
-    const mid = ["_x", "_y", "_z"].map((k) => ((range(k).max ?? 0) + (range(k).min ?? 0)) / 2);
-    addIk(m, name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)), [-mid[0], mid[1], mid[2]], reach);
+    if (at >= 0) m.iks.splice(at, 1);
+    const k = addIk(m, name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)));
+    for (const f of ["hold", "pole"]) if (ik[f]) m.iks[k][f] = true;
   }
 
   if (at < 0) {

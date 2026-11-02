@@ -1,6 +1,7 @@
 package mech
 
 import "core:encoding/json"
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:math/linalg"
@@ -57,9 +58,9 @@ JointKind :: enum u8 {
   BALL, // a ball and socket: x, y, z
 }
 
-// Joint is one mechanism of a slot's stack, inline on its part: a slot that needs more degrees of
+// Joint is one mechanism of a part's stack, inline on the part: a part that needs more degrees of
 // freedom stacks several. `name` is unique in its part, so drivers can move it. The first bolts
-// onto the slot it is matched with, each next one onto the one before, facing the way it did
+// onto the parent's slot, each next one onto the one before, facing the way it did
 // (SLOT_FACE); `twist` first turns its socket about the socket's normal. `bend` turns the first
 // degree of freedom at rest (a shoulder hinge holding the arm down from a sideways socket).
 // `min`/`max` are its range on each axis it has, from its rest (after `bend`), in radians. The rig
@@ -99,19 +100,17 @@ Axis :: enum u8 {
   Z,
 }
 
-// Slot is a named face on a part, in its frame, facing out of the part: where two parts are
-// matched. `joints` are what the part moves by when it hangs from this slot, listed from the
-// parent's side; none bolts it on rigid. Drivers can only move joints a slot exposes. Every part
-// also has a default slot, unnamed: its origin (Part).
+// Slot is a named face on a part, in its frame, facing out of the part: where a child is matched.
+// Every part also has a default slot, unnamed: its origin (Part).
 Slot :: struct {
   name:                      string,
   position, normal, forward: [3]f32,
-  joints:                    [dynamic]Joint,
 }
 
-// Part is a rigid piece: its shapes and the slots it matches other parts with. `joints` are its
-// default slot's: the part's origin, facing +y as a child (PART_FACE), -y as a parent (SLOT_FACE).
-// Parts are the model's library; the assembly places them, as often as it likes.
+// Part is a rigid piece: its shapes, the slots children are matched with, and `joints`, what it
+// moves by: a stack from its parent's slot to its origin, which faces +y toward them (PART_FACE).
+// As a parent's slot the origin faces -y (SLOT_FACE). Parts are the model's library; the assembly
+// places them, as often as it likes.
 Part :: struct {
   name:   string,
   joints: [dynamic]Joint,
@@ -119,34 +118,34 @@ Part :: struct {
   shapes: [dynamic]Shape,
 }
 
-// Instance places a part in the tree by matching two slots: its part's slot `slot` with slot
-// `parent_slot` of the parent's part, through `slot`'s joints. Empty names the default slot, the
-// part's origin: facing +y for `slot` (PART_FACE, with the part's own joints), -y for `parent_slot` (SLOT_FACE);
-// a root (no parent) matches its slot with the model origin. A `mirror` instance shows its part,
-// slots and joints reflected (joint_mirror), so one part serves both sides of the body; drivers
-// move it the mirrored way. Instances are listed parents first.
+// Instance places a part in the tree: its part's joints bolt onto slot `parent_slot` of the
+// parent's part (empty: the parent's origin, facing -y, SLOT_FACE), and its origin onto the last
+// joint. A root (no parent) matches the model origin. A `mirror` instance shows its part, slots
+// and joints reflected (joint_mirror), so one part serves both sides of the body; drivers move it
+// the mirrored way. Instances are listed parents first.
 Instance :: struct {
   name:        string,
   part:        string,
-  slot:        string,
   parent:      string,
   parent_slot: string,
   mirror:      bool,
 }
 
 // Drive is how a driver moves one joint of one instance: the driver's value running over `from`
-// maps linearly onto `to` (radians), clamped to the ends when `clamp`, turned about `axis` of joint
-// `joint` of instance `part`. The axis must be one the joint has. Drives on one axis add up.
+// maps linearly onto 0..`turn` (radians), clamped to the ends when `clamp`, about `axis` of joint
+// `joint` of instance `part`. The axis must be one the joint has. Drives on one axis add up, and
+// onto the joint's own channel (model_channels).
 Drive :: struct {
   part, joint: string,
   axis:        Axis,
-  from, to:    [2]f32,
+  from:        [2]f32,
+  turn:        f32,
   clamp:       bool,
 }
 
-// Driver is one animatable value: what clips key, by name. It moves the joints in
-// `drives` (a curl closing nine knuckles is one driver), or feeds an IK target (Ik). min/max bound
-// editor sliders.
+// Driver is one value that moves several joints at once (a curl closing nine knuckles), keyed by
+// name like any channel. A single joint needs none: each of its axes is a channel of its own.
+// min/max bound editor sliders.
 Driver :: struct {
   name:     string,
   min, max: f32,
@@ -155,13 +154,15 @@ Driver :: struct {
 
 // Ik reaches instance `tip`'s frame for a target by turning every joint from instance `root`'s
 // slot down to the one the tip hangs from (its own joints, an ankle or a wrist, keep the turn their
-// drivers give; with `hold`, they turn it to face the way its drivers turned it in the model's
-// space instead: a planted foot, however the knee bends), each about the axes it has. Its four drivers are named after it:
-// <name>_x, _y, _z, the target in the model's space (model units), and <name>_weight, 0 leaving
-// the chain as its drivers put it, 1 reaching.
+// channels give; with `hold`, they turn it to face the way those turned it in the model's space
+// instead: a planted foot, however the knee bends), each about the axes it has. Its channels are
+// named after it (IK_CHANNELS): <name>_x, _y, _z, the target in the model's space (model units)
+// as an offset from where the tip is at rest (0: the foot where it stands), <name>_weight, 0
+// leaving the chain as its joints' channels put it, 1 reaching; and with `pole`, <name>_pole_x,
+// _y, _z, the point the chain bends toward, from the same place.
 Ik :: struct {
   name, root, tip: string,
-  hold:            bool,
+  hold, pole:      bool,
 }
 
 // Hardware: the materials joint hardware is painted in.
@@ -232,43 +233,129 @@ part_slot :: proc(m: ^Model, part: int, name: string) -> int {
   return -1
 }
 
-// instance_joints are the joints instance `i` exposes: those of the slot of its part it hangs by
-// (its part's own, from its origin); none for an unknown part.
+// instance_joints are the joints instance `i` moves by: its part's; none for an unknown part.
 instance_joints :: proc(m: ^Model, i: int) -> []Joint {
   part := model_part(m, m.assembly[i].part)
-  if part < 0 do return nil
-  slot := part_slot(m, part, m.assembly[i].slot)
-  return m.parts[part].slots[slot].joints[:] if slot >= 0 else m.parts[part].joints[:]
+  return m.parts[part].joints[:] if part >= 0 else nil
 }
 
 slot_face :: proc(s: Slot) -> geometry.Face {
   return {s.position, s.normal, s.forward}
 }
 
-// ROOT_CHANNELS: after a model's drivers, the values clips carry hold six more, the
-// root's: where its origin is moved (x, y, z in model units) and turned (euler radians, as shapes
-// are). Clips key them to drop, lift, carry or tip the whole mech, which no joint does. Named like
-// an IK target's drivers, `<name>_x`, so editors show each three as one.
+// A pose holds one value per channel (model_channels), in this order:
+//   - each driver
+//   - each IK target's (IK_CHANNELS): its target, weight, and pole when it has one
+//   - the root's six (ROOT_CHANNELS)
+//   - every axis of every instance's joints, in assembly order: `<instance>.<joint>` for a joint
+//     with one, `<instance>.<joint>.x` (.y, .z) for a ball. A mirrored instance turns the mirrored
+//     way, so twins take the same values.
+// Clips key them all by name alike.
+
+// IK_CHANNELS: an IK target's channels, after its name; the last three only with a pole.
+IK_CHANNELS :: [7]string{"_x", "_y", "_z", "_weight", "_pole_x", "_pole_y", "_pole_z"}
+
+// ROOT_CHANNELS: where the model's origin is moved (x, y, z in model units) and turned (euler
+// radians, as shapes are). Clips key them to drop, lift, carry or tip the whole mech, which no
+// joint does. Named like an IK target's, `<name>_x`, so editors show each three as one.
 ROOT_CHANNELS :: [6]string{"root_x", "root_y", "root_z", "root_turn_x", "root_turn_y", "root_turn_z"}
 
-// model_channels is how many values a pose of `m` holds: one per driver, then the root's six.
-model_channels :: proc(m: ^Model) -> int {
-  return len(m.drivers) + len(ROOT_CHANNELS)
+@(private = "file")
+AXIS_NAMES :: [Axis]string{.X = "x", .Y = "y", .Z = "z"}
+
+// ik_channel is the first of IK target `k`'s channels; k = len(m.iks) is the root's first.
+ik_channel :: proc(m: ^Model, k: int) -> int {
+  n := len(m.drivers)
+  for ik in m.iks[:k] do n += 7 if ik.pole else 4
+  return n
 }
 
-// model_channel is the value `name` is among a pose's: a driver, or one of the root's channels; -1
-// for neither.
+// root_channel is the first of the root's channels.
+root_channel :: proc(m: ^Model) -> int {
+  return ik_channel(m, len(m.iks))
+}
+
+// joint_channel is the first channel of instance `i`'s joints; i = len(m.assembly) is the end.
+joint_channel :: proc(m: ^Model, i: int) -> int {
+  n := root_channel(m) + len(ROOT_CHANNELS)
+  for k in 0 ..< i do for j in instance_joints(m, k) {
+    _, count := joint_dofs(j)
+    n += count
+  }
+  return n
+}
+
+// model_channels is how many values a pose of `m` holds.
+model_channels :: proc(m: ^Model) -> int {
+  return joint_channel(m, len(m.assembly))
+}
+
+// model_channel is the channel named `name`, -1 for none.
 model_channel :: proc(m: ^Model, name: string) -> int {
   if d := model_driver(m, name); d >= 0 do return d
-  names := ROOT_CHANNELS
-  for r, k in names do if r == name do return len(m.drivers) + k
+  suffixes := IK_CHANNELS
+  for ik, k in m.iks {
+    if len(name) <= len(ik.name) || name[:len(ik.name)] != ik.name do continue
+    for x, n in suffixes[:7 if ik.pole else 4] do if name[len(ik.name):] == x do return ik_channel(m, k) + n
+  }
+  roots := ROOT_CHANNELS
+  for r, k in roots do if r == name do return root_channel(m) + k
+  n := root_channel(m) + len(ROOT_CHANNELS)
+  for inst, i in m.assembly {
+    for j in instance_joints(m, i) {
+      dofs, count := joint_dofs(j)
+      for d in dofs[:count] {
+        if is_joint_channel(name, inst.name, j.name, d.axis, count) do return n
+        n += 1
+      }
+    }
+  }
   return -1
 }
 
-// channel_name is value `i`'s name: its driver's, or the root channel's.
-channel_name :: proc(m: ^Model, i: int) -> string {
-  names := ROOT_CHANNELS
-  return m.drivers[i].name if i < len(m.drivers) else names[i - len(m.drivers)]
+// channel_name is channel `i`'s name, allocated with `allocator` when it is made up.
+channel_name :: proc(m: ^Model, i: int, allocator := context.temp_allocator) -> string {
+  if i < len(m.drivers) do return m.drivers[i].name
+  suffixes, roots := IK_CHANNELS, ROOT_CHANNELS
+  for ik, k in m.iks {
+    first := ik_channel(m, k)
+    if i < first + (7 if ik.pole else 4) do return fmt.aprint(ik.name, suffixes[i - first], sep = "", allocator = allocator)
+  }
+  root := root_channel(m)
+  if i < root + len(ROOT_CHANNELS) do return roots[i - root]
+  n := root + len(ROOT_CHANNELS)
+  for inst, k in m.assembly {
+    for j in instance_joints(m, k) {
+      dofs, count := joint_dofs(j)
+      if i < n + count do return joint_channel_name(inst.name, j.name, dofs[i - n].axis, count, allocator)
+      n += count
+    }
+  }
+  return ""
+}
+
+// is_joint_channel: whether `name` is the channel of `axis` of joint `joint` of instance `inst`.
+@(private = "file")
+is_joint_channel :: proc(name, inst, joint: string, axis: Axis, count: int) -> bool {
+  axes := AXIS_NAMES
+  rest := name
+  for word, k in ([3]string{inst, joint, axes[axis]}) {
+    if k == 2 && count == 1 do break
+    if k > 0 {
+      if len(rest) == 0 || rest[0] != '.' do return false
+      rest = rest[1:]
+    }
+    if len(rest) < len(word) || rest[:len(word)] != word do return false
+    rest = rest[len(word):]
+  }
+  return rest == ""
+}
+
+@(private = "file")
+joint_channel_name :: proc(inst, joint: string, axis: Axis, count: int, allocator: mem.Allocator) -> string {
+  axes := AXIS_NAMES
+  if count == 1 do return fmt.aprint(inst, ".", joint, sep = "", allocator = allocator)
+  return fmt.aprint(inst, ".", joint, ".", axes[axis], sep = "", allocator = allocator)
 }
 
 model_driver :: proc(m: ^Model, name: string) -> int {

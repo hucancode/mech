@@ -2,9 +2,10 @@
 
 An **animation** is a character's named **clips**; it is the `"animation"` half of a character
 file ([modeling.md](modeling.md#character-files)). A clip is a plain list of **key frames**,
-which may overlap; each blends its driver values onto what the keys before it give. Animations
-only ever set the model's **drivers** ([modeling.md](modeling.md)), so a clip works on any model
-that has the drivers it names. The game **mixes** clips: each plays on a **layer**, with its own
+which may overlap; each blends its channel values onto what the keys before it give. Animations
+only ever set the model's **channels** ([modeling.md](modeling.md#rigging-channels-drivers-ik-targets)):
+its joints' axes, its drivers, its IK targets' and its root's, so a clip works on any model that
+has the channels it names. The game **mixes** clips: each plays on a **layer**, with its own
 time scale and offset, replacing or adding to the layers below.
 
 ```odin
@@ -23,7 +24,7 @@ mech.rig_pose(&scene, rig, values)
 The `Mech` character (`src/character/mech.odin`) maps each `Action` to a clip by name
 (`ACTION_CLIPS`: `idle`, `walk`, `run`, `attack`, `cast`, `combat_idle`) and plays it on its
 first layer, looping or once following `action_loops`, cross-fading between clips. An action
-with no clip shows the rest pose (every driver 0). Game code adds its own layers above the
+with no clip shows the rest pose (every channel 0). Game code adds its own layers above the
 action's (`mech_layers`, with offsets on `mech_now`'s clock). Tools can also play any clip on
 the first layer or hold explicit values (`mech_play_clip`, `mech_show_values`).
 
@@ -48,8 +49,9 @@ A character file's `"animation"`:
 ```
 
 - **clips**: `{name, duration, keys}`.
-- **values**: maps driver names to values, in each driver's own units (its drives map them onto
-  turns), and the root's channels (`root_x`, `_y`, `_z` in model units, `root_turn_x`, `_y`, `_z`
+- **values**: maps channel names to values: joints' turns in radians (`l_forearm.elbow`), drivers
+  in their own units (their drives map them onto turns), IK targets' points in model units, and
+  the root's channels (`root_x`, `_y`, `_z` in model units, `root_turn_x`, `_y`, `_z`
   in radians: [modeling.md](modeling.md)) to where the whole model is moved and turned. Unlike
   everywhere else in these files, a 0 here is a real value ("move to 0"), so it's written out.
 
@@ -60,10 +62,54 @@ A character file's `"animation"`:
 | `at` | start time, in seconds into the clip |
 | `duration` | how long it takes to blend fully in; 0 snaps in at `at` |
 | `ease` | `SMOOTH` (default), `LINEAR`, `IN` (accelerates, driving into a hit), `OUT` (decelerates, coasting to a stop) |
-| `values` | the drivers it moves, and where to |
+| `values` | the channels it moves, and where to |
 
 Keys apply in time order (by `at`; keys starting together, in file order). A key moves only the
-drivers it names and leaves the rest to the keys before it.
+channels it names and leaves the rest to the keys before it.
+
+## Procedural clips
+
+A clip is **keyframed** (its keys, above) or **procedural**: a `gait`, a few numbers the engine
+turns into motion every time it samples the clip, so a walk, a run or a slither is tuned, not
+keyed. Keys, if a clip has any, apply first and the gait adds onto them, so a keyframed clip can
+also play over a procedural one on a layer (an attack over a walk).
+
+```json
+{"name": "walk", "duration": 1.1, "gait": {
+  "stride": 1.2, "lift": 0.33, "duty": 0.6, "crouch": 0.08, "bob": 0.05,
+  "legs": [{"ik": "l_leg"}, {"ik": "r_leg", "phase": 0.5}],
+  "swings": [{"channel": "root_turn_z", "amount": 0.03, "rate": 1}]
+}}
+```
+
+- **legs**: each walks an IK target (one that `hold`s: a planted foot) around where its foot
+  stands at rest. Down for `duty` of the cycle (the clip's duration), it slides straight back by
+  `stride` along the ground (model units; characters walk toward +z). Then it lifts and swings
+  forward, `lift` high, eased. Each touches down at its own `phase` (0 to 1) of the cycle. A
+  walking leg reaches (its weight is 1), and bends as its joints' stops allow (the default pole).
+  Any number of legs walks, whatever their joints:
+  - a biped (human, bird, a dog on two legs): two legs half a cycle apart; a duty over 0.5
+    walks, under 0.5 runs, every foot off the ground at once.
+  - a quadruped (cat, dog): four. A walk sets each hind foot down, then the fore foot on its side
+    (phases 0, 0.25, 0.5, 0.75), a trot moves diagonal pairs together, a gallop the hind pair then
+    the fore pair.
+- **crouch**, **bob**: the root sinks `crouch` while moving (the feet stay down, so the knees
+  bend), and dips `bob` more as each foot touches down, back up a quarter cycle either side.
+- **swings**: any channel to and fro, `amount * cos(2π (rate * cycle - phase))`: a sway, arms or a
+  hull swinging against the legs.
+- **waves**: `{from, to, axis, amount, length, taper}` bends the chain of instances from `from`
+  down to `to` about `axis` as a body following a path: the segment after each joint heads
+  `amount * (1 + taper * s) * sin(2π (cycle - length * s))` off its rest, `s` running 0 at the
+  head to 1 at the tail, so a wave `length` wavelengths long travels tailward once a cycle. Each
+  joint turns only by the difference from the segment before, so a turn does not pile up down the
+  chain (children inherit their parents' turns: turning each joint by the wave itself would swing
+  the tail by the sum of them all). `taper` (the editor's **growth**) changes the swing toward
+  the tail: 0 the same all along, above 0 bigger, -1 dying out at the tail. A snake slithers
+  about Y; a tail sways.
+
+The character editor makes procedural clips from presets (biped walk and run, quadruped walk,
+trot and gallop, snake slither), which measure the model's legs and spine for their first
+numbers, and making the legs' IK targets when it has none.
 
 ## How a clip is sampled
 
@@ -73,7 +119,7 @@ in time order:
 ```
 w = ease((t - at) / duration)        (clamped to 0..1; a zero duration is 0 before `at`, 1 after)
 skip the key if w <= 0
-out[c] += (value[c] - out[c]) * w    for each driver the key names
+out[c] += (value[c] - out[c]) * w    for each channel the key names
 ```
 
 A key keeps holding its values after it finishes (w stays 1), so later keys build on it. The
@@ -83,12 +129,12 @@ Typical shapes:
 - **A held stance**: one key at 0 (the mech's `idle` and `combat_idle`).
 - **A loop**: a starting stance, then one key per quarter period blending to the next stance,
   ending on the starting one (the mech's `walk` and `run`).
-- **A strike that chains up the body**: overlapping keys on separate driver groups, each
+- **A strike that chains up the body**: overlapping keys on separate channel groups, each
   starting a little after the one before: feet, then pelvis, chest, arm, fist. Wind-up, drive,
   follow-through, then a recovery key blending back to the stance (the mech's `attack` and
   `cast`).
 
-`clips_build` compiles an `Animation` against a `Model`: names become driver indices and keys
+`clips_build` compiles an `Animation` against a `Model`: names become channel indices and keys
 are stable-sorted by time. Names the model lacks are logged and skipped. Rebuild it whenever
 either side changes; the editors do so on every edit.
 
@@ -104,7 +150,7 @@ REPLACE:   out = lerp(out, the clip's keys applied on top of out, weight)
 ADDITIVE:  out += the clip sampled on the rest pose * weight
 ```
 
-A REPLACE layer moves only the drivers its clip keys, so a clip of just the arms plays over a
+A REPLACE layer moves only the channels its clip keys, so a clip of just the arms plays over a
 walk and leaves the legs to it. An ADDITIVE layer adds its clip's values, as offsets from the
 rest pose, to whatever is below (a recoil, a lean). Mixing is the game's: the character editor
 edits one clip at a time.
@@ -136,7 +182,7 @@ arm → fist, each link firing in turn.
 - `assets/characters/dragon.json`: just the dragon example's rest pose (jaw 0.21, arms 0.52, elbows 0.79,
   legs -0.44, knees 0.61 radians) as an `idle` clip. The example's motion (riding a spline loop, limbs
   swinging in strokes, the fly-in assembly) is code in that example and still has to be authored
-  here. Its spine drivers (`segment_*_pitch/yaw/roll` and so on) are in place for that.
+  here. Its spine's channels (`segment_*.spine.x`, `.y`, `.z` and so on) are in place for that.
 - `assets/characters/strider.json`: every clip a reverse-jointed body needs, authored for it. Both
   legs reach with IK in every key, their poles behind the knees. `walk` and `run` are sampled
   gaits (16 keys a loop, `LINEAR` between them): each foot slides straight back along the ground

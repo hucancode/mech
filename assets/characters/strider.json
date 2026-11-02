@@ -22,300 +22,40 @@
             "joint": "spin",
             "axis": "Y",
             "from": [0, 1],
-            "to": [0, 1]
+            "turn": 1
           },
           {
             "part": "l_thigh",
             "joint": "twist",
             "axis": "Y",
             "from": [0, 1],
-            "to": [0, -1]
+            "turn": -1
           },
           {
             "part": "r_thigh",
             "joint": "twist",
             "axis": "Y",
             "from": [0, 1],
-            "to": [0, 1]
+            "turn": 1
           }
         ]
-      },
-      {
-        "name": "twist",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "hull",
-            "joint": "waist",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "waist_bend",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {"part": "hull", "joint": "waist", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "waist_tilt",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "hull",
-            "joint": "waist",
-            "axis": "Z",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "head_yaw",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "sensor",
-            "joint": "neck",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "head_pitch",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {"part": "sensor", "joint": "neck", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "rack_pitch",
-        "min": -0.3,
-        "max": 0.9,
-        "drives": [
-          {"part": "rack", "joint": "mount", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "l_shoulder",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "l_arm",
-            "joint": "disc",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "l_arm_out",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {"part": "l_arm", "joint": "shoulder", "from": [0, 1], "to": [0, -1]}
-        ]
-      },
-      {
-        "name": "l_arm_twist",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "l_arm",
-            "joint": "twist",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, -1]
-          }
-        ]
-      },
-      {
-        "name": "l_elbow",
-        "min": -0.1,
-        "max": 2.4,
-        "drives": [
-          {"part": "l_cannon", "joint": "elbow", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "l_fore_twist",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "l_cannon",
-            "joint": "twist",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, -1]
-          }
-        ]
-      },
-      {
-        "name": "l_hip",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "l_thigh",
-            "joint": "disc",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "l_knee",
-        "min": -0.8,
-        "max": 1.2,
-        "drives": [
-          {"part": "l_shin", "joint": "knee", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "l_ankle",
-        "min": -1.2,
-        "max": 0.8,
-        "drives": [
-          {"part": "l_hock", "joint": "ankle", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "l_toe",
-        "min": -0.6,
-        "max": 0.6,
-        "drives": [
-          {"part": "l_foot", "joint": "toe", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "r_shoulder",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "r_arm",
-            "joint": "disc",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "r_arm_out",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {"part": "r_arm", "joint": "shoulder", "from": [0, 1], "to": [0, -1]}
-        ]
-      },
-      {
-        "name": "r_arm_twist",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "r_arm",
-            "joint": "twist",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, -1]
-          }
-        ]
-      },
-      {
-        "name": "r_elbow",
-        "min": -0.1,
-        "max": 2.4,
-        "drives": [
-          {"part": "r_cannon", "joint": "elbow", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "r_fore_twist",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "r_cannon",
-            "joint": "twist",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, -1]
-          }
-        ]
-      },
-      {
-        "name": "r_hip",
-        "min": -3.1416,
-        "max": 3.1416,
-        "drives": [
-          {
-            "part": "r_thigh",
-            "joint": "disc",
-            "axis": "Y",
-            "from": [0, 1],
-            "to": [0, 1]
-          }
-        ]
-      },
-      {
-        "name": "r_knee",
-        "min": -0.8,
-        "max": 1.2,
-        "drives": [
-          {"part": "r_shin", "joint": "knee", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "r_ankle",
-        "min": -1.2,
-        "max": 0.8,
-        "drives": [
-          {"part": "r_hock", "joint": "ankle", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {
-        "name": "r_toe",
-        "min": -0.6,
-        "max": 0.6,
-        "drives": [
-          {"part": "r_foot", "joint": "toe", "from": [0, 1], "to": [0, 1]}
-        ]
-      },
-      {"name": "l_leg_x", "min": -6, "max": 6},
-      {"name": "l_leg_y", "min": -6, "max": 6},
-      {"name": "l_leg_z", "min": -6, "max": 6},
-      {"name": "l_leg_weight", "max": 1},
-      {"name": "l_leg_pole_x", "min": -6, "max": 6},
-      {"name": "l_leg_pole_y", "min": -6, "max": 6},
-      {"name": "l_leg_pole_z", "min": -6, "max": 6},
-      {"name": "r_leg_x", "min": -6, "max": 6},
-      {"name": "r_leg_y", "min": -6, "max": 6},
-      {"name": "r_leg_z", "min": -6, "max": 6},
-      {"name": "r_leg_weight", "max": 1},
-      {"name": "r_leg_pole_x", "min": -6, "max": 6},
-      {"name": "r_leg_pole_y", "min": -6, "max": 6},
-      {"name": "r_leg_pole_z", "min": -6, "max": 6}
+      }
     ],
     "iks": [
-      {"name": "l_leg", "root": "l_thigh", "tip": "l_foot", "hold": true},
-      {"name": "r_leg", "root": "r_thigh", "tip": "r_foot", "hold": true}
+      {
+        "name": "l_leg",
+        "root": "l_thigh",
+        "tip": "l_foot",
+        "hold": true,
+        "pole": true
+      },
+      {
+        "name": "r_leg",
+        "root": "r_thigh",
+        "tip": "r_foot",
+        "hold": true,
+        "pole": true
+      }
     ],
     "parts": [
       {
@@ -775,32 +515,32 @@
         "keys": [
           {
             "values": {
-              "head_pitch": 0.05,
-              "l_arm_out": 0.08,
-              "l_elbow": 0.7,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.2,
+              "l_arm.shoulder": -0.08,
+              "l_cannon.elbow": 0.7,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.1,
-              "l_shoulder": 0.2,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.01401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.08,
-              "r_elbow": 0.7,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.2,
+              "r_arm.shoulder": -0.08,
+              "r_cannon.elbow": 0.7,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.1,
-              "r_shoulder": 0.2,
-              "rack_pitch": 0,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.01401,
+              "rack.mount": 0,
               "root_y": -0.12,
-              "twist": 0,
-              "waist_bend": 0
+              "sensor.neck.x": 0.05
             }
           }
         ]
@@ -811,32 +551,32 @@
         "keys": [
           {
             "values": {
-              "head_pitch": -0.08,
-              "l_arm_out": 0.04,
-              "l_elbow": 1.5,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.12,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.3,
+              "l_arm.shoulder": -0.04,
+              "l_cannon.elbow": 1.5,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.104,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.2,
-              "l_shoulder": 0.3,
+              "l_leg_x": 0.12,
+              "l_leg_y": 0,
+              "l_leg_z": 0.31401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.04,
-              "r_elbow": 1.5,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.3,
+              "r_arm.shoulder": -0.04,
+              "r_cannon.elbow": 1.5,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.104,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.4,
-              "r_shoulder": 0.3,
-              "rack_pitch": 0.2,
+              "r_leg_x": -0.12,
+              "r_leg_y": 0,
+              "r_leg_z": -0.28599,
+              "rack.mount": 0.2,
               "root_y": -0.45,
-              "twist": 0,
-              "waist_bend": 0.12
+              "sensor.neck.x": -0.08
             }
           }
         ]
@@ -847,59 +587,59 @@
         "keys": [
           {
             "values": {
-              "head_pitch": 0.05,
-              "l_arm_out": 0.08,
-              "l_elbow": 1,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.05,
+              "hull.waist.y": -0.14,
+              "l_arm.disc": 0.08,
+              "l_arm.shoulder": -0.08,
+              "l_cannon.elbow": 1,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.55,
-              "l_shoulder": 0.08,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.66401,
               "pelvis_turn": 0.1,
-              "r_arm_out": 0.08,
-              "r_elbow": 1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.32,
+              "r_arm.shoulder": -0.08,
+              "r_cannon.elbow": 1,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.75,
-              "r_shoulder": 0.32,
-              "rack_pitch": 0,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.63599,
+              "rack.mount": 0,
               "root_turn_z": 0.03,
               "root_y": -0.37,
-              "twist": -0.14,
-              "waist_bend": 0.05
+              "sensor.neck.x": 0.05
             }
           },
           {
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.12934,
+              "l_arm.disc": -0.03087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.3875,
-              "l_shoulder": -0.03087,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.50151,
               "pelvis_turn": 0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.43087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.46221,
-              "r_leg_z": -0.69414,
-              "r_shoulder": 0.43087,
+              "r_leg_x": 0,
+              "r_leg_y": 0.17221,
+              "r_leg_z": -0.58013,
               "root_turn_z": 0.02772,
-              "root_y": -0.46657,
-              "twist": -0.12934
+              "root_y": -0.46657
             }
           },
           {
@@ -907,26 +647,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.09899,
+              "l_arm.disc": -0.00485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.225,
-              "l_shoulder": -0.00485,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.33901,
               "pelvis_turn": 0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.40485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.6082,
-              "r_leg_z": -0.54688,
-              "r_shoulder": 0.40485,
+              "r_leg_x": 0,
+              "r_leg_y": 0.3182,
+              "r_leg_z": -0.43287,
               "root_turn_z": 0.02121,
-              "root_y": -0.41,
-              "twist": -0.09899
+              "root_y": -0.41
             }
           },
           {
@@ -934,26 +674,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.05358,
+              "l_arm.disc": 0.03408,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.0625,
-              "l_shoulder": 0.03408,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.17651,
               "pelvis_turn": 0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.36592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.70575,
-              "r_leg_z": -0.33867,
-              "r_shoulder": 0.36592,
+              "r_leg_x": 0,
+              "r_leg_y": 0.41575,
+              "r_leg_z": -0.22466,
               "root_turn_z": 0.01148,
-              "root_y": -0.35343,
-              "twist": -0.05358
+              "root_y": -0.35343
             }
           },
           {
@@ -961,26 +701,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.08,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.1,
-              "l_shoulder": 0.08,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.01401,
               "pelvis_turn": 0,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.32,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.74,
-              "r_leg_z": -0.1,
-              "r_shoulder": 0.32,
+              "r_leg_x": 0,
+              "r_leg_y": 0.45,
+              "r_leg_z": 0.01401,
               "root_turn_z": 0,
-              "root_y": -0.33,
-              "twist": 0
+              "root_y": -0.33
             }
           },
           {
@@ -988,26 +728,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.05358,
+              "l_arm.disc": 0.12592,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.2625,
-              "l_shoulder": 0.12592,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.14849,
               "pelvis_turn": -0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.27408,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.70575,
-              "r_leg_z": 0.13867,
-              "r_shoulder": 0.27408,
+              "r_leg_x": 0,
+              "r_leg_y": 0.41575,
+              "r_leg_z": 0.25268,
               "root_turn_z": -0.01148,
-              "root_y": -0.35343,
-              "twist": 0.05358
+              "root_y": -0.35343
             }
           },
           {
@@ -1015,26 +755,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.09899,
+              "l_arm.disc": 0.16485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.425,
-              "l_shoulder": 0.16485,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.31099,
               "pelvis_turn": -0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.23515,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.6082,
-              "r_leg_z": 0.34688,
-              "r_shoulder": 0.23515,
+              "r_leg_x": 0,
+              "r_leg_y": 0.3182,
+              "r_leg_z": 0.46089,
               "root_turn_z": -0.02121,
-              "root_y": -0.41,
-              "twist": 0.09899
+              "root_y": -0.41
             }
           },
           {
@@ -1042,26 +782,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.12934,
+              "l_arm.disc": 0.19087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.5875,
-              "l_shoulder": 0.19087,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.47349,
               "pelvis_turn": -0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.20913,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.46221,
-              "r_leg_z": 0.49414,
-              "r_shoulder": 0.20913,
+              "r_leg_x": 0,
+              "r_leg_y": 0.17221,
+              "r_leg_z": 0.60815,
               "root_turn_z": -0.02772,
-              "root_y": -0.46657,
-              "twist": 0.12934
+              "root_y": -0.46657
             }
           },
           {
@@ -1069,26 +809,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.14,
+              "l_arm.disc": 0.2,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.75,
-              "l_shoulder": 0.2,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.63599,
               "pelvis_turn": -0.1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.2,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.55,
-              "r_shoulder": 0.2,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.66401,
               "root_turn_z": -0.03,
-              "root_y": -0.49,
-              "twist": 0.14
+              "root_y": -0.49
             }
           },
           {
@@ -1096,26 +836,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.12934,
+              "l_arm.disc": 0.19087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.46221,
-              "l_leg_z": -0.69414,
-              "l_shoulder": 0.19087,
+              "l_leg_x": 0,
+              "l_leg_y": 0.17221,
+              "l_leg_z": -0.58013,
               "pelvis_turn": -0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.20913,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.3875,
-              "r_shoulder": 0.20913,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.50151,
               "root_turn_z": -0.02772,
-              "root_y": -0.46657,
-              "twist": 0.12934
+              "root_y": -0.46657
             }
           },
           {
@@ -1123,26 +863,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.09899,
+              "l_arm.disc": 0.16485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.6082,
-              "l_leg_z": -0.54688,
-              "l_shoulder": 0.16485,
+              "l_leg_x": 0,
+              "l_leg_y": 0.3182,
+              "l_leg_z": -0.43287,
               "pelvis_turn": -0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.23515,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.225,
-              "r_shoulder": 0.23515,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.33901,
               "root_turn_z": -0.02121,
-              "root_y": -0.41,
-              "twist": 0.09899
+              "root_y": -0.41
             }
           },
           {
@@ -1150,26 +890,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.05358,
+              "l_arm.disc": 0.12592,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.70575,
-              "l_leg_z": -0.33867,
-              "l_shoulder": 0.12592,
+              "l_leg_x": 0,
+              "l_leg_y": 0.41575,
+              "l_leg_z": -0.22466,
               "pelvis_turn": -0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.27408,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.0625,
-              "r_shoulder": 0.27408,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.17651,
               "root_turn_z": -0.01148,
-              "root_y": -0.35343,
-              "twist": 0.05358
+              "root_y": -0.35343
             }
           },
           {
@@ -1177,26 +917,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.08,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.74,
-              "l_leg_z": -0.1,
-              "l_shoulder": 0.08,
+              "l_leg_x": 0,
+              "l_leg_y": 0.45,
+              "l_leg_z": 0.01401,
               "pelvis_turn": 0,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.32,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.1,
-              "r_shoulder": 0.32,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.01401,
               "root_turn_z": 0,
-              "root_y": -0.33,
-              "twist": 0
+              "root_y": -0.33
             }
           },
           {
@@ -1204,26 +944,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.05358,
+              "l_arm.disc": 0.03408,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.70575,
-              "l_leg_z": 0.13867,
-              "l_shoulder": 0.03408,
+              "l_leg_x": 0,
+              "l_leg_y": 0.41575,
+              "l_leg_z": 0.25268,
               "pelvis_turn": 0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.36592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.2625,
-              "r_shoulder": 0.36592,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.14849,
               "root_turn_z": 0.01148,
-              "root_y": -0.35343,
-              "twist": -0.05358
+              "root_y": -0.35343
             }
           },
           {
@@ -1231,26 +971,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.09899,
+              "l_arm.disc": -0.00485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.6082,
-              "l_leg_z": 0.34688,
-              "l_shoulder": -0.00485,
+              "l_leg_x": 0,
+              "l_leg_y": 0.3182,
+              "l_leg_z": 0.46089,
               "pelvis_turn": 0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.40485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.425,
-              "r_shoulder": 0.40485,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.31099,
               "root_turn_z": 0.02121,
-              "root_y": -0.41,
-              "twist": -0.09899
+              "root_y": -0.41
             }
           },
           {
@@ -1258,26 +998,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.12934,
+              "l_arm.disc": -0.03087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.46221,
-              "l_leg_z": 0.49414,
-              "l_shoulder": -0.03087,
+              "l_leg_x": 0,
+              "l_leg_y": 0.17221,
+              "l_leg_z": 0.60815,
               "pelvis_turn": 0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.43087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.5875,
-              "r_shoulder": 0.43087,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.47349,
               "root_turn_z": 0.02772,
-              "root_y": -0.46657,
-              "twist": -0.12934
+              "root_y": -0.46657
             }
           },
           {
@@ -1285,26 +1025,26 @@
             "duration": 0.08125,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.14,
+              "l_arm.disc": -0.04,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.55,
-              "l_shoulder": -0.04,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.66401,
               "pelvis_turn": 0.1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.44,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.75,
-              "r_shoulder": 0.44,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.63599,
               "root_turn_z": 0.03,
-              "root_y": -0.49,
-              "twist": -0.14
+              "root_y": -0.49
             }
           }
         ]
@@ -1315,59 +1055,59 @@
         "keys": [
           {
             "values": {
-              "head_pitch": -0.15,
-              "l_arm_out": 0.15,
-              "l_elbow": 1.9,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.22,
+              "hull.waist.y": -0.14,
+              "l_arm.disc": -0.22,
+              "l_arm.shoulder": -0.15,
+              "l_cannon.elbow": 1.9,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.95,
-              "l_shoulder": -0.22,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 1.06401,
               "pelvis_turn": 0.1,
-              "r_arm_out": 0.15,
-              "r_elbow": 1.9,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.02,
+              "r_arm.shoulder": -0.15,
+              "r_cannon.elbow": 1.9,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.54193,
-              "r_leg_z": -1.04116,
-              "r_shoulder": 0.02,
-              "rack_pitch": 0,
+              "r_leg_x": 0,
+              "r_leg_y": 0.25193,
+              "r_leg_z": -0.92715,
+              "rack.mount": 0,
               "root_turn_z": 0.03,
               "root_y": -0.67,
-              "twist": -0.14,
-              "waist_bend": 0.22
+              "sensor.neck.x": -0.15
             }
           },
           {
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.12934,
+              "l_arm.disc": -0.33087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.6375,
-              "l_shoulder": -0.33087,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.75151,
               "pelvis_turn": 0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.13087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.70848,
-              "r_leg_z": -0.832,
-              "r_shoulder": 0.13087,
+              "r_leg_x": 0,
+              "r_leg_y": 0.41848,
+              "r_leg_z": -0.71799,
               "root_turn_z": 0.02772,
-              "root_y": -0.76657,
-              "twist": -0.12934
+              "root_y": -0.76657
             }
           },
           {
@@ -1375,26 +1115,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.09899,
+              "l_arm.disc": -0.30485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.325,
-              "l_shoulder": -0.30485,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.43901,
               "pelvis_turn": 0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.10485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.82752,
-              "r_leg_z": -0.54842,
-              "r_shoulder": 0.10485,
+              "r_leg_x": 0,
+              "r_leg_y": 0.53752,
+              "r_leg_z": -0.43441,
               "root_turn_z": 0.02121,
-              "root_y": -0.71,
-              "twist": -0.09899
+              "root_y": -0.71
             }
           },
           {
@@ -1402,26 +1142,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.05358,
+              "l_arm.disc": -0.26592,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.0125,
-              "l_shoulder": -0.26592,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 0.12651,
               "pelvis_turn": 0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.06592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.88555,
-              "r_leg_z": -0.22195,
-              "r_shoulder": 0.06592,
+              "r_leg_x": 0,
+              "r_leg_y": 0.59555,
+              "r_leg_z": -0.10794,
               "root_turn_z": 0.01148,
-              "root_y": -0.65343,
-              "twist": -0.05358
+              "root_y": -0.65343
             }
           },
           {
@@ -1429,26 +1169,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0,
+              "l_arm.disc": -0.22,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.3,
-              "l_shoulder": -0.22,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.18599,
               "pelvis_turn": 0,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.02,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.87597,
-              "r_leg_z": 0.11586,
-              "r_shoulder": 0.02,
+              "r_leg_x": 0,
+              "r_leg_y": 0.58597,
+              "r_leg_z": 0.22987,
               "root_turn_z": 0,
-              "root_y": -0.63,
-              "twist": 0
+              "root_y": -0.63
             }
           },
           {
@@ -1456,26 +1196,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.05358,
+              "l_arm.disc": -0.17408,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.6125,
-              "l_shoulder": -0.17408,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.49849,
               "pelvis_turn": -0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.02592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.79988,
-              "r_leg_z": 0.4335,
-              "r_shoulder": -0.02592,
+              "r_leg_x": 0,
+              "r_leg_y": 0.50988,
+              "r_leg_z": 0.54751,
               "root_turn_z": -0.01148,
-              "root_y": -0.65343,
-              "twist": 0.05358
+              "root_y": -0.65343
             }
           },
           {
@@ -1483,26 +1223,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.09899,
+              "l_arm.disc": -0.13515,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": -0.925,
-              "l_shoulder": -0.13515,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": -0.81099,
               "pelvis_turn": -0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.06485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.66591,
-              "r_leg_z": 0.69942,
-              "r_shoulder": -0.06485,
+              "r_leg_x": 0,
+              "r_leg_y": 0.37591,
+              "r_leg_z": 0.81343,
               "root_turn_z": -0.02121,
-              "root_y": -0.71,
-              "twist": 0.09899
+              "root_y": -0.71
             }
           },
           {
@@ -1510,26 +1250,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.12934,
+              "l_arm.disc": -0.10913,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.34679,
-              "l_leg_z": -1.14438,
-              "l_shoulder": -0.10913,
+              "l_leg_x": 0,
+              "l_leg_y": 0.05679,
+              "l_leg_z": -1.03037,
               "pelvis_turn": -0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.09087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.48926,
-              "r_leg_z": 0.8821,
-              "r_shoulder": -0.09087,
+              "r_leg_x": 0,
+              "r_leg_y": 0.19926,
+              "r_leg_z": 0.99611,
               "root_turn_z": -0.02772,
-              "root_y": -0.76657,
-              "twist": 0.12934
+              "root_y": -0.76657
             }
           },
           {
@@ -1537,26 +1277,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.14,
+              "l_arm.disc": -0.1,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.54193,
-              "l_leg_z": -1.04116,
-              "l_shoulder": -0.1,
+              "l_leg_x": 0,
+              "l_leg_y": 0.25193,
+              "l_leg_z": -0.92715,
               "pelvis_turn": -0.1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.1,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.95,
-              "r_shoulder": -0.1,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 1.06401,
               "root_turn_z": -0.03,
-              "root_y": -0.79,
-              "twist": 0.14
+              "root_y": -0.79
             }
           },
           {
@@ -1564,26 +1304,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.12934,
+              "l_arm.disc": -0.10913,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.70848,
-              "l_leg_z": -0.832,
-              "l_shoulder": -0.10913,
+              "l_leg_x": 0,
+              "l_leg_y": 0.41848,
+              "l_leg_z": -0.71799,
               "pelvis_turn": -0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.09087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.6375,
-              "r_shoulder": -0.09087,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.75151,
               "root_turn_z": -0.02772,
-              "root_y": -0.76657,
-              "twist": 0.12934
+              "root_y": -0.76657
             }
           },
           {
@@ -1591,26 +1331,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.09899,
+              "l_arm.disc": -0.13515,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.82752,
-              "l_leg_z": -0.54842,
-              "l_shoulder": -0.13515,
+              "l_leg_x": 0,
+              "l_leg_y": 0.53752,
+              "l_leg_z": -0.43441,
               "pelvis_turn": -0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.06485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.325,
-              "r_shoulder": -0.06485,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.43901,
               "root_turn_z": -0.02121,
-              "root_y": -0.71,
-              "twist": 0.09899
+              "root_y": -0.71
             }
           },
           {
@@ -1618,26 +1358,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0.05358,
+              "l_arm.disc": -0.17408,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.88555,
-              "l_leg_z": -0.22195,
-              "l_shoulder": -0.17408,
+              "l_leg_x": 0,
+              "l_leg_y": 0.59555,
+              "l_leg_z": -0.10794,
               "pelvis_turn": -0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": -0.02592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": 0.0125,
-              "r_shoulder": -0.02592,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": 0.12651,
               "root_turn_z": -0.01148,
-              "root_y": -0.65343,
-              "twist": 0.05358
+              "root_y": -0.65343
             }
           },
           {
@@ -1645,26 +1385,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": 0,
+              "l_arm.disc": -0.22,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.87597,
-              "l_leg_z": 0.11586,
-              "l_shoulder": -0.22,
+              "l_leg_x": 0,
+              "l_leg_y": 0.58597,
+              "l_leg_z": 0.22987,
               "pelvis_turn": 0,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.02,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.3,
-              "r_shoulder": 0.02,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.18599,
               "root_turn_z": 0,
-              "root_y": -0.63,
-              "twist": 0
+              "root_y": -0.63
             }
           },
           {
@@ -1672,26 +1412,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.05358,
+              "l_arm.disc": -0.26592,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.79988,
-              "l_leg_z": 0.4335,
-              "l_shoulder": -0.26592,
+              "l_leg_x": 0,
+              "l_leg_y": 0.50988,
+              "l_leg_z": 0.54751,
               "pelvis_turn": 0.03827,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.06592,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.6125,
-              "r_shoulder": 0.06592,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.49849,
               "root_turn_z": 0.01148,
-              "root_y": -0.65343,
-              "twist": -0.05358
+              "root_y": -0.65343
             }
           },
           {
@@ -1699,26 +1439,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.09899,
+              "l_arm.disc": -0.30485,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.66591,
-              "l_leg_z": 0.69942,
-              "l_shoulder": -0.30485,
+              "l_leg_x": 0,
+              "l_leg_y": 0.37591,
+              "l_leg_z": 0.81343,
               "pelvis_turn": 0.07071,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.10485,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.925,
-              "r_shoulder": 0.10485,
+              "r_leg_x": 0,
+              "r_leg_y": 0,
+              "r_leg_z": -0.81099,
               "root_turn_z": 0.02121,
-              "root_y": -0.71,
-              "twist": -0.09899
+              "root_y": -0.71
             }
           },
           {
@@ -1726,26 +1466,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.12934,
+              "l_arm.disc": -0.33087,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.48926,
-              "l_leg_z": 0.8821,
-              "l_shoulder": -0.33087,
+              "l_leg_x": 0,
+              "l_leg_y": 0.19926,
+              "l_leg_z": 0.99611,
               "pelvis_turn": 0.09239,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.13087,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.34679,
-              "r_leg_z": -1.14438,
-              "r_shoulder": 0.13087,
+              "r_leg_x": 0,
+              "r_leg_y": 0.05679,
+              "r_leg_z": -1.03037,
               "root_turn_z": 0.02772,
-              "root_y": -0.76657,
-              "twist": -0.12934
+              "root_y": -0.76657
             }
           },
           {
@@ -1753,26 +1493,26 @@
             "duration": 0.045,
             "ease": "LINEAR",
             "values": {
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.y": -0.14,
+              "l_arm.disc": -0.34,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 0.984,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.95,
-              "l_shoulder": -0.34,
+              "l_leg_x": 0,
+              "l_leg_y": 0,
+              "l_leg_z": 1.06401,
               "pelvis_turn": 0.1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.14,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -0.984,
-              "r_leg_y": 0.54193,
-              "r_leg_z": -1.04116,
-              "r_shoulder": 0.14,
+              "r_leg_x": 0,
+              "r_leg_y": 0.25193,
+              "r_leg_z": -0.92715,
               "root_turn_z": 0.03,
-              "root_y": -0.79,
-              "twist": -0.14
+              "root_y": -0.79
             }
           }
         ]
@@ -1783,54 +1523,54 @@
         "keys": [
           {
             "values": {
-              "head_pitch": -0.08,
-              "l_arm_out": 0.04,
-              "l_elbow": 1.5,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.12,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.3,
+              "l_arm.shoulder": -0.04,
+              "l_cannon.elbow": 1.5,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.104,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.2,
-              "l_shoulder": 0.3,
+              "l_leg_x": 0.12,
+              "l_leg_y": 0,
+              "l_leg_z": 0.31401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.04,
-              "r_elbow": 1.5,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.3,
+              "r_arm.shoulder": -0.04,
+              "r_cannon.elbow": 1.5,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.104,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.4,
-              "r_shoulder": 0.3,
-              "rack_pitch": 0.2,
+              "r_leg_x": -0.12,
+              "r_leg_y": 0,
+              "r_leg_z": -0.28599,
+              "rack.mount": 0.2,
               "root_y": -0.45,
-              "twist": 0,
-              "waist_bend": 0.12
+              "sensor.neck.x": -0.08
             }
           },
           {
             "duration": 0.28,
             "values": {
-              "head_pitch": -0.1,
-              "l_elbow": 1.7,
-              "l_shoulder": 0.3,
+              "hull.waist.x": 0,
+              "hull.waist.y": -0.3,
+              "l_arm.disc": 0.3,
+              "l_cannon.elbow": 1.7,
               "pelvis_turn": -0.25,
-              "r_elbow": 2.1,
-              "r_shoulder": -0.55,
+              "r_arm.disc": -0.55,
+              "r_cannon.elbow": 2.1,
               "root_y": -0.6,
-              "twist": -0.3,
-              "waist_bend": 0
+              "sensor.neck.x": -0.1
             }
           },
           {
             "at": 0.12,
             "duration": 0.2,
             "values": {
-              "l_leg_y": 0.64,
-              "l_leg_z": 0.65
+              "l_leg_y": 0.35,
+              "l_leg_z": 0.76401
             }
           },
           {
@@ -1838,7 +1578,7 @@
             "duration": 0.08,
             "ease": "IN",
             "values": {
-              "l_leg_y": 0.29
+              "l_leg_y": 0
             }
           },
           {
@@ -1856,8 +1596,8 @@
             "duration": 0.1,
             "ease": "IN",
             "values": {
-              "twist": 0.35,
-              "waist_bend": 0.25
+              "hull.waist.x": 0.25,
+              "hull.waist.y": 0.35
             }
           },
           {
@@ -1865,8 +1605,8 @@
             "duration": 0.1,
             "ease": "IN",
             "values": {
-              "l_shoulder": -0.2,
-              "r_shoulder": 1.35
+              "l_arm.disc": -0.2,
+              "r_arm.disc": 1.35
             }
           },
           {
@@ -1874,8 +1614,8 @@
             "duration": 0.08,
             "ease": "IN",
             "values": {
-              "r_elbow": 0.15,
-              "r_fore_twist": 0.4
+              "r_cannon.elbow": 0.15,
+              "r_cannon.twist": -0.4
             }
           },
           {
@@ -1883,34 +1623,34 @@
             "duration": 0.36,
             "ease": "OUT",
             "values": {
-              "head_pitch": -0.08,
-              "l_arm_out": 0.04,
-              "l_elbow": 1.5,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.12,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.3,
+              "l_arm.shoulder": -0.04,
+              "l_cannon.elbow": 1.5,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.104,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.2,
-              "l_shoulder": 0.3,
+              "l_leg_x": 0.12,
+              "l_leg_y": 0,
+              "l_leg_z": 0.31401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.04,
-              "r_elbow": 1.5,
-              "r_fore_twist": 0,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.3,
+              "r_arm.shoulder": -0.04,
+              "r_cannon.elbow": 1.5,
+              "r_cannon.twist": 0,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.104,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.4,
-              "r_shoulder": 0.3,
-              "rack_pitch": 0.2,
+              "r_leg_x": -0.12,
+              "r_leg_y": 0,
+              "r_leg_z": -0.28599,
+              "rack.mount": 0.2,
               "root_y": -0.45,
               "root_z": 0,
-              "twist": 0,
-              "waist_bend": 0.12
+              "sensor.neck.x": -0.08
             }
           }
         ]
@@ -1921,65 +1661,65 @@
         "keys": [
           {
             "values": {
-              "head_pitch": -0.08,
-              "l_arm_out": 0.04,
-              "l_elbow": 1.5,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.12,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.3,
+              "l_arm.shoulder": -0.04,
+              "l_cannon.elbow": 1.5,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.104,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.2,
-              "l_shoulder": 0.3,
+              "l_leg_x": 0.12,
+              "l_leg_y": 0,
+              "l_leg_z": 0.31401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.04,
-              "r_elbow": 1.5,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.3,
+              "r_arm.shoulder": -0.04,
+              "r_cannon.elbow": 1.5,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.104,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.4,
-              "r_shoulder": 0.3,
-              "rack_pitch": 0.2,
+              "r_leg_x": -0.12,
+              "r_leg_y": 0,
+              "r_leg_z": -0.28599,
+              "rack.mount": 0.2,
               "root_y": -0.45,
-              "twist": 0,
-              "waist_bend": 0.12
+              "sensor.neck.x": -0.08
             }
           },
           {
             "duration": 0.3,
             "values": {
-              "head_pitch": -0.15,
-              "l_arm_out": 0.35,
-              "l_elbow": 1,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": -0.12,
+              "l_arm.shoulder": -0.35,
+              "l_cannon.elbow": 1,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.284,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.05,
-              "r_arm_out": 0.35,
-              "r_elbow": 1,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "l_leg_x": 0.3,
+              "l_leg_y": 0,
+              "l_leg_z": 0.16401,
+              "r_arm.shoulder": -0.35,
+              "r_cannon.elbow": 1,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.284,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.25,
+              "r_leg_x": -0.3,
+              "r_leg_y": 0,
+              "r_leg_z": -0.13599,
               "root_y": -0.65,
-              "waist_bend": -0.12
+              "sensor.neck.x": -0.15
             }
           },
           {
             "at": 0.2,
             "duration": 0.25,
             "values": {
-              "rack_pitch": 0.75
+              "rack.mount": 0.75
             }
           },
           {
@@ -1987,9 +1727,9 @@
             "duration": 0.03,
             "ease": "IN",
             "values": {
-              "rack_pitch": 0.55,
-              "root_z": -0.12,
-              "waist_bend": -0.2
+              "hull.waist.x": -0.2,
+              "rack.mount": 0.55,
+              "root_z": -0.12
             }
           },
           {
@@ -1997,9 +1737,9 @@
             "duration": 0.13,
             "ease": "OUT",
             "values": {
-              "rack_pitch": 0.75,
-              "root_z": 0,
-              "waist_bend": -0.12
+              "hull.waist.x": -0.12,
+              "rack.mount": 0.75,
+              "root_z": 0
             }
           },
           {
@@ -2007,9 +1747,9 @@
             "duration": 0.03,
             "ease": "IN",
             "values": {
-              "rack_pitch": 0.55,
-              "root_z": -0.12,
-              "waist_bend": -0.2
+              "hull.waist.x": -0.2,
+              "rack.mount": 0.55,
+              "root_z": -0.12
             }
           },
           {
@@ -2017,9 +1757,9 @@
             "duration": 0.13,
             "ease": "OUT",
             "values": {
-              "rack_pitch": 0.75,
-              "root_z": 0,
-              "waist_bend": -0.12
+              "hull.waist.x": -0.12,
+              "rack.mount": 0.75,
+              "root_z": 0
             }
           },
           {
@@ -2027,9 +1767,9 @@
             "duration": 0.03,
             "ease": "IN",
             "values": {
-              "rack_pitch": 0.55,
-              "root_z": -0.12,
-              "waist_bend": -0.2
+              "hull.waist.x": -0.2,
+              "rack.mount": 0.55,
+              "root_z": -0.12
             }
           },
           {
@@ -2037,9 +1777,9 @@
             "duration": 0.13,
             "ease": "OUT",
             "values": {
-              "rack_pitch": 0.75,
-              "root_z": 0,
-              "waist_bend": -0.12
+              "hull.waist.x": -0.12,
+              "rack.mount": 0.75,
+              "root_z": 0
             }
           },
           {
@@ -2047,32 +1787,32 @@
             "duration": 0.4,
             "ease": "OUT",
             "values": {
-              "head_pitch": -0.08,
-              "l_arm_out": 0.04,
-              "l_elbow": 1.5,
-              "l_leg_pole_x": 0.984,
-              "l_leg_pole_y": 2,
-              "l_leg_pole_z": -4,
+              "hull.waist.x": 0.12,
+              "hull.waist.y": 0,
+              "l_arm.disc": 0.3,
+              "l_arm.shoulder": -0.04,
+              "l_cannon.elbow": 1.5,
+              "l_leg_pole_x": 0,
+              "l_leg_pole_y": 0.420159,
+              "l_leg_pole_z": -1.492363,
               "l_leg_weight": 1,
-              "l_leg_x": 1.104,
-              "l_leg_y": 0.29,
-              "l_leg_z": 0.2,
-              "l_shoulder": 0.3,
+              "l_leg_x": 0.12,
+              "l_leg_y": 0,
+              "l_leg_z": 0.31401,
               "pelvis_turn": 0,
-              "r_arm_out": 0.04,
-              "r_elbow": 1.5,
-              "r_leg_pole_x": -0.984,
-              "r_leg_pole_y": 2,
-              "r_leg_pole_z": -4,
+              "r_arm.disc": 0.3,
+              "r_arm.shoulder": -0.04,
+              "r_cannon.elbow": 1.5,
+              "r_leg_pole_x": 0,
+              "r_leg_pole_y": 0.420159,
+              "r_leg_pole_z": -1.492363,
               "r_leg_weight": 1,
-              "r_leg_x": -1.104,
-              "r_leg_y": 0.29,
-              "r_leg_z": -0.4,
-              "r_shoulder": 0.3,
-              "rack_pitch": 0.2,
+              "r_leg_x": -0.12,
+              "r_leg_y": 0,
+              "r_leg_z": -0.28599,
+              "rack.mount": 0.2,
               "root_y": -0.45,
-              "twist": 0,
-              "waist_bend": 0.12
+              "sensor.neck.x": -0.08
             }
           }
         ]

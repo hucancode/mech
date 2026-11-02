@@ -92,7 +92,7 @@ function renderDock() {
     timeline.refresh();
   } else {
     // the pose test (rig tab) keeps its sliders' state: rebuild it only when the model changes
-    const stamp = `pose:${JSON.stringify(editor.model.drivers ?? [])}:${Object.keys(editor.test).length}`;
+    const stamp = `pose:${JSON.stringify([editor.model.drivers ?? [], editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
     if (dockTab !== stamp) dock.replaceChildren(...poseTest());
     dockTab = stamp;
     return;

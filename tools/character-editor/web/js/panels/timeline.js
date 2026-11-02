@@ -90,9 +90,8 @@ export class Timeline {
   // part selected, only those moving it
   get channels() {
     const keyed = new Set(this.keys.flatMap((/** @type {any} */ k) => Object.keys(k.values ?? {})));
-    const root = editor.rootChannels();
     const m = this.moving;
-    const all = [...(editor.model.drivers ?? []).map((/** @type {any} */ d) => d.name), ...root.move, ...root.turn];
+    const all = editor.channels().map((c) => c.name);
     const known = new Set(all);
     // names the model lacks still show, last, so their keys can be found and removed
     const names = [...all, ...[...keyed].filter((n) => !known.has(n))].filter((n) => keyed.has(n) && (!m || m.channels.has(n)));
@@ -155,9 +154,8 @@ export class Timeline {
 
   toolbar() {
     const clip = editor.clipData;
-    // the drivers and the root's channels (a group of their own)
-    const root = editor.rootChannels();
-    const groups = groupDrivers([...(editor.model.drivers ?? []), ...[...root.move, ...root.turn].map((name) => ({ name }))]);
+    // every channel, grouped
+    const groups = groupDrivers(editor.channels());
     const menu = this.keyPoseOpen
       ? h(
           "div",

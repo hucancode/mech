@@ -98,15 +98,6 @@ joint_mirror :: proc(j: Joint) -> (out: Mirror) {
   return
 }
 
-// mirror_moved is `mi` seen from a frame placed at `x` in mi's frame.
-mirror_moved :: proc(mi: Mirror, x: geometry.Transform) -> Mirror {
-  r := linalg.matrix3_from_quaternion(x.rotation)
-  out := mi
-  out.reflect = linalg.transpose(r) * mi.reflect * r
-  out.offset = linalg.transpose(r) * (mi.reflect * x.position + mi.offset - x.position)
-  return out
-}
-
 // twist_face is `f` turned by `angle` about its normal.
 twist_face :: proc(f: geometry.Face, angle: f32) -> geometry.Face {
   return {f.position, f.normal, linalg.mul(linalg.quaternion_angle_axis(angle, linalg.normalize(f.normal)), f.forward)}

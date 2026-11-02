@@ -49,15 +49,15 @@ To put a character in the game, export it and copy the file into `assets/charact
   arrow keys (shift for 10×), or drag the x/y/z label (shift for fine, alt for coarse). A size's
   🔗 lock changes all three in proportion.
 - Angles are shown and typed in **degrees**: shape rotations, and the ranges, driver ends and
-  pose values of drivers that turn a joint, and joint twists. Files keep radians.
+  pose values of joints' channels and drivers that turn a joint, and joint twists. Files keep radians.
 - Exports are written by the engine's own writer, so copying one over an asset only diffs where
   you changed something.
-- Warnings from the engine (a key naming a driver the model lacks, an instance matched with a
-  slot its parent's part lacks, a drive on a joint its instance does not expose, and so on) collect under ⚠ in the header.
+- Warnings from the engine (a key naming a channel the model lacks, an instance matched with a
+  slot its parent's part lacks, a drive on a joint its instance's part lacks, and so on) collect under ⚠ in the header.
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
-The Model tab makes parts, their slots and the joints those expose; the Assemble tab only
-matches slots; the Rig tab drives the exposed joints.
+The Model tab makes parts, their slots and their joints; the Assemble tab only hangs parts on
+slots; the Rig tab drives the joints.
 
 ## Model
 
@@ -73,11 +73,11 @@ previewing. Nothing about the view is saved.
   never). **+** adds a small box, ⧉ duplicates, ✕ deletes a part nothing places.
 - **The selected part**:
   - name (renaming carries to the instances), and its own
-    **joints**: those of its default slot, its origin, which most parts hang by. To make a part
+    **joints**: what it hangs by, from its parent's slot to its origin. To make a part
     bigger or smaller, select its shapes (Cmd-A selects them all) and drag the size tool's middle
     box: they scale together about their middle. A joint stack is listed from the parent's
     side, each joint on the one before, edited in place: its **name** (unique in the part;
-    drivers move it by name), its **kind** (spin, hinge or ball; a new joint is a hinge
+    its channels and drivers name it by it), its **kind** (spin, hinge or ball; a new joint is a hinge
     sized to the first shape, and switching kind drops the old kind's fields and fills in
     default proportions at the current size), ↑ to move it up, ✕, a **twist** about the socket's
     normal first (degrees) with its axes, **bend** (a turn at rest), its **range** on each axis
@@ -90,8 +90,7 @@ previewing. Nothing about the view is saved.
   - its **slots**: the named faces it is matched with other parts by; the origin needs no name.
     Select one to rename it (carried to the instances matched on it), **snap** it to one of the
     six faces of a shape (**inset** moves the next snap in toward the shape's centre), or type
-    its position, normal and forward, and give it **joints** for when the part hangs by it. A
-    slot something is matched on can't be deleted.
+    its position, normal and forward. A slot something is matched on can't be deleted.
   - its **shapes**: primitive, taper or top radius, material, **span**, position, **turn**
     (a quarter turn about the part's X, Y or Z; a box, a sphere or an upright cylinder shows it
     as its size instead of a rotation), rotation (degrees; shown when there is one) and size (the
@@ -135,9 +134,9 @@ part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
   - **⇋ mirror** copies the selected limb (from the topmost `l_`/`r_` instance, or
     `left`/`right`) to the other side of the body, replacing what is there. The copies place the
     **same parts**, mirrored, so editing a left hand edits both. They get the other side's names,
-    and their drives are copied to the other side's drivers (made when missing; a driver with no
-    side, like `pelvis_turn`, moves both) with the same numbers: the engine turns over the ones a
-    reflection needs. IK targets come along. The limb is matched with the other side's slot of the
+    and their joints' channels are the other side's (`r_forearm.elbow`); drives on them are copied
+    to the other side's drivers (made when missing; a driver with no side, like `pelvis_turn`,
+    moves both) with the same numbers: the engine turns over the ones a reflection needs. IK targets come along. The limb is matched with the other side's slot of the
     parent's part (`l_shoulder` to `r_shoulder`), which is made, reflected, when the part has none.
   - **kit** adds any instance of any character (this one, those saved here and those in
     assets/), with what hangs from it, under the selection: the parts they place, their joints,
@@ -149,36 +148,37 @@ part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
   - Drag an instance onto another to hang it there (matched with the slot of the same name, else the first
     free one), or onto "make root". The tree stays parents first.
 - **The selected instance**: name (renaming carries to its children, drives and IK targets),
-  **part** (from the library, or a new one), **slot** (the one of its part it hangs by, or its
-  origin), **parent**, **matched with** (a slot of the parent's part, or its origin),
-  **mirrored**, and the joints its slot exposes.
+  **part** (from the library, or a new one), **parent**, **matched with** (a slot of the parent's part, or its origin),
+  **mirrored**, and its part's joints.
 
 The view shows the character at rest, with no dock: the tree has the sidebar's full height.
 Bend joints to check clearances in the Rig tab's pose test.
 
 ## Rig
 
-Rigging is defining drivers and what they move; keys and timing are the Animate tab's.
+Every joint axis is already a channel clips key (`l_forearm.elbow`), so rigging is only what
+moves several joints at once: drivers and IK targets. Keys and timing are the Animate tab's.
 
-- **Drivers**: the values clips key. Each row says what it moves. **+** adds one moving
-  the selected instance's first joint. Its inspector sets the name (renaming carries through the
-  open animation), the slider range (degrees when it turns a joint) and its **drives**: each an
-  instance, a joint that instance exposes and one of its axes, the driver's range **from** and
-  the turn it maps **to** (degrees), **clamp**, with a
-  preview of the mapping when it is not a plain scale. Drives on one axis add up.
-- **An instance**: the joints it exposes, one row per axis, with the drivers moving each (click
-  one to edit it) and **+ driver** to drive it with an existing driver or a new one.
+- **Drivers**: values that move several joints at once (a curl). Each row says what it moves.
+  **+** adds one moving the selected instance's first joint. Its inspector sets the name
+  (renaming carries through the open animation), the slider range and its **drives**: each an
+  instance, a joint of that instance's part and one of its axes, the driver's range **from** and
+  the **turn** it maps onto (degrees), **clamp**, with a preview of the mapping when it is not a
+  plain scale. Drives add onto the joint's own channel.
+- **An instance**: its part's joints, one row per axis, with the axis's own channel, the drivers
+  also moving it (click one to edit it) and **+ driver** to drive it with an existing driver or a
+  new one.
 - **IK targets**: **+** makes one for the selected instance (the tip), its chain from two
-  instances above, with its four drivers (`_x`, `_y`, `_z`, ranged around where the tip is, and
-  `_weight`, 0 to 1). Its inspector sets the name, **root**, **tip** and **hold its facing** (for a planted
-  foot: its ankle keeps it as the clip angles it to the ground); **Try it at the tip** puts
-  the pose test's target on the tip at full weight, to drag from there. **+ pole** gives it a
-  pole (`_pole_x`, `_y`, `_z`), a point in front of the chain's middle that the knee or elbow
-  bends toward; ✕ by it takes it away. ✕ deletes the target and its drivers.
+  instances above. Its channels are named after it (`_x`, `_y`, `_z`, `_weight`). Its inspector
+  sets the name (carried through the open animation), **root**, **tip** and **hold its facing**
+  (for a planted foot: its ankle keeps it as the clip angles it to the ground); **Try it at the
+  tip** puts the pose test's target on the tip at full weight, to drag from there. **+ pole**
+  gives it a pole (`_pole_x`, `_y`, `_z`), a point in front of the chain's middle that the knee or
+  elbow bends toward; ✕ by it takes it away. ✕ deletes the target.
 
-The **pose test** in the dock has a slider per driver, to try the rig. An IK target's x, y, z and
-the root's move and turn (its channels: [modeling.md](modeling.md)) each show as one x/y/z row.
-It moves the view only and is never saved.
+The **pose test** in the dock has a slider per channel (the engine's list), to try the rig: a
+joint's runs over its range. An IK target's x, y, z, a ball's x, y, z and the root's move and turn
+each show as one x/y/z row. It moves the view only and is never saved.
 
 **Handles in the view** (Rig and Animate): a diamond on the model's root, a dot on each IK
 target and a ring on each pole. Click one to select it: arrows move it along the model's axes (shift: 0.01 steps), and
@@ -204,19 +204,27 @@ with their names (remembered in this browser); the root's diamond always shows.
     edit in it shows in the view), shift-click adds, dragging on empty space box-selects
     the keys on the rows it covers. Double-click a key to play from it.
   - **A part's channels**: click a part in the view and the timeline shows only the channels
-    that move it. Those are the drivers of its joints and its parents', the IK targets whose
+    that move it. Those are its joints' and its parents' channels and the drivers moving them, the IK targets whose
     chains pass through them, and the root (the engine answers them: query `moves`). ✕ by
     "channels moving …" in the toolbar, or a click on empty space, shows every channel again.
+- **Clips** are keyframed or procedural. **+ clip…** adds an empty keyframed clip or one from
+  a procedural preset: biped walk or run (a human, a bird, a dog on two legs), quadruped walk,
+  trot or gallop (a cat, a dog), snake slither ([animation.md](animation.md#procedural-clips)).
+  A preset measures the model at rest for its numbers, and makes IK targets on the feet (the
+  lowest leaf instances, reaching from two above) when it has none. It plays as soon as it is
+  made. The inspector tunes it with sliders while it plays: the cycle's duration; the legs'
+  stride, lift, duty, crouch, bob and each foot's phase; each wave's chain, axis, amount, length
+  and growth; and swings, any channel to and fro with the cycle (+ adds one).
 - **Toolbar**:
   - play/pause (space), loop, speed, zoom, the clip length
   - **+ Key** adds an empty key at the playhead
-  - **◆ Key pose…** keys what the view shows now, choosing the driver groups
+  - **◆ Key pose…** keys what the view shows now, choosing the channel groups
   - ⧉ (Cmd-D) duplicates the selected keys, ✕ (Delete) deletes them
   - Cmd-C / Cmd-V copy and paste keys at the playhead
-- **Key inspector**: at, duration and ease, then **Key values**: the key's drivers, and the
-  root's channels; an IK target's x, y, z and the root's move and turn show as one x/y/z row each
-  (only what you change is set). **capture** sets them to what the view shows; "+ driver" adds
-  one at its value now.
+- **Key inspector**: at, duration and ease, then **Key values**: the key's channels; an IK
+  target's x, y, z, a ball's and the root's move and turn show as one x/y/z row each (only what you
+  change is set). **capture** sets them to what the view shows; "+ driver" adds one at its value
+  now.
 
 Characters saved in this browser before clips were plain key lists are brought up to date when
 opened: each key's pose is copied into its values and the keys are put in time order, which plays

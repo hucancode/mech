@@ -5,7 +5,7 @@
 
 import { listCharacters, readFile } from "./api.js";
 import { fromQuat } from "./math3.js";
-import { clone, inlineJoints, jointAxes, respan, tryDriver, uniqueName, upgradeAnim } from "./model.js";
+import { clone, inlineJoints, jointAxes, jointChannel, respan, uniqueName, upgradeAnim } from "./model.js";
 import { blankCharacter, exportFile, loadLocal, localNames, pickFile, saveLocal } from "./store.js";
 import { Viewer } from "./viewer.js";
 
@@ -52,7 +52,7 @@ class Editor {
     /** @type {{spanned: any, flat: any}[]} shapes copied (Cmd-C): as they were, and in their part's frame */
     this.clipShapes = [];
     this.joint = -1; // of the joints the part hangs by, the one selected (the joint tool)
-    /** @type {Record<string, number>} the part's joints tried, never saved: by tryDriver(joint, axis) */
+    /** @type {Record<string, number>} the part's joints tried, never saved: by their channels (jointChannel) */
     this.tries = {};
     this.explode = 0; // the part's shapes pushed apart, 0 to 1
     this.mirrored = false; // preview the part as a mirrored instance shows it (the right side)
@@ -88,7 +88,6 @@ class Editor {
     this.pendingAnim = false;
     this.sentModel = false; // the viewer holds a model
     this.sentAlone = false; // what it holds is one part alone (the model tab)
-    this.sentHang = ""; // the slot that part hangs by
     this.scheduled = false;
     /** @type {((what: Change) => void)[]} */
     this.listeners = [];
@@ -245,39 +244,28 @@ class Editor {
   }
 
   // alone is the model the model tab shows: the selected library part, placed once at the origin,
-  // hanging by its origin with its own joints, or by the selected slot when that has joints;
-  // mirrored, as the other side shows it, when previewing that. It shows in model units
+  // hanging by its joints; mirrored, as the other side shows it, when previewing that. It shows in model units
   // (ALONE_SCALE), not scaled to the character's size.
-  // Each axis of the joints it hangs by gets a driver (tryDriver), which the joints' try sliders
+  // Each axis of the joints it hangs by is a channel of its own (jointChannel), which the joints' try sliders
   // and the joint tool set (this.tries), so a joint can be tried before it is rigged.
   alone() {
     const m = this.model;
     const part = m.parts?.[this.def];
-    const slot = this.hang();
-    const drivers = this.hangJoints().flatMap((/** @type {any} */ j) =>
-      jointAxes(j).map((axis) => ({ name: tryDriver(j.name, axis), min: -Math.PI, max: Math.PI, drives: [{ part: part.name, joint: j.name, axis, from: [0, 1], to: [0, 1] }] })),
-    );
     return {
       name: m.name,
       scale: ALONE_SCALE,
       materials: m.materials,
       hardware: m.hardware,
-      drivers,
       parts: part ? [part] : [],
-      assembly: part ? [{ name: part.name, part: part.name, ...(slot ? { slot } : {}), ...(this.mirrored ? { mirror: true } : {}) }] : [],
+      assembly: part ? [{ name: part.name, part: part.name, ...(this.mirrored ? { mirror: true } : {}) }] : [],
     };
-  }
-
-  /** the joints the model tab hangs the part by: the selected slot's, when it has some, else its own (its origin's) */
-  hangJoints() {
-    const part = this.model.parts?.[this.def];
-    const slot = this.hang();
-    return (slot ? part?.slots?.find((/** @type {any} */ s) => s.name === slot)?.joints : part?.joints) ?? [];
   }
 
   /** setTry turns a joint the model tab shows, to try it; never saved @param {string} joint @param {string} axis @param {number} v */
   setTry(joint, axis, v) {
-    this.tries[tryDriver(joint, axis)] = v;
+    const part = this.model.parts?.[this.def];
+    const j = part?.joints?.find((/** @type {any} */ x) => x.name === joint);
+    if (j) this.tries[jointChannel(part.name, j, axis)] = v;
     this.viewer?.showValues(this.tries);
   }
 
@@ -286,12 +274,6 @@ class Editor {
     this.tries = {};
     this.viewer?.showValues(this.tries);
     this.emit("select");
-  }
-
-  // hang is the slot the model tab hangs the part by: the selected one, when it has joints.
-  hang() {
-    const s = this.model.parts?.[this.def]?.slots?.[this.slot];
-    return s?.joints?.length ? s.name : "";
   }
 
   // sync sends what changed to the viewer, then tells it what to show. `whole`: the whole
@@ -304,7 +286,6 @@ class Editor {
     // a new character: drop the old animation first, so the new model is not compiled against it
     if (this.pendingModel && this.pendingAnim && this.sentModel) v.setAnimation({});
     if (this.pendingModel) {
-      this.sentHang = alone ? this.hang() : "";
       this.sentModel = v.setModel(alone ? this.alone() : this.model) || this.sentModel;
     }
     if (this.pendingAnim) v.setAnimation(alone ? {} : this.anim);
@@ -328,11 +309,6 @@ class Editor {
       v.select(this.part, -1, false);
       v.play(this.clip, this.time, this.playing, this.speed, this.loop);
     } else if (this.tab === "model") {
-      // selecting a slot with joints hangs the part by it
-      if (this.hang() !== this.sentHang) {
-        this.pendingModel = true;
-        return this.sync();
-      }
       v.showValues(this.tries);
       v.select(this.model.parts?.[this.def] ? 0 : -1, this.shape, true);
       v.explode(this.explode);
@@ -489,6 +465,11 @@ class Editor {
       if (info?.root) this.root = info.root;
     }
     return this.root ?? { move: [], turn: [] };
+  }
+
+  /** every channel of the character, in the engine's order (the "channels" query): {name, kind, angle, min, max, part?, ik?} @returns {any[]} */
+  channels() {
+    return this.viewer?.query({ q: "channels" }) ?? [];
   }
 
   // shown is the drivers as the viewer shows them now.
