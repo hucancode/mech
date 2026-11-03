@@ -1,5 +1,6 @@
 package mech
 
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:math/linalg"
@@ -40,15 +41,14 @@ Piece :: struct {
   node:      world.NodeHandle,
 }
 
-// RigDrive is a Drive resolved: channel `channel` moves bone `bone`, mirrored instances' `turn`
-// already turned over. A joint's own channels are drives too, from [0, 1] onto 1 radian.
+// RigDrive is a driver's move on one joint axis, resolved: channel `channel` past `delay` turns bone
+// `bone` by `turn` per unit, mirrored instances' already turned over. A joint's own channels are
+// drives too, 1 radian per unit.
 @(private)
 RigDrive :: struct {
   bone, channel: int,
   axis:          Axis,
-  from:          [2]f32,
-  turn:          f32,
-  clamp:         bool,
+  delay, turn:   f32,
 }
 
 // RigIk: the chain's bones are chains[first:][:count], root first, down to the tip's own; IK reaches
@@ -57,13 +57,15 @@ RigDrive :: struct {
 // reaches; `channel` is the first of its channels (IK_CHANNELS), its target an offset from
 // `rest`, where the tip is at rest (in the frame node's space, lifted). `mid` is the chain's
 // middle joint (chain_middle; -1 for none), which bends toward a pole: `pole_rest`, in front of
-// that joint at rest the way its stops let it bend, moved by the pole's channels when it has them.
+// that joint at rest the way its stops let it bend, moved by the pole's channels.
+// An aiming one (`aim`) turns its whole chain so the tip's `look` (a direction in its frame: ahead
+// at rest) points at the target, `rest` then being a point ahead of the tip.
 RigIk :: struct {
   first, count, turning, tip: int,
   channel:                    int,
-  hold, pole:                 bool,
+  hold, aim:                  bool,
   mid:                        int,
-  rest, pole_rest:            [3]f32,
+  rest, pole_rest, look:      [3]f32,
 }
 
 Rig :: struct {
@@ -182,30 +184,27 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
       p := placed[firsts[i] + k]
       dofs, count := joint_dofs(j)
       for d in dofs[:count] {
-        append(&rig.drives, RigDrive{p.bone, ch, d.axis, {0, 1}, -1 if p.mirror.turn[d.axis] else 1, false})
+        append(&rig.drives, RigDrive{p.bone, ch, d.axis, 0, -1 if p.mirror.turn[d.axis] else 1})
         ch += 1
       }
     }
   }
+  // a driver's moves name joints' channels, whose own drives say which bone and axis they turn
+  own := rig.drives[:]
+  first := joint_channel(m, 0)
+  targets := make([dynamic]Target, context.temp_allocator)
   for d, di in m.drivers {
-    for dr in d.drives {
-      // the joint, among its instance's
-      inst := model_instance(m, dr.part)
-      k := -1
-      if inst >= 0 do for j, n in instance_joints(m, inst) do if j.name == dr.joint do k = n
-      if k < 0 {
-        log.warnf("model %s: driver %s moves joint %s, which %s does not have", m.name, d.name, dr.joint, dr.part)
-        continue
+    for mv in d.moves {
+      clear(&targets)
+      targets_resolve(m, fmt.tprint("driver", d.name), mv.by, &targets)
+      for t in targets {
+        if t.driver < first {
+          log.warnf("model %s: driver %s moves %s, which is not a joint's", m.name, d.name, channel_name(m, t.driver))
+          continue
+        }
+        j := own[t.driver - first]
+        append(&rig.drives, RigDrive{j.bone, di, j.axis, mv.delay, j.turn * t.value})
       }
-      p := placed[firsts[inst] + k]
-      dofs, count := joint_dofs(p.joint)
-      has := false
-      for x in dofs[:count] do has ||= x.axis == dr.axis
-      if !has {
-        log.warnf("model %s: driver %s moves joint %s of %s about %v, which it does not have", m.name, d.name, dr.joint, dr.part, dr.axis)
-        continue
-      }
-      append(&rig.drives, RigDrive{p.bone, di, dr.axis, dr.from, -dr.turn if p.mirror.turn[dr.axis] else dr.turn, dr.clamp})
     }
   }
   for _, k in m.iks do ik_add(rig, k)
@@ -260,9 +259,8 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
   resize(&rig.motion, len(rig.bones))
   for &mo in rig.motion do mo = {}
   for d in rig.drives {
-    t := (s[d.channel] - d.from[0]) / (d.from[1] - d.from[0]) if d.from[1] != d.from[0] else 0
-    if d.clamp do t = clamp(t, 0, 1)
-    rig.motion[d.bone][d.axis] += t * d.turn
+    v := s[d.channel]
+    rig.motion[d.bone][d.axis] += math.sign(v) * max(abs(v) - d.delay, 0) * d.turn
   }
   for b, i in rig.bones do rig.motion[i] = limit(b, rig.motion[i])
   origin := rig_origin(rig)
@@ -271,8 +269,8 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     c := s[ik.channel:]
     weight := clamp(c[3], 0, 1)
     if weight <= 0 do continue
-    pole := ik.pole_rest + ({c[4], c[5], c[6]} if ik.pole else 0)
-    reach(rig, ik, ik.rest + {c[0], c[1], c[2]}, pole, weight, origin)
+    if ik.aim do aim(rig, ik, ik.rest + {c[0], c[1], c[2]}, weight, origin)
+    else do reach(rig, ik, ik.rest + {c[0], c[1], c[2]}, ik.pole_rest + {c[4], c[5], c[6]}, weight, origin)
     solve(rig, origin)
   }
 }
@@ -310,7 +308,7 @@ rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []boo
   for ik in rig.iks {
     moves := false
     for c in rig.chains[ik.first:][:ik.count] do moves ||= above[c]
-    if moves do for &o in out[ik.channel:][:7 if ik.pole else 4] do o = true
+    if moves do for &o in out[ik.channel:][:4 if ik.aim else 7] do o = true
   }
   for &o in out[root_channel(m):][:len(ROOT_CHANNELS)] do o = true
   return out
@@ -370,7 +368,7 @@ ik_add :: proc(rig: ^Rig, k: int) {
   m := rig.model
   ik := m.iks[k]
   root, tip := model_instance(m, ik.root), model_instance(m, ik.tip)
-  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, k), hold = ik.hold, pole = ik.pole}
+  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, k), hold = ik.hold, aim = ik.aim}
   if root < 0 || tip < 0 {
     log.warnf("model %s: ik %s names an unknown instance", m.name, ik.name)
     return
@@ -382,7 +380,7 @@ ik_add :: proc(rig: ^Rig, k: int) {
       slice.reverse(rig.chains[out.first:])
       // the tip's own joints (an ankle, a wrist) only turn it where it is: IK turns those above
       out.turning = out.count
-      for c, n in rig.chains[out.first:][:out.count] do if c == instance_base(rig, tip) do out.turning = n + 1
+      if !ik.aim do for c, n in rig.chains[out.first:][:out.count] do if c == instance_base(rig, tip) do out.turning = n + 1
       append(&rig.iks, out)
       return
     }
@@ -399,6 +397,15 @@ ik_add :: proc(rig: ^Rig, k: int) {
 @(private = "file")
 ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
   ik.rest = rig_frame(rig, ik.tip).position
+  if ik.aim {
+    // it looks ahead (+z) at rest, at a point as far ahead as it is high
+    x := rig_frame(rig, ik.tip)
+    ik.look = linalg.mul(linalg.quaternion_inverse(x.rotation), [3]f32{0, 0, 1})
+    ik.rest += {0, 0, max(x.position.y, 1)}
+    ik.mid = -1
+    ik.pole_rest = ik.rest
+    return
+  }
   ik.mid = chain_middle(rig, ik^, rig_origin(rig))
   ik.pole_rest = ik.rest
   if ik.mid < 0 do return
@@ -472,6 +479,33 @@ reach :: proc(rig: ^Rig, ik: RigIk, target, pole: [3]f32, weight: f32, origin: g
           for c in chain[k:mid + 1] do pose_bone(rig, c, origin)
           if linalg.length(rig.poses[chain[mid]].position - at) > 0.01 do rig.motion[chain[k]] = was
         }
+      }
+    }
+  }
+  for bone, k in chain {
+    mo := &rig.motion[bone]
+    mo^ = linalg.lerp(from[k], mo^, weight)
+  }
+}
+
+// aim turns the chain's bones, tip first, so the tip's look points at `target`, each about the
+// axes it turns (the tip's own joints, a neck, doing the most), then blends the result with the
+// motion the drives gave by `weight`.
+@(private = "file")
+aim :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, weight: f32, origin: geometry.Transform) {
+  ITERATIONS :: 8
+  chain := rig.chains[ik.first:][:ik.count]
+  from := make([][3]f32, len(chain), context.temp_allocator)
+  for bone, k in chain do from[k] = rig.motion[bone]
+  for _ in 0 ..< ITERATIONS {
+    for k := len(chain) - 1; k >= 0; k -= 1 {
+      for axis in Axis {
+        if axis not_in rig.bones[chain[k]].turns do continue
+        for c in chain[k:] do pose_bone(rig, c, origin)
+        x := rig_frame(rig, ik.tip)
+        pivot := rig.poses[chain[k]].position
+        // turn the way the tip looks toward the way to the target, about this joint
+        turn_toward(rig, chain[k], axis, pivot + linalg.mul(x.rotation, ik.look), pivot + linalg.normalize0(target - x.position))
       }
     }
   }

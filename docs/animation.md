@@ -1,12 +1,11 @@
 # The mech animation engine
 
 An **animation** is a character's named **clips**; it is the `"animation"` half of a character
-file ([modeling.md](modeling.md#character-files)). A clip is a plain list of **key frames**,
-which may overlap; each blends its channel values onto what the keys before it give. Animations
-only ever set the model's **channels** ([modeling.md](modeling.md#rigging-channels-drivers-ik-targets)):
-its joints' axes, its drivers, its IK targets' and its root's, so a clip works on any model that
-has the channels it names. The game **mixes** clips: each plays on a **layer**, with its own
-time scale and offset, replacing or adding to the layers below.
+file ([modeling.md](modeling.md#character-files)). A clip is a list of **motions**: shapes over
+time added onto the model's **channels** ([modeling.md](modeling.md#rigging-channels-drivers-ik-targets)),
+on top of the model's **rest pose**. A clip works on any model that has the channels it names.
+The game **mixes** clips: each plays on a **layer**, with its own time scale and offset, replacing
+or adding to the layers below.
 
 ```odin
 model, anim, _ := mech.character_load("assets/characters/mech.json")  // or character_parse(text)
@@ -24,119 +23,109 @@ mech.rig_pose(&scene, rig, values)
 The `Mech` character (`src/character/mech.odin`) maps each `Action` to a clip by name
 (`ACTION_CLIPS`: `idle`, `walk`, `run`, `attack`, `cast`, `combat_idle`) and plays it on its
 first layer, looping or once following `action_loops`, cross-fading between clips. An action
-with no clip shows the rest pose (every channel 0). Game code adds its own layers above the
-action's (`mech_layers`, with offsets on `mech_now`'s clock). Tools can also play any clip on
-the first layer or hold explicit values (`mech_play_clip`, `mech_show_values`).
+with no clip shows the rest pose. Game code adds its own layers above the action's
+(`mech_layers`, with offsets on `mech_now`'s clock). Tools can also play any clip on the first
+layer or hold explicit values (`mech_play_clip`, `mech_show_values`).
 
-## The animation
+## Motions
 
-A character file's `"animation"`:
+There is one kind of track. A motion is **a shape over time, added onto some channels**. A walk,
+a slither and a strike aren't built into the engine. Each is a few motions with particular shapes
+and numbers (the table below), and motions compose.
 
 ```json
-{
-  "clips": [
-    {
-      "name": "attack",
-      "duration": 0.9,
-      "keys": [
-        {"values": {"l_curl": 0.35, "l_elbow": 0.2618, "l_shoulder": 0.0698, "r_curl": 0.35}},
-        {"at": 0.04, "duration": 0.14, "values": {"root_y": -0.19908, "pelvis_turn": -0.2094}},
-        {"at": 0.27, "duration": 0.08, "ease": "IN", "values": {"pelvis_turn": 0.4363}}
-      ]
-    }
-  ]
-}
+{"name": "walk", "duration": 1, "motions": [
+  {"moves": [{"by": {"root_y": -0.06}}]},
+  {"shape": [{"v": 0.5}, {"u": 0.55, "v": -0.5}, {"u": 1, "v": 0.5}],
+   "moves": [{"delay": 0.25, "by": {"l_leg": [0, 0, 1.75]}}, {"delay": 0.75, "by": {"r_leg": [0, 0, 1.75]}}]},
+  {"shape": [{"v": 1, "ease": "IN"}, {"u": 0.5, "ease": "OUT"}], "rate": 2,
+   "moves": [{"delay": 0.5, "by": {"root_y": -0.14}}]}
+]}
 ```
 
-- **clips**: `{name, duration, keys}`.
-- **values**: maps channel names to values: joints' turns in radians (`l_forearm.elbow`), drivers
-  in their own units (their drives map them onto turns), IK targets' points in model units, and
-  the root's channels (`root_x`, `_y`, `_z` in model units, `root_turn_x`, `_y`, `_z`
-  in radians: [modeling.md](modeling.md)) to where the whole model is moved and turned. Unlike
-  everywhere else in these files, a 0 here is a real value ("move to 0"), so it's written out.
+A motion is `{shape, rate, moves}`:
 
-### Key frames
+- **shape**: points `{u, v, ease}` over one cycle: the value `v` at `u` (0 to 1), reached from
+  the point before by `ease`. No points means 1 throughout: a pose held.
+- **rate**: how many whole cycles of the shape run over the clip (default 1).
+- **moves**: a list of `{delay, by}`. `by` holds the channel amounts that move together, and
+  `delay` says how many cycles late they run. The amounts are written as anywhere else in these
+  files: an `[x, y, z]` under a stem, or one channel.
 
-| field | meaning |
+At clip progress `x` (`t / duration`: 0 at the clip's start, 1 at its end), each move adds
+
+```
+out[c] += by[c] * shape(rate * x - delay)      for each channel c in by
+```
+
+A move's delay is written on the move itself, so you can read when it fires:
+
+- **Two feet** are two moves, the second half a cycle later than the first.
+- **A trot's diagonal pairs** are two moves of two channels each.
+- **A strike** fires feet, pelvis, chest, shoulder, arm and fist as moves in that order, each a
+  little later.
+- **A wave down a chain** is a move per joint, the delays growing toward the tail.
+
+**The shape** repeats every cycle: the last point eases into the first a cycle on. A one-shot (a
+strike) is a shape that ends where it starts (it returns to 0), so repeating changes nothing. Its
+moves must all finish within the clip: the last point plus the largest delay must be at most 1,
+or the end of the shape wraps round to the clip's start. A whole cycle in (u = 1, 2, …) is the
+cycle's end, so a one-shot clip held at its end holds the shape's last point.
+
+**Loops are seamless**: the rate is a whole number, so every motion ends a clip where it started.
+
+### Eases
+
+An ease shapes how a shape goes from one point to the next. Each runs from 0 at the start to
+exactly 1 at the end, so shapes join where they say. They are all mechanical: things move, hit a
+stop and hold, rather than ease to and fro.
+
+| ease | how it gets there | for |
+| --- | --- | --- |
+| `LINEAR` | steady (the default, left out of files) | a foot sliding back, a piston, a ramp, a return |
+| `IN` | slow, then faster and faster | driving into a hit, a foot landing |
+| `OUT` | fast, then slowing | a wind-up, coasting to a stop |
+| `SETTLE` | there a sixth in, then a damped bounce (about 0.19 past, 0.04 short), still at the end | a hard stop: an arm slamming into its limit, a servo overshooting, a jaw snapping shut |
+| `STEP` | holds, then snaps at the end | a ratchet, a lock clunking in |
+
+### Shapes to start from
+
+The character editor's curve editor starts shapes from these (`shapes.js`); after that, a shape
+is whatever the artist drags it into:
+
+| shape | points |
 | --- | --- |
-| `at` | start time, in seconds into the clip |
-| `duration` | how long it takes to blend fully in; 0 snaps in at `at` |
-| `ease` | `SMOOTH` (default), `LINEAR`, `IN` (accelerates, driving into a hit), `OUT` (decelerates, coasting to a stop) |
-| `values` | the channels it moves, and where to |
+| hold | none: 1 throughout. A pose held: a stance, a crouch, a guard |
+| sine | 1 at ¼, −1 at ¾: a sway, a swing, a wave |
+| slide | ½ at 0, −½ at the duty, ½ at 1: a foot down for `duty` of the cycle sliding back, then swinging ahead |
+| lift | 0 at the duty, 1 halfway after (OUT), 0 at 1 (IN): the foot lifted as it swings |
+| pulse | 0, 1 at the rise (IN drives into a hit), 0 at 1: a strike |
+| square | 1 around ¼, −1 around ¾, each move SETTLE into its stop and held: a servo swinging (an arm, a hull, a weight shift) |
+| bounce | 1 at 0 reached IN, 0 at ½ left OUT: the body coming down hard on each step, lowest as the foot lands |
+| hit | still, into 1 by SETTLE, held, back to 0 by the end: a strike slamming into its stop |
+| steps | from −1 up to 1 and back in `n` steps, each SETTLE (or STEP: snapping): a scan, a ratchet |
 
-Keys apply in time order (by `at`; keys starting together, in file order). A key moves only the
-channels it names and leaves the rest to the keys before it.
+### Familiar motions, as data
 
-## Procedural clips
-
-A clip is **keyframed** (its keys, above) or **procedural**: a `gait`, a few numbers the engine
-turns into motion every time it samples the clip, so a walk, a run or a slither is tuned, not
-keyed. Keys, if a clip has any, apply first and the gait adds onto them, so a keyframed clip can
-also play over a procedural one on a layer (an attack over a walk).
-
-```json
-{"name": "walk", "duration": 1.1, "gait": {
-  "stride": 1.2, "lift": 0.33, "duty": 0.6, "crouch": 0.08, "bob": 0.05,
-  "legs": [{"ik": "l_leg"}, {"ik": "r_leg", "phase": 0.5}],
-  "swings": [{"channel": "root_turn_z", "amount": 0.03, "rate": 1}]
-}}
-```
-
-- **legs**: each walks an IK target (one that `hold`s: a planted foot) around where its foot
-  stands at rest. Down for `duty` of the cycle (the clip's duration), it slides straight back by
-  `stride` along the ground (model units; characters walk toward +z). Then it lifts and swings
-  forward, `lift` high, eased. Each touches down at its own `phase` (0 to 1) of the cycle. A
-  walking leg reaches (its weight is 1), and bends as its joints' stops allow (the default pole).
-  Any number of legs walks, whatever their joints:
-  - a biped (human, bird, a dog on two legs): two legs half a cycle apart; a duty over 0.5
-    walks, under 0.5 runs, every foot off the ground at once.
-  - a quadruped (cat, dog): four. A walk sets each hind foot down, then the fore foot on its side
-    (phases 0, 0.25, 0.5, 0.75), a trot moves diagonal pairs together, a gallop the hind pair then
-    the fore pair.
-- **crouch**, **bob**: the root sinks `crouch` while moving (the feet stay down, so the knees
-  bend), and dips `bob` more as each foot touches down, back up a quarter cycle either side.
-- **swings**: any channel to and fro, `amount * cos(2π (rate * cycle - phase))`: a sway, arms or a
-  hull swinging against the legs.
-- **waves**: `{from, to, axis, amount, length, taper}` bends the chain of instances from `from`
-  down to `to` about `axis` as a body following a path: the segment after each joint heads
-  `amount * (1 + taper * s) * sin(2π (cycle - length * s))` off its rest, `s` running 0 at the
-  head to 1 at the tail, so a wave `length` wavelengths long travels tailward once a cycle. Each
-  joint turns only by the difference from the segment before, so a turn does not pile up down the
-  chain (children inherit their parents' turns: turning each joint by the wave itself would swing
-  the tail by the sum of them all). `taper` (the editor's **growth**) changes the swing toward
-  the tail: 0 the same all along, above 0 bigger, -1 dying out at the tail. A snake slithers
-  about Y; a tail sways.
-
-The character editor makes procedural clips from presets (biped walk and run, quadruped walk,
-trot and gallop, snake slither), which measure the model's legs and spine for their first
-numbers, and making the legs' IK targets when it has none.
+| motion | as motions |
+| --- | --- |
+| a stance (idle) | the rest pose ([modeling.md](modeling.md#the-rest-pose)): nothing to write. Mechanical life on top: a scan in `steps`, a weight shift as a `square` on `root_x` |
+| a different stance (combat idle, a walk's crouch) | no shape: a held motion, its amounts how it differs from the rest pose |
+| a walk's feet | a slide and a lift, each with a move per leg's IK target: `[0, 0, stride]` slides it, `[0, lift, 0]` lifts it, the first foot's delay its touch-down. A duty over 0.5 walks, under 0.5 runs (every foot off the ground at once). A biped's second foot is half a cycle later. A quadruped's walk sets each hind foot down, then the fore foot on its side (delays 0, ¼, ½, ¾); a trot moves diagonal pairs together (two moves of two) |
+| its bob | a bounce on `root_y`, rate 2 for a biped (once a step), lowest as each foot lands |
+| a sway, a hull against the legs | a sine or a square, one move |
+| a wave (a snake's slither, a tail's sway) | a move per joint down a chain, each turning about the chain's side axis (a snake slithers about Y), each a fraction of a cycle later than the one before: the wave travels tailward. To have each segment head as the shape says instead of the turns piling up, each move also turns the next joint back by as much (the dragon's slither) |
+| arms swinging | a square: the shoulders one move (the other arm at minus its amounts: half a cycle apart), the forearms a move a little later |
+| a strike | a hit, its moves the hit's channels in firing order (feet, pelvis, chest, shoulder, arm, fist), each a little later, each slamming into its stop. The wind-up is a hit before it with the coil's amounts, OUT, over the clip's first part, letting go as the strike rises. A step into it is a one-shot shape of its own on the foot's IK target (out, held, back), with a lift for each step |
+| a head that is the root (the dragon) | turn the root and the first spine joint back by as much: the head turns alone |
 
 ## How a clip is sampled
 
-`clip_sample(clips, clip, t, out)` starts from the rest pose (every value 0) and applies each key
-in time order:
-
-```
-w = ease((t - at) / duration)        (clamped to 0..1; a zero duration is 0 before `at`, 1 after)
-skip the key if w <= 0
-out[c] += (value[c] - out[c]) * w    for each channel the key names
-```
-
-A key keeps holding its values after it finishes (w stays 1), so later keys build on it. The
-first key is usually the stance the clip starts from, at time 0.
-
-Typical shapes:
-- **A held stance**: one key at 0 (the mech's `idle` and `combat_idle`).
-- **A loop**: a starting stance, then one key per quarter period blending to the next stance,
-  ending on the starting one (the mech's `walk` and `run`).
-- **A strike that chains up the body**: overlapping keys on separate channel groups, each
-  starting a little after the one before: feet, then pelvis, chest, arm, fist. Wind-up, drive,
-  follow-through, then a recovery key blending back to the stance (the mech's `attack` and
-  `cast`).
-
-`clips_build` compiles an `Animation` against a `Model`: names become channel indices and keys
-are stable-sorted by time. Names the model lacks are logged and skipped. Rebuild it whenever
-either side changes; the editors do so on every edit.
+`clip_sample(clips, clip, t, out)` starts from the rest pose (`Clips.pose`, compiled from the
+model's `pose`) and adds each motion in file order. `clips_build` compiles an `Animation`
+against a `Model`: names become channel indices, a shape's points are sorted by u. Names the
+model lacks are logged and skipped. Rebuild it whenever either side changes; the editors do so
+on every edit.
 
 ## Mixing clips on layers
 
@@ -146,14 +135,16 @@ when it doesn't. `mix_sample(clips, layers, t, out, scratch)` starts from the re
 each layer, from the first up, by its `weight`:
 
 ```
-REPLACE:   out = lerp(out, the clip's keys applied on top of out, weight)
-ADDITIVE:  out += the clip sampled on the rest pose * weight
+sample = the clip sampled (on the rest pose)
+REPLACE:   out[c] = lerp(out[c], sample[c], weight)   for each channel c the clip's moves name
+ADDITIVE:  out += (sample - rest pose) * weight
 ```
 
-A REPLACE layer moves only the channels its clip keys, so a clip of just the arms plays over a
-walk and leaves the legs to it. An ADDITIVE layer adds its clip's values, as offsets from the
-rest pose, to whatever is below (a recoil, a lean). Mixing is the game's: the character editor
-edits one clip at a time.
+The channels a clip sets are those its moves name (`ClipData.channels`, found when it is built).
+A REPLACE layer moves only those, so a strike of just the upper body plays over a walk, replacing
+its arms and leaving the legs to it. An ADDITIVE layer adds how its clip differs from the rest
+pose to whatever is below (a recoil, a lean). Mixing is the game's: the character editor edits
+one clip at a time.
 
 Cross-fading (in `src/character/mech.odin`): when an action starts, the pose currently shown is
 kept, and the new mix is blended over it with a smoothstep across the fade time.
@@ -166,27 +157,24 @@ arm → fist, each link firing in turn.
 
 ## The assets
 
-- `assets/characters/mech.json`: the clips that used to be code (`src/mech_clips.odin`), flattened
-  to data, then given IK. Every key that set a stance carries the legs' IK too: both legs reach,
-  their poles in front of the knees, and the feet hold the angle the clip gives them (`hold`).
-  Their targets are keyed so a standing foot stays put with its sole on the ground, and in the
-  walk and run each stance foot moves straight back along the ground at a steady speed while the
-  swing foot eases forward and lifts: the feet no longer slide or sink. The attack's left foot
-  steps into the lunge and back; its right stays planted. The walk, run, cast and attack also key
-  the hands (`l_hand`, `r_hand`, shoulder to palm) where the clip's hands come to rest (the
-  swing's ends, the poses they strike), with their poles keyed to bend the elbows as the clip
-  does, so each stroke is one eased path; the one-shot clips let go of the hands as they settle
-  back to their stance. The keys were generated from the clips' own paths, sampled with the
-  engine's rig. (The clips once shared named poses; those were copied into the keys that played
-  them, and keys landing together were merged into one, which samples the same.)
-- `assets/characters/dragon.json`: just the dragon example's rest pose (jaw 0.21, arms 0.52, elbows 0.79,
-  legs -0.44, knees 0.61 radians) as an `idle` clip. The example's motion (riding a spline loop, limbs
-  swinging in strokes, the fly-in assembly) is code in that example and still has to be authored
-  here. Its spine's channels (`segment_*.spine.x`, `.y`, `.z` and so on) are in place for that.
-- `assets/characters/strider.json`: every clip a reverse-jointed body needs, authored for it. Both
-  legs reach with IK in every key, their poles behind the knees. `walk` and `run` are sampled
-  gaits (16 keys a loop, `LINEAR` between them): each foot slides straight back along the ground
-  through its stance and swings forward lifting, while the root bobs twice a cycle and the pelvis,
-  hull and cannons counter-swing. `attack` is a cannon ram: the left foot steps in, then the
-  pelvis, hull, right shoulder and cannon each fire in turn. `cast` is a missile salvo: brace low
-  and wide, tip the rack forward, three launches jolt the rack and root, then settle back.
+Each character's stance is its rest pose (the model's `pose`). Its clips hold how they differ from
+it, then their motions. They were checked on the rig (`test_shipped_clips`: loops end where they
+start, planted feet stay on the ground and don't slide sideways). `test_golden_poses` compares
+every frame of every clip against the reference in `bin/golden`.
+
+- `assets/characters/mech.json`: `idle` (the head scanning in settling steps), `combat_idle`
+  (the guard held, the weight shifting foot to foot between stops), `walk` and `run` (feet
+  sliding and lifting on IK, crouched, coming down hard on each step, the arms swinging between
+  stops against the legs, the waist and head twisting), `attack` (the left foot steps into a
+  lunge; a wind-up coils pelvis, waist and arm; the hit fires pelvis, waist, arm and head in
+  turn, slamming into its stops) and `cast` (gather, then the arms thrown up and the hands
+  opening, a kick back as it fires).
+- `assets/characters/strider.json`: the same, for a reverse-jointed body: the sensor scans,
+  `walk` and `run` counter-swing pelvis, hull and cannons, `attack` is a cannon ram with a step
+  and a root lunge, `cast` braces and tips the rack, then three launches kick the rack and root
+  back (three moves of the same amounts, a quarter cycle apart).
+- `assets/characters/dragon.json`: the head is the root. `idle` (the head scanning, the tail
+  ticking side to side), `combat_idle` (reared: head up, the neck sloping down to the body on
+  the ground, forelimbs raised, the jaw snapping in steps, swaying between stops), `slither`
+  (limbs folded back, a square wave down the spine's z turns, a wavelength along it) and
+  `attack` (coil back and up, then lunge, the jaw snapping shut on the hit).

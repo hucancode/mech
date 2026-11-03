@@ -25,6 +25,10 @@ import "../mjolnir/render"
 //     by instance name (default: every instance)
 //   {"q": "trajectory", "clip": "walk", "part": "l_foot", "n": 60}
 //     an instance's world position over a clip: motion paths, foot slide
+//   {"q": "motion", "clip": "walk", "motion": 0, "n": 120}
+//     a clip's motion as the engine reads it, for drawing its curves: {shape: its shape over one
+//     cycle (n values, u 0 to 1), moves: [{channels (names, as resolved), delay, values (n: how
+//     much of its amounts the move adds, over the clip)}]}
 //   {"q": "bounds", "clip": .., "time": ..}
 //     the box around the posed model
 //   {"q": "faces", "part": "torso"}
@@ -44,7 +48,7 @@ import "../mjolnir/render"
 //     what can be dragged in the view, as posed (default: now), in metres: the model's root
 //     {position, rotation} (its channels placing it) and each IK target {name, position, rest,
 //     pole} (where its channels put it, where its tip is at rest, which they are offsets from, and
-//     its pole, when it has one), with the model's `scale` (metres per model unit)
+//     its pole, unless it aims), with the model's `scale` (metres per model unit)
 //   {"q": "span", "part": "shin", "span": ["foot", ""]}
 //     the frame a shape spanning those slots of a library part would sit in: {position, rotation,
 //     length} (mech.span_frame), for changing a shape's span without moving it
@@ -82,6 +86,7 @@ Query :: struct {
   x, y:     f32,
   points:   [][3]f32,
   span:     [2]string,
+  motion:   int,
 }
 
 query :: proc(text: []u8, allocator := context.allocator) -> string {
@@ -189,6 +194,28 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       fmt.sbprintf(&b, "[%v,%v,%v]", pos.x, pos.y, pos.z)
     }
     strings.write_string(&b, "]}")
+  case "motion":
+    if clip < 0 || q.motion < 0 || q.motion >= len(app.asset.clips.clips[clip].motions) do return fail(&b, "no motion %d", q.motion)
+    mo := &app.asset.clips.clips[clip].motions[q.motion]
+    n := clamp(q.n if q.n > 0 else 120, 2, 4000)
+    row := make([]f32, n)
+    for &v, i in row do v = mech.shape_value(mo.shape[:], f32(i) / f32(n - 1))
+    strings.write_string(&b, `{"shape":`)
+    write_floats(&b, row)
+    strings.write_string(&b, `,"moves":[`)
+    for mv, k in mo.moves {
+      if k > 0 do strings.write_byte(&b, ',')
+      strings.write_string(&b, `{"channels":[`)
+      for target, j in mo.targets[mv.first:][:mv.count] {
+        if j > 0 do strings.write_byte(&b, ',')
+        fmt.sbprintf(&b, "%q", mech.channel_name(m, target.driver))
+      }
+      for &v, i in row do v = mech.motion_move(mo, k, f32(i) / f32(n - 1))
+      fmt.sbprintf(&b, `],"delay":%v,"values":`, mv.delay)
+      write_floats(&b, row)
+      strings.write_byte(&b, '}')
+    }
+    strings.write_string(&b, "]}")
   case "pick":
     part, shape := pick({q.x, q.y})
     fmt.sbprintf(&b, `{{"part":%d,"shape":%d}}`, part, shape)
@@ -260,9 +287,9 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       for ik, k in m.iks do if mech.ik_channel(m, k) == rik.channel do name = ik.name
       c := rig.values[rik.channel:]
       r := rik.rest
-      at, pole := r + {c[0], c[1], c[2]}, r + {c[4], c[5], c[6]} if rik.pole else {}
+      at, pole := r + {c[0], c[1], c[2]}, rik.pole_rest + {c[4], c[5], c[6]} if !rik.aim else {}
       fmt.sbprintf(&b, `{{"name":%q,"position":[%v,%v,%v],"rest":[%v,%v,%v]`, name, at.x * s, at.y * s, at.z * s, r.x * s, r.y * s, r.z * s)
-      if rik.pole do fmt.sbprintf(&b, `,"pole":[%v,%v,%v]`, pole.x * s, pole.y * s, pole.z * s)
+      if !rik.aim do fmt.sbprintf(&b, `,"pole":[%v,%v,%v]`, pole.x * s, pole.y * s, pole.z * s)
       strings.write_byte(&b, '}')
     }
     strings.write_string(&b, "]}")
@@ -382,13 +409,13 @@ info :: proc(b: ^strings.Builder) {
   fmt.sbprintf(b, `{{"parts":%d,"bones":%d,"pieces":%d,"meshes":%d,"materials":%d,"clips":[`, len(m.assembly), bones, pieces, len(app.library.meshes), len(app.library.materials))
   for c, i in app.asset.clips.clips {
     if i > 0 do strings.write_byte(b, ',')
-    fmt.sbprintf(b, `{{"name":%q,"duration":%v,"keys":%d}}`, c.name, c.duration, len(c.keys))
+    fmt.sbprintf(b, `{{"name":%q,"duration":%v,"motions":%d}}`, c.name, c.duration, len(c.motions))
   }
   // drivers that move nothing
   strings.write_string(b, `],"unused_drivers":[`)
   first := true
   for c in m.drivers {
-    if len(c.drives) > 0 do continue
+    if len(c.moves) > 0 do continue
     if !first do strings.write_byte(b, ',')
     first = false
     fmt.sbprintf(b, "%q", c.name)
@@ -422,10 +449,10 @@ channels :: proc(b: ^strings.Builder, rig: ^mech.Rig) {
     strings.write_byte(b, '}')
   }
   strings.write_byte(b, '[')
-  for d in m.drivers do item(b, &first, d.name, "driver", len(d.drives) > 0, d.min, d.max)
+  for d in m.drivers do item(b, &first, d.name, "driver", len(d.moves) > 0, d.min, d.max)
   suffixes := mech.IK_CHANNELS
   for ik in m.iks {
-    for x, n in suffixes[:7 if ik.pole else 4] {
+    for x, n in suffixes[:mech.ik_channel_count(ik)] {
       // x, y, z, the weight, then the pole's x, y, z
       a := n if n < 3 else n - 4
       if n == 3 do item(b, &first, fmt.tprint(ik.name, x, sep = ""), "ik", false, 0, 1, ik.name, "ik")

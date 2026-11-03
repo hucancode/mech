@@ -1,91 +1,74 @@
 package mech
 
 import "core:encoding/json"
+import "core:fmt"
 import "core:log"
 import "core:math"
 import "core:mem"
 import "core:slice"
 
 // An Animation is a character's clips (the "animation" half of a character file). A clip is a
-// list of key frames, which may overlap; each key frame blends its driver values onto what the
-// keys before it give. The game mixes clips: each plays on a Layer, with its own time scale and
-// offset, replacing or adding to the layers below.
+// list of motions: shapes over time added onto channels. The game mixes clips: each plays on a
+// Layer, with its own time scale and offset, replacing or adding to the layers below.
 // clips_build compiles an Animation against a Model; clip_sample evaluates a clip at a time and
 // mix_sample a stack of layers. See docs/animation.md.
 //
 // Values are channel values (model_channels): joints' turns, drivers' values, IK targets' points
-// and the root's place, by name. A clip with a Gait walks or runs: its legs' paths and its swings
-// are computed and added to what its keys give.
+// and the root's place, by name, added onto the model's rest pose (Model.pose).
 
-// Ease shapes a key frame's progress: IN accelerates (driving into a hit), OUT decelerates
-// (coasting to a stop), SMOOTH does both.
+// Ease shapes how a motion's shape goes from one point to the next. They are mechanical: LINEAR
+// (the default) runs steady, IN accelerates (driving into a hit), OUT decelerates (coasting to a
+// stop), SETTLE arrives fast and bounces on its stop, dying out (a hard stop, a servo overshooting),
+// STEP holds, then snaps at the end (a ratchet, a lock clunking in). Every ease is 0 at the start
+// and 1 at the end.
 Ease :: enum u8 {
-  SMOOTH,
   LINEAR,
   IN,
   OUT,
+  SETTLE,
+  STEP,
 }
 
-// Key is a key frame. It starts at `at` seconds and, over `duration`, blends its values in. A
-// zero duration snaps. Keys apply in time order (keys starting together, in file order), each
-// moving its drivers toward its values from what the keys before it give.
-Key :: struct {
-  at, duration: f32,
-  ease:         Ease,
-  values:       map[string]f32,
+// Value is one channel's amount, or three's at once: `"l_leg": [x, y, z]` sets an IK target
+// (l_leg_x, _y, _z), as `"l_leg_pole"` its pole, `"root"` and `"root_turn"` the root,
+// `"l_arm.shoulder"` a BALL joint's turns (.x, .y, .z).
+Value :: union {
+  f32,
+  [3]f32,
 }
 
+// Clip is a clip's motions over its duration, each adding on in order. A clip can be a walk alone,
+// an arm swing alone, to mix on layers (mix_sample).
 Clip :: struct {
   name:     string,
   duration: f32,
-  keys:     [dynamic]Key,
-  gait:     Gait,
+  motions:  [dynamic]Motion,
 }
 
-// Gait makes a clip procedural: a walk or a run from a handful of numbers instead of keys. Over each
-// cycle (the clip's duration) every leg's IK target runs a foot's path around where the keys put
-// it (where the foot stands at rest, when no key moves it), reaching at full weight: down for `duty` of the cycle, sliding straight back by `stride` along the ground (model
-// units, along -z: the character walks toward +z), then up, swinging forward `stride` on an arc
-// `lift` high. Each leg starts its cycle at its own `phase` (0 to 1: two legs half a cycle apart
-// walk; a duty under 0.5 runs, every foot off the ground at once). The root sinks `crouch` (the
-// knees bend: the feet stay on the ground) and dips `bob` more as each foot touches down, rising
-// between. Swings move any other channel to and fro with the cycle: a sway, arms or a hull
-// swinging against the legs.
-// Waves run down chains of joints: a snake's slither, a tail's sway.
-// Keys still apply first: they can widen the stance, crouch the root, set the poles. With none,
-// any legged model walks: a biped, a dog, a hexapod; its legs' IK chains bend however they are
-// built. Its legs' default poles bend each as its stops allow (a knee forward, a hock back).
-Gait :: struct {
-  stride, lift, duty: f32,
-  crouch, bob:        f32,
-  legs:               [dynamic]Step,
-  swings:             [dynamic]Swing,
-  waves:              [dynamic]Wave,
+// Point is a point on a motion's shape: its value `v` at `u` (one cycle, 0 to 1), reached from
+// the point before by `ease`.
+Point :: struct {
+  u, v: f32,
+  ease: Ease,
 }
 
-// Wave bends the chain from instance `from`'s joints down to instance `to`'s, about `axis`, as a
-// body following a path: the segment after each joint heads amount * (1 + taper * s) *
-// sin(2π (cycle - length * s)) off its rest, s running 0 at the head to 1 at the tail, so a wave
-// `length` wavelengths long travels tailward once a cycle, growing by `taper` toward the tail
-// (-1 dies out at the tail). Each joint turns only by the difference from the segment before, so
-// its turn does not pile up down the chain: a snake slithers about Y, a tail sways.
-Wave :: struct {
-  from, to:              string,
-  axis:                  Axis,
-  amount, length, taper: f32,
+// Move is channel amounts that move together, `delay` late: in a Motion, cycles of its shape (a
+// foot half a cycle behind the other, a strike firing feet, pelvis, shoulder, arm in turn); in a
+// Driver, its own units (a knuckle closing once the curl passes 0.2).
+Move :: struct {
+  delay: f32,
+  by:    map[string]Value,
 }
 
-// Step is one leg of a gait: IK target `ik`, its foot touching down at `phase` of the cycle.
-Step :: struct {
-  ik:    string,
-  phase: f32,
-}
-
-// Swing moves channel `channel` by `amount` * cos(2π (rate * cycle - phase)): `rate` times a cycle
-// (2 for a biped's bob, once per step), at its highest at `phase` (of 1 / rate of a cycle).
-Swing :: struct {
-  channel:            string,
-  amount, rate, phase: f32,
+// Motion is a shape over time added onto channels. Its shape is points over one cycle
+// (shape_value), repeating `rate` times over the clip (0 is 1); no points is 1 throughout (a held
+// pose). At clip progress x (0 at its start, 1 at its end), each move adds its amounts times
+//   shape(rate * x - delay)
+// A walk, a slither, a swing or a strike is a few motions: data, not code (docs/animation.md).
+Motion :: struct {
+  shape: [dynamic]Point,
+  rate:  int,
+  moves: [dynamic]Move,
 }
 
 Animation :: struct {
@@ -128,121 +111,126 @@ animation_clip :: proc(a: ^Animation, name: string) -> int {
 ease :: proc(e: Ease, t: f32) -> f32 {
   x := clamp(t, 0, 1)
   switch e {
-  case .SMOOTH:
-    return x * x * (3 - 2 * x)
   case .LINEAR:
     return x
   case .IN:
     return x * x
   case .OUT:
     return 1 - (1 - x) * (1 - x)
+  case .SETTLE:
+    // a damped spring: reaches 1 a sixth in, swings about 0.19 past, 0.04 short, and is still at
+    // the end (the last term takes off what is left of the swing there)
+    K :: 5
+    return 1 - math.exp(-K * x) * math.cos(3 * math.PI * x) - x * math.exp(f32(-K))
+  case .STEP:
+    return 1 if x >= 1 else 0
   }
   return x
 }
 
-// Clips is an Animation compiled against a Model: names resolved to driver indices, keys sorted
-// by time. Rebuild it when either changes.
+// Clips is an Animation compiled against a Model: names resolved to channel indices, on the
+// model's rest pose (`pose`, one value per channel). Rebuild it when either changes.
 Clips :: struct {
   drivers: int,
+  pose:    [dynamic]f32,
   clips:   [dynamic]ClipData,
 }
 
+// `channels` are the channels its motions set, in order: what a REPLACE layer replaces.
 ClipData :: struct {
   name:     string,
   duration: f32,
-  keys:     [dynamic]KeyData,
-  gait:     GaitData,
+  motions:  [dynamic]MotionData,
+  channels: [dynamic]int,
 }
 
-// GaitData is a Gait with its names resolved: each leg's first IK channel (x, y, z, ..), each
-// swing's channel.
-GaitData :: struct {
-  stride, lift, duty: f32,
-  crouch, bob:        f32,
-  root_y:             int,
-  legs:               [dynamic]Target, // driver: the IK's first channel, value: the phase
-  swings:             [dynamic]SwingData,
-  waves:              [dynamic]WaveData,
+// MotionData is a Motion with its names resolved: its moves' targets, flat, each move a run of
+// them; its shape copied in order of u.
+MotionData :: struct {
+  shape:   [dynamic]Point,
+  rate:    f32,
+  targets: [dynamic]Target,
+  moves:   [dynamic]MoveData,
 }
 
-// WaveData is a Wave with its chain's channels found, head first.
-WaveData :: struct {
-  channels:              [dynamic]int,
-  amount, length, taper: f32,
+MoveData :: struct {
+  delay:        f32,
+  first, count: int,
 }
 
-SwingData :: struct {
-  channel:             int,
-  amount, rate, phase: f32,
-}
-
-KeyData :: struct {
-  at, duration: f32,
-  ease:         Ease,
-  targets:      [dynamic]Target,
-}
-
+// Target is a channel and its value.
 Target :: struct {
   driver: int,
   value:  f32,
 }
 
+// targets_resolve appends `values`' channels in model `m` to `out`, logging names it lacks.
+targets_resolve :: proc(m: ^Model, what: string, values: map[string]Value, out: ^[dynamic]Target) {
+  for name, value in values {
+    switch v in value {
+    case f32:
+      ch := model_channel(m, name)
+      if ch < 0 {
+        log.warnf("%s: no channel %s in model %s", what, name, m.name)
+        continue
+      }
+      append(out, Target{ch, v})
+    case [3]f32:
+      chs, ok := model_channel3(m, name)
+      if !ok {
+        log.warnf("%s: no channels %s x, y, z in model %s", what, name, m.name)
+        continue
+      }
+      for ch, n in chs do append(out, Target{ch, v[n]})
+    }
+  }
+}
+
+// model_pose is `m`'s rest pose, one value per channel: Model.pose, every other channel 0.
+model_pose :: proc(m: ^Model, allocator := context.allocator) -> []f32 {
+  out := make([]f32, model_channels(m), allocator)
+  targets := make([dynamic]Target, context.temp_allocator)
+  targets_resolve(m, "pose", m.pose, &targets)
+  for t in targets do out[t.driver] += t.value
+  return out
+}
+
 clips_build :: proc(a: ^Animation, m: ^Model) -> (c: Clips) {
   c.drivers = model_channels(m)
+  pose := model_pose(m, context.temp_allocator)
+  append(&c.pose, ..pose)
   for clip in a.clips {
     data := ClipData{name = clip.name, duration = clip.duration}
-    for k in clip.keys {
-      key := KeyData{k.at, k.duration, k.ease, {}}
-      for name, v in k.values {
-        ch := model_channel(m, name)
-        if ch < 0 {
-          log.warnf("clip %s: no driver %s in model %s", clip.name, name, m.name)
-          continue
-        }
-        append(&key.targets, Target{ch, v})
+    what := fmt.tprint("clip", clip.name)
+    for mo in clip.motions {
+      out := MotionData{rate = f32(max(mo.rate, 1))}
+      append(&out.shape, ..mo.shape[:])
+      slice.stable_sort_by(out.shape[:], proc(a, b: Point) -> bool {return a.u < b.u})
+      for mv in mo.moves {
+        first := len(out.targets)
+        targets_resolve(m, what, mv.by, &out.targets)
+        append(&out.moves, MoveData{mv.delay, first, len(out.targets) - first})
       }
-      slice.sort_by(key.targets[:], proc(a, b: Target) -> bool {return a.driver < b.driver})
-      append(&data.keys, key)
+      append(&data.motions, out)
     }
-    slice.stable_sort_by(data.keys[:], proc(a, b: KeyData) -> bool {return a.at < b.at})
-    g := clip.gait
-    data.gait = {stride = g.stride, lift = g.lift, duty = g.duty, crouch = g.crouch, bob = g.bob, root_y = root_channel(m) + 1}
-    for leg in g.legs {
-      k := -1
-      for ik, n in m.iks do if ik.name == leg.ik do k = n
-      if k < 0 {
-        log.warnf("clip %s: its gait walks with IK target %s, which model %s lacks", clip.name, leg.ik, m.name)
-        continue
-      }
-      append(&data.gait.legs, Target{ik_channel(m, k), leg.phase})
-    }
-    for sw in g.swings {
-      ch := model_channel(m, sw.channel)
-      if ch < 0 {
-        log.warnf("clip %s: its gait swings %s, which model %s lacks", clip.name, sw.channel, m.name)
-        continue
-      }
-      append(&data.gait.swings, SwingData{ch, sw.amount, sw.rate, sw.phase})
-    }
-    for wv in g.waves {
-      out := WaveData{amount = wv.amount, length = wv.length, taper = wv.taper}
-      chain_channels(m, wv.from, wv.to, wv.axis, &out.channels)
-      if len(out.channels) == 0 do log.warnf("clip %s: its wave from %s to %s finds no joint turning about %v", clip.name, wv.from, wv.to, wv.axis)
-      append(&data.gait.waves, out)
-    }
+    for mo in data.motions do for target in mo.targets do append(&data.channels, target.driver)
+    slice.sort(data.channels[:])
+    resize(&data.channels, len(slice.unique(data.channels[:])))
     append(&c.clips, data)
   }
   return
 }
 
 clips_destroy :: proc(c: ^Clips) {
+  delete(c.pose)
   for clip in c.clips {
-    for k in clip.keys do delete(k.targets)
-    delete(clip.keys)
-    delete(clip.gait.legs)
-    delete(clip.gait.swings)
-    for wv in clip.gait.waves do delete(wv.channels)
-    delete(clip.gait.waves)
+    for mo in clip.motions {
+      delete(mo.shape)
+      delete(mo.targets)
+      delete(mo.moves)
+    }
+    delete(clip.motions)
+    delete(clip.channels)
   }
   delete(c.clips)
   c^ = {}
@@ -257,76 +245,65 @@ clip_duration :: proc(c: ^Clips, clip: int) -> f32 {
   return c.clips[clip].duration if clip >= 0 && clip < len(c.clips) else 0
 }
 
-// clip_sample writes clip `clip` at `t` seconds into `out` (one value per channel), on the rest
-// pose (every value 0). A clip index out of range gives the rest pose.
+// clip_sample writes clip `clip` at `t` seconds into `out` (one value per channel): the rest
+// pose, then each motion adding its own. A clip index out of range gives the rest pose.
 clip_sample :: proc(c: ^Clips, clip: int, t: f32, out: []f32) {
-  slice.zero(out)
-  clip_apply(c, clip, t, out)
-}
-
-// clip_apply blends clip `clip` at `t` seconds onto `out`: each key, in time order, moves its
-// channels toward its values by its eased progress at t, then its gait adds its legs' paths and
-// swings. Channels neither sets keep their value.
-clip_apply :: proc(c: ^Clips, clip: int, t: f32, out: []f32) {
+  copy(out, c.pose[:])
   if clip < 0 || clip >= len(c.clips) do return
   data := &c.clips[clip]
-  for k in data.keys {
-    w := ease(k.ease, (t - k.at) / k.duration) if k.duration > 0 else f32(1 if t >= k.at else 0)
-    if w <= 0 do continue
-    for target in k.targets do out[target.driver] += (target.value - out[target.driver]) * w
-  }
-  if data.duration > 0 do gait_apply(&data.gait, t / data.duration, out)
+  x := t / data.duration if data.duration > 0 else 0
+  for &mo in data.motions do motion_apply(&mo, x, out)
 }
 
-// gait_apply adds gait `g` at `cycle` (its clip's time over its duration) onto `out`.
-gait_apply :: proc(g: ^GaitData, cycle: f32, out: []f32) {
-  dip: f32
-  for leg in g.legs {
-    foot := gait_foot(g.stride, g.lift, g.duty, cycle - leg.value)
-    out[leg.driver + 1] += foot.y
-    out[leg.driver + 2] += foot.z
-    // a walking leg reaches
-    out[leg.driver + 3] = 1
-    // the root dips as this foot touches down: lowest then, back up a quarter cycle either side
-    w := cycle - leg.value
-    w -= math.round(w)
-    if abs(w) < 0.25 do dip = max(dip, math.cos(2 * math.PI * w) * math.cos(2 * math.PI * w))
-  }
-  if len(g.legs) > 0 do out[g.root_y] -= g.crouch + g.bob * dip
-  for sw in g.swings do out[sw.channel] += sw.amount * math.cos(2 * math.PI * (sw.rate * cycle - sw.phase))
-  for wv in g.waves {
-    n := len(wv.channels)
-    // each joint turns its segment from the heading of the one before to its own
-    before: f32
-    for ch, k in wv.channels {
-      s := f32(k) / f32(max(n - 1, 1))
-      heading := wv.amount * (1 + wv.taper * s) * math.sin(2 * math.PI * (cycle - wv.length * s))
-      out[ch] += heading - before
-      before = heading
-    }
+// motion_apply adds motion `mo` at clip progress `x` (0 to 1 over the clip) onto `out`.
+motion_apply :: proc(mo: ^MotionData, x: f32, out: []f32) {
+  for mv, k in mo.moves {
+    f := motion_move(mo, k, x)
+    for target in mo.targets[mv.first:][:mv.count] do out[target.driver] += target.value * f
   }
 }
 
-// gait_foot is where a foot is at `cycle` of its own (0: touching down), around where it stands:
-// down for `duty` of the cycle, sliding from `stride` / 2 ahead to as far behind, then swinging
-// back ahead on an arc `lift` high, easing in and out.
-gait_foot :: proc(stride, lift, duty, cycle: f32) -> (foot: [3]f32) {
-  u := cycle - math.floor(cycle)
-  d := clamp(duty, 0.01, 0.99)
-  if u < d {
-    foot.z = stride * (0.5 - u / d)
-    return
+// motion_move is how much of its amounts move `k` of motion `mo` adds at clip progress `x`.
+motion_move :: proc(mo: ^MotionData, k: int, x: f32) -> f32 {
+  return shape_value(mo.shape[:], mo.rate * x - mo.moves[k].delay)
+}
+
+// shape_value is shape `points` (in order of u) at `u` cycles: each point's value at its u,
+// eased into from the point before, the last point easing into the first a cycle on. It repeats
+// every cycle; a whole cycle past the start (u = 1, 2, ..) is the cycle's end, so a one-shot
+// clip, held at its end, holds where its shape ends. No points is 1.
+shape_value :: proc(points: []Point, u: f32) -> f32 {
+  n := len(points)
+  if n == 0 do return 1
+  v := u - math.floor(u)
+  if v == 0 && u > 0 {
+    if points[n - 1].u >= 1 do return points[n - 1].v
+    v = 1
   }
-  s := (u - d) / (1 - d)
-  foot.z = -stride * math.cos(math.PI * s) / 2
-  foot.y = lift * math.sin(math.PI * s)
-  return
+  next := n
+  for p, i in points do if p.u > v {
+    next = i
+    break
+  }
+  a, b: Point
+  switch {
+  case next == 0:
+    a, b = points[n - 1], points[0]
+    a.u -= 1
+  case next == n:
+    a, b = points[n - 1], points[0]
+    b.u += 1
+  case:
+    a, b = points[next - 1], points[next]
+  }
+  if b.u - a.u <= 1e-6 do return b.v
+  return a.v + (b.v - a.v) * ease(b.ease, (v - a.u) / (b.u - a.u))
 }
 
 // Blend is how a layer lands on the layers below it.
 Blend :: enum u8 {
-  REPLACE, // move the drivers its clip sets toward the clip's values
-  ADDITIVE, // add its clip's values (on the rest pose) to the drivers it sets
+  REPLACE, // move the channels its clip sets toward the clip's values
+  ADDITIVE, // add how its clip differs from the rest pose
 }
 
 // Layer plays one clip in a mix. Its clip time is (t - offset) * speed, looped over the clip or
@@ -349,42 +326,21 @@ layer_time :: proc(c: ^Clips, l: Layer, t: f32) -> f32 {
 }
 
 // mix_sample writes the mix of `layers` at `t` seconds into `out`, on the rest pose: each layer,
-// from the first up, samples its clip and blends it by its weight onto what the layers below give.
+// from the first up, samples its clip and lands it by its weight onto what the layers below give,
+// moving the channels its clip sets toward it (REPLACE) or adding how it differs from the rest pose
+// (ADDITIVE).
 // `scratch` holds one value per channel, like `out`.
 mix_sample :: proc(c: ^Clips, layers: []Layer, t: f32, out, scratch: []f32) {
-  slice.zero(out)
+  copy(out, c.pose[:])
   for l in layers {
     if l.weight <= 0 || l.clip < 0 || l.clip >= len(c.clips) do continue
-    lt := layer_time(c, l, t)
+    clip_sample(c, l.clip, layer_time(c, l, t), scratch)
     switch l.blend {
     case .REPLACE:
-      copy(scratch, out)
-      clip_apply(c, l.clip, lt, scratch)
-      for &v, i in out do v += (scratch[i] - v) * l.weight
+      for i in c.clips[l.clip].channels do out[i] += (scratch[i] - out[i]) * l.weight
     case .ADDITIVE:
-      clip_sample(c, l.clip, lt, scratch)
-      for &v, i in out do v += scratch[i] * l.weight
+      for &v, i in out do v += (scratch[i] - c.pose[i]) * l.weight
     }
   }
 }
 
-// chain_channels appends the channels turning about `axis` of every joint on the chain from
-// instance `from`'s joints down to instance `to`'s, head first; none when `from` is not above `to`.
-@(private = "file")
-chain_channels :: proc(m: ^Model, from, to: string, axis: Axis, out: ^[dynamic]int) {
-  top := model_instance(m, from)
-  chain := make([dynamic]int, context.temp_allocator)
-  for i := model_instance(m, to); i >= 0; i = model_instance(m, m.assembly[i].parent) {
-    append(&chain, i)
-    if i == top do break
-  }
-  if top < 0 || len(chain) == 0 || chain[len(chain) - 1] != top do return
-  #reverse for i in chain {
-    ch := joint_channel(m, i)
-    for j in instance_joints(m, i) {
-      dofs, count := joint_dofs(j)
-      for d, k in dofs[:count] do if d.axis == axis do append(out, ch + k)
-      ch += count
-    }
-  }
-}

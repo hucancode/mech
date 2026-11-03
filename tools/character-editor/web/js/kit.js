@@ -1,13 +1,13 @@
 // @ts-check
 // Kits: any instance of any character, with what hangs from it, copied into the open one. They
 // bring the parts they place, with the joints and materials those use, the drivers moving them
-// (only their drives on the copies) and the IK targets on them; all can be scaled on the way in.
+// (only their moves on the copies) and the IK targets on them; all can be scaled on the way in.
 // The copy is matched with the selected instance's slot of the same name, else its first free
 // slot, else its origin.
 import { readFile } from "./api.js";
 import { btn, h, num, row } from "./dom.js";
 import { editor } from "./editor.js";
-import { addIk, clone, inlineJoints, freeSlot, instanceIndex, partOf, scalePart, subtreeEnd, treeOrder, uniqueName } from "./model.js";
+import { addIk, clone, copyDriverMoves, driverChannels, freeSlot, instanceIndex, partOf, scalePart, subtreeEnd, treeOrder, uniqueName } from "./model.js";
 import { loadLocal } from "./store.js";
 
 /** the same data but for its name @param {any} a @param {any} b */
@@ -61,19 +61,18 @@ export function insertKit(m, src, i, parent, scale = 1) {
       );
     if (p.part) p.part = parts.get(p.part);
   }
-  // drivers moving the copies: ours of the same name, else a copy, with the drives on the copies
+  // drivers moving the copies: ours of the same name, else a copy, with the moves on the copies
   for (const d of src.drivers ?? []) {
-    const drives = (d.drives ?? []).filter((/** @type {any} */ x) => names.has(x.part)).map((/** @type {any} */ x) => ({ ...clone(x), part: names.get(x.part) }));
-    if (!drives.length) continue;
+    if (!driverChannels(d).some((n) => names.has(n.slice(0, n.indexOf("."))))) continue;
     m.drivers ??= [];
     let ours = m.drivers.find((/** @type {any} */ x) => x.name === d.name);
-    if (!ours) m.drivers.push((ours = { ...clone(d), drives: [] }));
-    (ours.drives ??= []).push(...drives);
+    if (!ours) m.drivers.push((ours = { ...clone(d), moves: [] }));
+    copyDriverMoves(d, ours, names);
   }
   for (const ik of src.iks ?? []) {
     if (!names.has(ik.root) || !names.has(ik.tip)) continue;
     const k = addIk(m, ik.name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)));
-    for (const f of ["hold", "pole"]) if (ik[f]) m.iks[k][f] = true;
+    for (const f of ["hold", "aim"]) if (ik[f]) m.iks[k][f] = true;
   }
 
   m.assembly ??= [];
@@ -101,7 +100,7 @@ async function sources() {
       const text = c.local ? loadLocal(c.name) : c.files ? await readFile(c.files.file) : null;
       if (!text) continue;
       const data = JSON.parse(text);
-      const model = inlineJoints(typeof data.model === "string" ? JSON.parse(data.model) : data.model);
+      const model = data.model;
       if (model?.assembly?.length) out.push({ name: c.name, model });
     } catch (e) {
       console.warn("kit", c.name, e);

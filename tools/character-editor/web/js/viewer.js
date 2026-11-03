@@ -74,10 +74,11 @@ export class Viewer {
     return this.withText(JSON.stringify(anim), (p, n) => this.x.viewer_set_animation(p, n)) !== 0;
   }
 
-  /** showValues holds the mech in these driver values; others are 0. @param {Record<string, number>} values */
+  /** showValues holds the mech in these channel values; others at the rest pose (the model's `pose`). @param {Record<string, number>} values */
   showValues(values) {
     return this.withText(JSON.stringify(values), (p, n) => this.x.viewer_set_values(p, n)) !== 0;
   }
+
 
   /** @param {number} clip @param {number} time @param {boolean} playing @param {number} speed @param {boolean} loops */
   play(clip, time, playing, speed = 1, loops = true) {

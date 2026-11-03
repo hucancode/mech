@@ -5,7 +5,7 @@
 
 import { listCharacters, readFile } from "./api.js";
 import { fromQuat } from "./math3.js";
-import { clone, inlineJoints, jointAxes, jointChannel, respan, uniqueName, upgradeAnim } from "./model.js";
+import { clone, flatValues, jointAxes, jointChannel, packValues, respan, uniqueName, vectors } from "./model.js";
 import { blankCharacter, exportFile, loadLocal, localNames, pickFile, saveLocal } from "./store.js";
 import { Viewer } from "./viewer.js";
 
@@ -65,17 +65,25 @@ class Editor {
     this.material = -1;
     this.driver = -1;
     this.ik = -1;
-    /** @type {Record<string, number>} the pose test, driver values */
+    /** @type {Record<string, number>} the pose test: channel values tried on the rest pose */
     this.test = {};
 
     // animation
     this.clip = 0;
-    /** @type {number[]} selected keys of the clip */
-    this.keys = [];
     this.time = 0;
     this.playing = false;
     this.speed = 1;
     this.loop = true;
+    /** the clip's motion the curve editor and the inspector show: the last picked */
+    this.motion = 0;
+    /** @type {number[]} the clip's motions picked, in the order picked (pickedMotions) */
+    this.picked = [];
+    /** @type {number[]} the shown motion's moves picked (pickedMoves) */
+    this.moves = [];
+    /** @type {number[]} the shown motion's moves unfolded in the inspector (folded, a move shows its channels' names only) */
+    this.openMoves = [];
+    /** only the picked motions play: the clip's other motions are left out */
+    this.isolate = false;
 
     /** @type {{model: string, anim: string}[]} */
     this.undoStack = [];
@@ -140,9 +148,7 @@ class Editor {
     const text = c.local ? loadLocal(name) : c.files ? await readFile(c.files.file) : null;
     if (!text) return;
     const data = JSON.parse(text);
-    // saves from before characters were one file hold the model's and animation's text apart
-    if (typeof data.model === "string") this.load(name, JSON.parse(data.model), JSON.parse(data.anim ?? "{}"));
-    else this.load(name, data.model ?? {}, data.animation ?? {});
+    this.load(name, data.model ?? {}, data.animation ?? {});
   }
 
   discardOk() {
@@ -151,8 +157,8 @@ class Editor {
 
   /** load shows a character from its data, with a fresh undo history. @param {string} name @param {any} model @param {any} anim */
   load(name, model, anim) {
-    this.model = inlineJoints(model);
-    this.anim = upgradeAnim(anim);
+    this.model = model;
+    this.anim = anim;
     this.current = name;
     this.saved = this.snapshot();
     this.modelDirty = this.animDirty = false;
@@ -163,7 +169,6 @@ class Editor {
     this.def = 0;
     this.inspect = "character";
     this.clip = 0;
-    this.keys = [];
     this.time = 0;
     this.playing = false;
     this.test = {};
@@ -215,7 +220,6 @@ class Editor {
     this.modelDirty = now.model !== this.saved.model;
     this.animDirty = now.anim !== this.saved.anim;
     this.lastEdit = { key: "", at: 0 };
-    this.keys = this.keys.filter((k) => k < (this.clipData?.keys?.length ?? 0));
     this.schedule();
   }
 
@@ -288,7 +292,7 @@ class Editor {
     if (this.pendingModel) {
       this.sentModel = v.setModel(alone ? this.alone() : this.model) || this.sentModel;
     }
-    if (this.pendingAnim) v.setAnimation(alone ? {} : this.anim);
+    if (this.pendingAnim) v.setAnimation(alone ? {} : this.isolate ? this.isolated() : this.anim);
     this.pendingModel = this.pendingAnim = false;
     if (alone !== this.sentAlone) {
       this.sentAlone = alone;
@@ -305,9 +309,10 @@ class Editor {
     const v = this.viewer;
     if (!v) return;
     if (this.tab === "animation") {
-      // the part whose keys the timeline shows
+      // the part picked in the view, lit
       v.select(this.part, -1, false);
-      v.play(this.clip, this.time, this.playing, this.speed, this.loop);
+      // held past the end it shows the end, not the start again
+      v.play(this.clip, this.time, this.playing, this.speed, this.loop && this.playing);
     } else if (this.tab === "model") {
       v.showValues(this.tries);
       v.select(this.model.parts?.[this.def] ? 0 : -1, this.shape, true);
@@ -339,6 +344,82 @@ class Editor {
     this.sync();
     this.viewer?.frame();
     this.emit("select");
+  }
+
+  /** pickClip shows clip i from its start, its first motion picked @param {number} i */
+  pickClip(i) {
+    this.select(() => {
+      this.clip = i;
+      this.time = 0;
+      this.motion = 0;
+      this.picked = [];
+      this.moves = [];
+      this.openMoves = [];
+    });
+    if (this.isolate) this.setIsolate(false);
+  }
+
+  /** the clip's motions picked, in the order picked, the one shown (`motion`) last @returns {number[]} */
+  pickedMotions() {
+    const n = this.clipData?.motions?.length ?? 0;
+    if (!n) return [];
+    const shown = Math.min(Math.max(this.motion, 0), n - 1);
+    return [...this.picked.filter((k, i, all) => k >= 0 && k < n && k !== shown && all.indexOf(k) === i), shown];
+  }
+
+  /**
+   * pickMotion shows motion i, picking it alone; `add` (shift- or cmd-click) adds it to the
+   * motions picked, or takes it out when it is one of them
+   * @param {number} i @param {boolean} [add]
+   */
+  pickMotion(i, add = false) {
+    this.select(() => {
+      const was = this.pickedMotions();
+      if (add && was.includes(i) && was.length > 1) this.picked = was.filter((k) => k !== i);
+      else this.picked = add ? [...was.filter((k) => k !== i), i] : [i];
+      this.motion = /** @type {number} */ (this.picked.at(-1));
+      this.moves = [];
+      this.openMoves = [];
+      if (this.isolate) this.pendingAnim = true;
+    });
+    if (this.isolate) this.sync();
+  }
+
+  /** the shown motion's moves picked, in order @returns {number[]} */
+  pickedMoves() {
+    const n = this.clipData?.motions?.[this.motion]?.moves?.length ?? 0;
+    return [...new Set(this.moves)].filter((k) => k >= 0 && k < n).sort((a, b) => a - b);
+  }
+
+  /** pickMove picks move i of the motion shown, alone; `add` adds it or takes it out @param {number} i @param {boolean} [add] */
+  pickMove(i, add = false) {
+    this.select(() => {
+      const was = this.pickedMoves();
+      this.moves = !add ? (was.length === 1 && was[0] === i ? [] : [i]) : was.includes(i) ? was.filter((k) => k !== i) : [...was, i];
+    });
+  }
+
+  /** toggleMove unfolds move i of the motion shown in the inspector, or folds it @param {number} i */
+  toggleMove(i) {
+    this.select(() => (this.openMoves = this.openMoves.includes(i) ? this.openMoves.filter((k) => k !== i) : [...this.openMoves, i]));
+  }
+
+  /** setIsolate plays only the picked motions (on), or the whole clip @param {boolean} on */
+  setIsolate(on) {
+    this.isolate = on;
+    this.pendingAnim = true;
+    this.sync();
+    this.emit("select");
+  }
+
+  /** the animation as isolating shows it: the clip shown with its motions not picked emptied (kept, so motions keep their places) */
+  isolated() {
+    const a = JSON.parse(JSON.stringify(this.anim));
+    const c = a.clips?.[this.clip];
+    if (!c) return a;
+    const keep = new Set(this.pickedMotions());
+    c.motions = (c.motions ?? []).map((/** @type {any} */ mo, /** @type {number} */ k) => (keep.has(k) ? mo : { moves: [] }));
+    return a;
   }
 
   // select changes what is selected (in `change`) and refreshes the views and the viewer.
@@ -442,9 +523,10 @@ class Editor {
   }
 
   /**
-   * setChannels sets driver and root values from the view's handles: the pose test's in the rig
-   * tab; the selected key's own values in the animate tab (one key must be selected). `coalesce`
-   * makes a drag one undo step.
+   * setChannels sets channel values from the view's handles: the pose test's in the rig tab; in
+   * the animate tab, the shown motion's move (the one picked, else its first) changes its amounts
+   * so the pose shown now becomes these values: by the change over how much of them the move adds
+   * now (its shape at the playhead). `coalesce` makes a drag one undo step.
    * @param {Record<string, number>} values @param {string} [coalesce]
    */
   setChannels(values, coalesce) {
@@ -453,9 +535,29 @@ class Editor {
       this.show();
       return;
     }
-    const key = this.keys.length === 1 ? this.clipData?.keys?.[this.keys[0]] : undefined;
-    if (!key) return this.flash("Select one key to set it there");
-    this.edit("anim", () => Object.assign((key.values ??= {}), values), coalesce);
+    const mo = this.clipData?.motions?.[this.motion];
+    const k = this.pickedMoves()[0] ?? 0;
+    const mv = mo?.moves?.[k];
+    if (!mv) return this.flash("Pick a motion with a move to pose it (add a held motion: +)");
+    // how much of its amounts the move adds now
+    const d = this.clipData.duration || 1;
+    const lane = this.ask({ q: "motion", clip: this.clipData.name, motion: this.motion, n: 201 })?.moves?.[k];
+    const f = lane ? lane.values[Math.round((Math.min(Math.max(this.time / d, 0), 1)) * 200)] : 1;
+    if (Math.abs(f) < 0.05) return this.flash("This move adds nothing now: move the playhead to where it acts");
+    // a vector (an IK target, a ball joint) moves whole: its other axes as shown now
+    const shown = this.shown();
+    /** @type {Record<string, number>} */
+    const whole = {};
+    for (const e of vectors(this.channels().map((c) => c.name))) if (e.names.some((n) => n in values)) for (const n of e.names) whole[n] = values[n] ?? shown[n] ?? 0;
+    this.edit(
+      "anim",
+      () => {
+        const by = flatValues(mv.by);
+        for (const [n, v] of Object.entries(whole)) by[n] = Math.round(((by[n] ?? 0) + (v - (shown[n] ?? 0)) / f) * 1e4) / 1e4;
+        mv.by = packValues(by);
+      },
+      coalesce,
+    );
   }
 
   /** the root's channels, the values after the drivers (the engine's "info"): those moving it (model units) and turning it (radians) @returns {{move: string[], turn: string[]}} */
@@ -472,7 +574,7 @@ class Editor {
     return this.viewer?.query({ q: "channels" }) ?? [];
   }
 
-  // shown is the drivers as the viewer shows them now.
+  // shown is the channels as the viewer shows them now.
   /** @returns {Record<string, number>} */
   shown() {
     return this.viewer?.query({ q: "state" }).drivers ?? {};

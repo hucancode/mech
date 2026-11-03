@@ -121,7 +121,7 @@ write_items :: proc(b: ^strings.Builder, data: rawptr, count, size: int, elem: t
 
 @(private)
 write_value :: proc(b: ^strings.Builder, v: any, indent: int) {
-  if values, ok := v.(map[string]f32); ok {
+  if values, ok := v.(map[string]Value); ok {
     if len(values) == 0 {
       strings.write_string(b, "{}")
       return
@@ -134,7 +134,19 @@ write_value :: proc(b: ^strings.Builder, v: any, indent: int) {
       newline(b, indent + 1)
       strings.write_quoted_string(b, k)
       strings.write_string(b, ": ")
-      write_number(b, f64(values[k]))
+      switch x in values[k] {
+      case f32:
+        write_number(b, f64(x))
+      case [3]f32:
+        strings.write_byte(b, '[')
+        for c, n in x {
+          if n > 0 do strings.write_string(b, ", ")
+          write_number(b, f64(c))
+        }
+        strings.write_byte(b, ']')
+      case:
+        strings.write_string(b, "null")
+      }
     }
     newline(b, indent)
     strings.write_byte(b, '}')

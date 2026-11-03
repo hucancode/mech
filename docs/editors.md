@@ -37,7 +37,7 @@ To put a character in the game, export it and copy the file into `assets/charact
 | 1, 2, 3, 4 | Model, Assemble, Rig, Animate tabs |
 | F, frame button (top right of the view) | frame the character (the part, in the Model tab) |
 | I, inspector button (top right of the view) | hide or show the inspector (the right panel); remembered |
-| dock span toggles (right end of the dock bar) | let the timeline or pose test run under the left panel, the right panel, or both; remembered |
+| dock span toggles (right end of the dock bar) | let the curve editor or pose test run under the left panel, the right panel, or both; remembered |
 | Esc | clear the selection: the inspector shows the character's settings (Assemble, Rig) |
 | drag / scroll in the view | orbit / zoom (dragging leaves a side view for the free orbit) |
 | view gizmo (top right of the view) | the world axes as the camera sees them: click an axis end to look from that side, front (+z), the character's left (+x), top (+y) or their opposites, orthographic and framed; click the disc for the free perspective orbit |
@@ -52,8 +52,8 @@ To put a character in the game, export it and copy the file into `assets/charact
   pose values of joints' channels and drivers that turn a joint, and joint twists. Files keep radians.
 - Exports are written by the engine's own writer, so copying one over an asset only diffs where
   you changed something.
-- Warnings from the engine (a key naming a channel the model lacks, an instance matched with a
-  slot its parent's part lacks, a drive on a joint its instance's part lacks, and so on) collect under ⚠ in the header.
+- Warnings from the engine (a motion naming a channel the model lacks, an instance matched with a
+  slot its parent's part lacks, a driver moving a channel that is not a joint's, and so on) collect under ⚠ in the header.
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
 The Model tab makes parts, their slots and their joints; the Assemble tab only hangs parts on
@@ -134,20 +134,20 @@ part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
   - **⇋ mirror** copies the selected limb (from the topmost `l_`/`r_` instance, or
     `left`/`right`) to the other side of the body, replacing what is there. The copies place the
     **same parts**, mirrored, so editing a left hand edits both. They get the other side's names,
-    and their joints' channels are the other side's (`r_forearm.elbow`); drives on them are copied
+    and their joints' channels are the other side's (`r_forearm.elbow`); driver moves on them are copied
     to the other side's drivers (made when missing; a driver with no side, like `pelvis_turn`,
     moves both) with the same numbers: the engine turns over the ones a reflection needs. IK targets come along. The limb is matched with the other side's slot of the
     parent's part (`l_shoulder` to `r_shoulder`), which is made, reflected, when the part has none.
   - **kit** adds any instance of any character (this one, those saved here and those in
     assets/), with what hangs from it, under the selection: the parts they place, their joints,
-    materials, the drivers moving them (with only their drives on the copies) and IK targets come
+    materials, the drivers moving them (with only their moves on the copies) and IK targets come
     along, all can be scaled on the way in, and it is matched with the selection's slot of the
     same name, else its first free one.
   - ⧉ duplicates an instance without its children; ✕ deletes it and everything under it (the
     parts stay in the library).
   - Drag an instance onto another to hang it there (matched with the slot of the same name, else the first
     free one), or onto "make root". The tree stays parents first.
-- **The selected instance**: name (renaming carries to its children, drives and IK targets),
+- **The selected instance**: name (renaming carries to its children, its channels and IK targets),
   **part** (from the library, or a new one), **parent**, **matched with** (a slot of the parent's part, or its origin),
   **mirrored**, and its part's joints.
 
@@ -156,82 +156,87 @@ Bend joints to check clearances in the Rig tab's pose test.
 
 ## Rig
 
-Every joint axis is already a channel clips key (`l_forearm.elbow`), so rigging is only what
-moves several joints at once: drivers and IK targets. Keys and timing are the Animate tab's.
+Every joint axis is already a channel motions name (`l_forearm.elbow`), so rigging is only what
+moves several joints at once (drivers and IK targets) and the rest pose clips start from.
+Motions are the Animate tab's.
 
 - **Drivers**: values that move several joints at once (a curl). Each row says what it moves.
   **+** adds one moving the selected instance's first joint. Its inspector sets the name
-  (renaming carries through the open animation), the slider range and its **drives**: each an
-  instance, a joint of that instance's part and one of its axes, the driver's range **from** and
-  the **turn** it maps onto (degrees), **clamp**, with a preview of the mapping when it is not a
-  plain scale. Drives add onto the joint's own channel.
+  (renaming carries through the rest pose and the open animation), the slider range and its
+  **moves**. Each move has a **delay** (the driver's value it starts at: a finger's tip closing
+  after its base) and its joints' channels, each with the turn per unit of the driver (degrees);
+  **+ joint** adds one. Moves add onto the joints' own channels, and the joints' ranges stop
+  them.
 - **An instance**: its part's joints, one row per axis, with the axis's own channel, the drivers
   also moving it (click one to edit it) and **+ driver** to drive it with an existing driver or a
   new one.
 - **IK targets**: **+** makes one for the selected instance (the tip), its chain from two
-  instances above. Its channels are named after it (`_x`, `_y`, `_z`, `_weight`). Its inspector
-  sets the name (carried through the open animation), **root**, **tip** and **hold its facing**
-  (for a planted foot: its ankle keeps it as the clip angles it to the ground); **Try it at the
-  tip** puts the pose test's target on the tip at full weight, to drag from there. **+ pole**
-  gives it a pole (`_pole_x`, `_y`, `_z`), a point in front of the chain's middle that the knee or
-  elbow bends toward; ✕ by it takes it away. ✕ deletes the target.
+  instances above. Its channels are named after it (`_x`, `_y`, `_z`, `_weight`, and a reaching
+  one's pole `_pole_x`, `_y`, `_z`: moving the point in front of the chain's middle that the knee
+  or elbow bends toward). Its inspector sets the name (carried through the rest pose and the open
+  animation), **root**, **tip**, **aim** (look at the target instead of reaching it: a head, with
+  root and tip both the head) and **hold its facing** (for a planted foot: its ankle keeps it as
+  the clip angles it to the ground). **Try it at the tip** puts the pose test's target on the tip
+  at full weight, to drag from there. ✕ deletes the target.
 
-The **pose test** in the dock has a slider per channel (the engine's list), to try the rig: a
-joint's runs over its range. An IK target's x, y, z, a ball's x, y, z and the root's move and turn
-each show as one x/y/z row. It moves the view only and is never saved.
+The **pose test** in the dock has a slider per channel (the engine's list), starting from the
+rest pose, to try the rig: a joint's runs over its range. An IK target's x, y, z, a ball's x, y, z
+and the root's move and turn each show as one x/y/z row. It moves the view only, until **Set rest
+pose** saves what it shows as the model's rest pose: the stance every clip starts from and adds
+onto ([modeling.md](modeling.md#the-rest-pose)). ↺ goes back to the rest pose.
 
 **Handles in the view** (Rig and Animate): a diamond on the model's root, a dot on each IK
 target and a ring on each pole. Click one to select it: arrows move it along the model's axes (shift: 0.01 steps), and
-the root's rings turn it (shift: 15° steps). In the Rig tab they set the pose test; in the
-Animate tab, the selected key's own values (select one key first). A drag is one undo step.
+the root's rings turn it (shift: 15° steps). In the Rig tab they set the pose test. In the
+Animate tab they pose the motion shown: its picked move (else its first) changes its amounts so
+the view shows what you dragged to, by the change over how much of them the move adds at the
+playhead (a held motion: all of it). A drag is one undo step.
 Three buttons at the top right show the IK targets and poles hidden, as points, or as points
 with their names (remembered in this browser); the root's diamond always shows.
 
 ## Animate
 
-- **Clips** in the sidebar. The editor edits one clip at a time; mixing clips on layers is the
-  game's ([animation.md](animation.md#mixing-clips-on-layers)).
-- **Timeline** (the dock):
-  - **Ruler**: click or drag to scrub. The ruler and the labels stay put while time scrolls
-    sideways; Cmd/Ctrl-wheel or the zoom buttons zoom time (around the pointer, or the
-    playhead), and the frame button fits the clip again.
-  - **Rows**: one per channel the clip keys, grouped (click a group's label to fold it into one
-    row), under an **all keys** row. A key shows on every row it sets: a ramp from `at` across
-    `duration`, then a diamond where it lands (only the diamond when
-    it snaps). Drag a key to move it, drag the start of its ramp to retime it (where it lands
-    stays), alt-drag to duplicate it.
-  - **Selection**: click selects a key and moves the playhead to where it lands (so what you
-    edit in it shows in the view), shift-click adds, dragging on empty space box-selects
-    the keys on the rows it covers. Double-click a key to play from it.
-  - **A part's channels**: click a part in the view and the timeline shows only the channels
-    that move it. Those are its joints' and its parents' channels and the drivers moving them, the IK targets whose
-    chains pass through them, and the root (the engine answers them: query `moves`). ✕ by
-    "channels moving …" in the toolbar, or a click on empty space, shows every channel again.
-- **Clips** are keyframed or procedural. **+ clip…** adds an empty keyframed clip or one from
-  a procedural preset: biped walk or run (a human, a bird, a dog on two legs), quadruped walk,
-  trot or gallop (a cat, a dog), snake slither ([animation.md](animation.md#procedural-clips)).
-  A preset measures the model at rest for its numbers, and makes IK targets on the feet (the
-  lowest leaf instances, reaching from two above) when it has none. It plays as soon as it is
-  made. The inspector tunes it with sliders while it plays: the cycle's duration; the legs'
-  stride, lift, duty, crouch, bob and each foot's phase; each wave's chain, axis, amount, length
-  and growth; and swings, any channel to and fro with the cycle (+ adds one).
-- **Toolbar**:
-  - play/pause (space), loop, speed, zoom, the clip length
-  - **+ Key** adds an empty key at the playhead
-  - **◆ Key pose…** keys what the view shows now, choosing the channel groups
-  - ⧉ (Cmd-D) duplicates the selected keys, ✕ (Delete) deletes them
-  - Cmd-C / Cmd-V copy and paste keys at the playhead
-- **Key inspector**: at, duration and ease, then **Key values**: the key's channels; an IK
-  target's x, y, z, a ball's and the root's move and turn show as one x/y/z row each (only what you
-  change is set). **capture** sets them to what the view shows; "+ driver" adds one at its value
-  now.
+A clip is motions ([animation.md](animation.md#motions)): shapes over time added onto channels, on
+top of the rest pose. There are no key frames: a pose held is a motion with no shape, and a pose
+at a moment is a shape stepping into it there.
 
-Characters saved in this browser before clips were plain key lists are brought up to date when
-opened: each key's pose is copied into its values and the keys are put in time order, which plays
-the same.
+- **Clips** in the sidebar. The editor edits one clip at a time. **+** adds an empty clip, ⧉
+  duplicates it.
+- **Motions** (the sidebar, under Clips): the clip's motions. Click picks one (the dock and the
+  inspector show it); shift- or cmd-click picks several, the last picked the one shown.
+  - **+** adds a motion holding a pose (no shape, one empty move): pose it with the view's
+    handles, then give it a shape in the dock.
+  - **Isolate** (the eye) plays only the picked motions (the viewer gets a copy of the animation
+    with the others left out; the clip itself is untouched). It stays on while you pick, and goes
+    off with another clip.
+  - **Merge** appends the moves of the other picked motions to the last one picked (tagged
+    "into"), in clip order, and removes them: they take its shape.
+  - The trash removes the picked ones.
+- **The inspector** shows the clip's duration, then the motion shown: its **rate** (whole cycles
+  of its shape over the clip, so a loop never jumps) and its **moves**, each with its **delay**
+  (cycles late). Click a move's head to pick it (the view's handles pose it), shift- or
+  cmd-click to pick several. **Split** moves the picked moves into a new motion right after it,
+  with the same shape; ✕ removes them; + adds a move (unfolded). Moves are folded, showing their
+  channels' names; the caret unfolds one to edit its amounts (+ channel adds one at 0).
+- **The curve editor** (the dock) shows the motion picked as curves. Everything drawn comes from
+  the engine (query `motion`), so it is what plays.
+  - **Shape** (left): one cycle of the motion's shape, repeating. Drag a point (shift snaps to
+    0.05), click empty space to add one, double-click or Delete to remove it. The toolbar sets
+    the selected point's ease (how it is reached from the point before: LINEAR, IN, OUT, SETTLE,
+    STEP). **Hold, Sine, Slide, Lift, Pulse, Square, Bounce, Hit, Steps** start the shape over
+    (the one it matches is lit). A one-shot (a pulse, a hit) is a shape that ends where it
+    starts.
+  - **Lanes** (right): what each move adds over the clip, one lane each, the picked moves lit.
+    Drag a lane sideways to make its move run later or sooner (its
+    delay); click a lane to pick its move. Too many moves for a lane each (a chain's joints)
+    share one: a drag there moves them all, a click scrubs.
+  - **Window** (the bar under the ruler): the first move's first cycle. Drag it to make every
+    move run later or sooner, its right end to fit more or fewer whole cycles in the clip (its
+    rate).
+- **Player** (floating at the bottom of the view): to the start, play/pause (space), loop, the
+  time, speed.
 
 ## Not there yet
 
 - Turning joints by dragging in the view outside the Model tab (the pose test's sliders do it).
 - Onion skin and motion paths in the view (`trajectory` queries already answer them).
-- A graph editor for curves.

@@ -552,7 +552,7 @@ function snapTo(p, own, planes, near) {
 /** v held in lo..hi, unless they are equal (free) @param {number} v @param {number} lo @param {number} hi */
 const clampTo = (v, lo, hi) => (lo === hi ? v : Math.min(hi, Math.max(lo, v)));
 
-/** pickAt selects what is under a point of the canvas: a shape in the model tab (`add`: shift, to the selection), an instance in the assemble and rig tabs, and in the animate tab an instance whose keys the timeline then shows (empty space: all of them) @param {number} x @param {number} y @param {boolean} [add] */
+/** pickAt selects what is under a point of the canvas: a shape in the model tab (`add`: shift, to the selection), an instance in the assemble and rig tabs, and in the animate tab an instance, lit (empty space: none) @param {number} x @param {number} y @param {boolean} [add] */
 function pickAt(x, y, add = false) {
   const hit = editor.viewer?.query({ q: "pick", x, y });
   if (editor.tab === "animation") return editor.select(() => (editor.part = hit && hit.part >= 0 ? hit.part : -1));

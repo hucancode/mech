@@ -44,8 +44,8 @@ edits models ([editors.md](editors.md)).
 - Lengths are in **model units**. `scale` brings the whole model to world size (the mech is
   about 5.5 units tall at scale 0.297).
 - Angles are in **radians**, in files and at run time alike; nothing converts them. A joint's
-  channels are radians; a driver's value is in its own units (a hand's 0 to 1 curl), which each of
-  its drives maps onto radians. IK targets' channels are model units and a weight. The root's channels (below) are
+  channels are radians; a driver's value is in its own units (a hand's 0 to 1 curl), which its
+  moves turn into radians. IK targets' channels are model units and a weight. The root's channels (below) are
   model units and radians.
 - Characters face **+z**, with **+y** up. The mech's left side is +x.
 - Every part has a **frame**: a place on one of the rig's bones. A part's shapes and its slots
@@ -70,8 +70,9 @@ Top level:
 | `ground` | lift the model so its lowest point at rest sits at y = 0 |
 | `materials` | `{name, color, metallic, roughness, emissive}` |
 | `hardware` | the materials joint hardware uses: `{female, male, metal}` |
-| `drivers` | values moving several joints at once: `{name, min, max, drives}`; min/max only bound editor sliders (equal bounds: a half turn each way) |
-| `iks` | IK targets: `{name, root, tip, hold, pole}` |
+| `drivers` | values moving several joints at once: `{name, min, max, moves}`; min/max only bound editor sliders (equal bounds: a half turn each way) |
+| `iks` | IK targets: `{name, root, tip, hold, aim}` |
+| `pose` | the rest pose clips start from: channel values by name ([below](#the-rest-pose)) |
 | `parts` | the library: `{name, joints, slots, shapes}` |
 | `assembly` | the tree placing parts: `{name, part, parent, parent_slot, mirror}`, parents first |
 
@@ -208,40 +209,45 @@ materials. It belongs to no shape, so the editor doesn't list it.
 
 ### Rigging: channels, drivers, IK targets
 
-A pose is one number per **channel**, and clips key channels by name
+A pose is one number per **channel**, and clips' motions name channels
 ([animation.md](animation.md)). Nothing needs declaring to animate a joint: **every axis of every
 instance's joints is a channel of its own**, named `<instance>.<joint>` (`l_forearm.elbow`), or
 `<instance>.<joint>.x` (`.y`, `.z`) for a ball. Its value is the turn from rest, in radians, held
 in the joint's range; a mirrored instance turns the mirrored way, so twins take the same values.
 The editor's sliders for it run over the joint's `min`/`max`. Renaming an instance or a joint
-renames its channels in the open animation.
+renames its channels wherever they are named: the drivers, the rest pose and the open animation.
 
 The channels, in order (`mech.model_channels`): the drivers, each IK target's, the root's six,
 then the joints'.
 
-A **driver** is one number that moves **several joints at once**, `{name, min, max, drives}`:
-the mech's `curl` closes nine knuckles at staggered rates, and `pelvis_turn` turns the pelvis and
-twists both legs back (so the feet keep pointing ahead). min and max bound the editor's slider.
-Each **drive** moves one joint, adding onto that joint's own channel:
+A **driver** is one number that moves **several joints at once**, `{name, min, max, moves}`:
+the mech's `curl` closes nine knuckles, the tips after the bases, and `pelvis_turn` turns the
+pelvis and twists both legs back (so the feet keep pointing ahead). min and max bound the
+editor's slider. Its **moves** are written like a motion's (`{delay, by}`,
+[animation.md](animation.md#motions)), with the driver's value in place of time. `by` names
+joints' channels and how far each turns per unit of the driver (radians). The joints start once
+the value is past the move's `delay` (in the driver's units):
+
+```
+turn[c] += by[c] * sign(value) * max(|value| - delay, 0)
+```
 
 ```json
-{"name": "l_curl", "max": 1, "drives": [
-  {"part": "l_thumb_1", "joint": "knuckle", "axis": "X", "from": [0, 0.5], "turn": -0.5236, "clamp": true},
-  {"part": "l_thumb_2", "joint": "knuckle", "axis": "X", "from": [0.2, 0.8], "turn": 0.7854, "clamp": true}
+{"name": "l_curl", "max": 1, "moves": [
+  {"by": {"l_thumb_1.knuckle": -1.0472, "l_finger_a_1.knuckle": -1.0472}},
+  {"delay": 0.2, "by": {"l_thumb_2.knuckle": 1.309, "l_finger_a_2.knuckle": 1.309}}
 ]}
 ```
 
-- **part**, **joint**: an instance and a joint of its part.
-- **axis**: `X`, `Y` or `Z`, one the joint has (table above), which it turns about.
-- **from**, **turn**: the driver's value running over `from` maps linearly onto 0 to `turn`
-  (radians), clamped to the ends when `clamp`.
+A drive adds onto the joint's own channel, and the joint's range stops it: the knuckles' `min`
+and `max` are where a curl ends.
 
 **The root.** No joint moves the whole model: six channels, `mech.ROOT_CHANNELS`, place it.
 `root_x`, `root_y`, `root_z` move the model's origin (model units) and `root_turn_x`, `_y`, `_z`
 turn it (euler radians, as shapes are). The mech's walk drops it with `root_y`, and IK targets,
 being in the model's space, keep the feet planted while it does.
 
-An **IK target** (`iks`, `{name, root, tip, hold, pole}`) reaches instance `tip`'s frame for a
+An **IK target** (`iks`, `{name, root, tip, hold, aim}`) reaches instance `tip`'s frame for a
 point by turning every joint from instance `root`'s slot down to the tip, each about the axes it
 turns. The tip's own joints (an ankle, a wrist) don't reach: they keep the turn their channels
 give. With `"hold": true` they turn the tip to face the way those turned it in the model's space
@@ -257,12 +263,32 @@ from its thigh.
 Every chain bends toward a **pole**. By default it sits in front of the chain's middle joint (the
 pivot nearest halfway along it: a knee, an elbow), as far out as the joint is from the tip, on the
 side that joint's stops let it bend: forward for a human knee, back for a reverse-jointed one or a
-dog's hock, back for an elbow. So any leg bends the way it is built with nothing given. With
-`"pole": true` a target has three more channels, `<name>_pole_x`, `_y`, `_z`, moving the pole from
-there (model units) to key it. Each pass first swings the chain's middle joint (the
+dog's hock, back for an elbow. So any leg bends the way it is built with nothing given. A
+reaching target has three more channels, `<name>_pole_x`, `_y`, `_z`, moving the pole from there
+(model units). Each pass first swings the chain's middle joint (the
 pivot nearest halfway along it: a knee, an elbow) around the line from the chain's root to the
 target, toward the pole, with the joints above it; then the tip reaches as before. So the chain
 bends in the plane through the pole, and a knee points at it instead of flipping.
+
+With `"aim": true` a target is looked at, not reached: its chain, the tip's own joints included
+(a neck), turns so the tip faces it, as it faced ahead (+z) at rest: a head looking, a gun
+aiming. Its point is then an offset from a point ahead of the tip at rest (as far ahead as the
+tip is high), and it has no pole. The mech's `head_aim` turns its head by the neck; the
+strider's turns its sensor, and its `l_hand` and `r_hand` reach its cannons from the shoulders.
+
+### The rest pose
+
+The model's `pose` is the pose every clip starts from and adds onto: channel values by name,
+written as a motion's amounts are, every channel it leaves out at 0. It is the character's
+stance: the mech's arms hanging a little bent, its hands half closed, its legs reaching for the
+ground (their IK weights 1). The stance is written once, here. Each clip then holds only how it
+differs. The game shows the rest pose when an action has no clip, and an ADDITIVE layer adds how
+its clip differs from it. The character editor's pose test (Rig tab) starts from it, and **Set
+rest pose** saves what it shows.
+
+```json
+"pose": {"l_curl": 0.35, "l_forearm.elbow": 0.2618, "l_leg_weight": 1, "r_leg_weight": 1}
+```
 
 ## How a rig is built and posed
 
@@ -285,7 +311,7 @@ After building, the rig finds each IK target's chain and, when `ground` is set, 
 of any piece at rest.
 
 `rig_pose(values)` then:
-1. adds up each bone's motion from the drives
+1. adds up each bone's motion from its joint's channels and the drivers' moves
 2. solves each bone from its parent (a root's anchor from the root's channels): `parent ∘ offset ∘
    rest ∘ Rx·Ry·Rz`
 3. reaches with each IK target whose weight is above 0, and solves again
@@ -347,5 +373,5 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   shapes sized from them.
 - Free (unconstrained) bones, which the dragon example used to steer its spine along a spline.
   Its spine is ball joints here, waiting for the dragon's motion to be authored in this engine.
-- Renaming a driver, an instance or a joint in the character editor updates the open animation, but not other
+- Renaming a driver, an instance or a joint in the character editor updates the rest pose and the open animation, but not other
   character files that use the old name.

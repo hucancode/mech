@@ -262,8 +262,8 @@ set_animation :: proc(text: []u8) -> bool {
   return true
 }
 
-// set_values shows explicit driver values: a JSON object of driver name to value; drivers it
-// leaves out are 0.
+// set_values shows explicit channel values: a JSON object of channel name to value; channels it
+// leaves out are at the rest pose (Model.pose).
 set_values :: proc(text: []u8) -> bool {
   if !app.has_asset do return false
   values: map[string]f32
@@ -274,7 +274,7 @@ set_values :: proc(text: []u8) -> bool {
   }
   m := app.asset.model
   resize(&app.values, mech.model_channels(m))
-  for &v, i in app.values do v = values[mech.channel_name(m, i)] or_else 0
+  for &v, i in app.values do v = values[mech.channel_name(m, i)] or_else app.asset.clips.pose[i]
   app.show = .VALUES
   apply_show()
   return true

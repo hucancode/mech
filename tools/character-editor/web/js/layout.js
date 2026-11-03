@@ -1,5 +1,5 @@
 // @ts-check
-// Layout choices, remembered across sessions: whether the dock (the timeline, the pose test)
+// Layout choices, remembered across sessions: whether the dock (the curve editor, the pose test)
 // also spans under the left panel, the right panel or both, whether the inspector (the right
 // panel) is shown, and the panels' sizes, set by dragging their inner edges.
 import { btn, h } from "./dom.js";

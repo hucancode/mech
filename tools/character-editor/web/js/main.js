@@ -5,7 +5,7 @@
 //   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 4 tabs
 //   Esc back to the character's settings (assemble and rig tabs)    I show/hide the inspector
 //   W E R T move, rotate, scale a shape, place slots (model tab; see gizmo.js)    click the view to pick
-//   space play/pause   Delete delete keys  Cmd/Ctrl-C/V/D copy, paste, duplicate keys   F frame
+//   space play/pause   Delete remove the shape's point (animate tab)   F frame
 import { btn, h, segmented, ui } from "./dom.js";
 import { icon } from "./icons.js";
 import { inspectorButton, refit, toggleInspector } from "./layout.js";
@@ -17,7 +17,8 @@ import { assembleInspector, assembleSidebar } from "./panels/assemble.js";
 import { modelInspector, modelSidebar } from "./panels/model.js";
 import { poseTest } from "./panels/poseTest.js";
 import { rigInspector, rigSidebar } from "./panels/rig.js";
-import { Timeline } from "./panels/timeline.js";
+import { Curves } from "./panels/curves.js";
+import { renderPlayer, tickPlayer } from "./player.js";
 
 const $ = (/** @type {string} */ id) => /** @type {HTMLElement} */ (document.getElementById(id));
 const header = $("header");
@@ -25,7 +26,7 @@ const sidebar = $("sidebar");
 const inspector = $("inspector");
 const dock = $("dock");
 const status = $("status");
-const timeline = new Timeline();
+const curves = new Curves();
 const TABS = /** @type {const} */ ([
   ["model", "Model"],
   ["assemble", "Assemble"],
@@ -43,6 +44,7 @@ function render() {
   pending = false;
   renderHeader();
   viewportTools();
+  renderPlayer();
   const keep = [sidebar.scrollTop, inspector.scrollTop];
   const lists = listScrolls();
   if (editor.tab === "model") {
@@ -88,16 +90,16 @@ function renderDock() {
   }
   if (editor.tab === "model" || editor.tab === "assemble") return; // no dock: nothing to pose here
   if (editor.tab === "animation") {
-    if (dockTab !== "animation") dock.replaceChildren(...timeline.el);
-    timeline.refresh();
+    // the clip's motions as curves
+    if (dockTab !== "animation") dock.replaceChildren(...curves.el);
+    dockTab = "animation";
+    curves.refresh();
   } else {
     // the pose test (rig tab) keeps its sliders' state: rebuild it only when the model changes
     const stamp = `pose:${JSON.stringify([editor.model.drivers ?? [], editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
     if (dockTab !== stamp) dock.replaceChildren(...poseTest());
     dockTab = stamp;
-    return;
   }
-  dockTab = "animation";
 }
 
 function renderHeader() {
@@ -134,7 +136,10 @@ function renderHeader() {
 }
 
 editor.on((what) => {
-  if (what === "time") return timeline.tick();
+  if (what === "time") {
+    tickPlayer();
+    return curves.tick();
+  }
   if (what === "status") {
     status.textContent = editor.status;
     return renderHeader();
@@ -196,14 +201,7 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       editor.togglePlay();
     } else if (key === "delete" || key === "backspace") {
-      timeline.deleteSelected();
-    } else if (cmd && key === "c") {
-      timeline.copyKeys();
-    } else if (cmd && key === "v") {
-      timeline.pasteKeys();
-    } else if (cmd && key === "d") {
-      e.preventDefault();
-      timeline.duplicateSelected();
+      curves.deletePoint();
     }
   }
 });

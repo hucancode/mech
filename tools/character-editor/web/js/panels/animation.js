@@ -1,15 +1,14 @@
 // @ts-check
-// The Animation tab: the clips, and the selected key. A clip is keyframed (keys, edited on the
-// timeline in the dock) or procedural (a walk, a run, a slither the engine computes from a few
-// numbers, tuned here while it plays: gait.js).
-import { btn, h, list, num, row, section, select, slider, text } from "../dom.js";
+// The Animation tab: the clips, and their motions (procedural: a pose held, a walk, a wave, a
+// strike, each a shape over time added onto some channels; src/mech/animation.odin). A motion's
+// shape and timing are drawn in the dock's curve editor (panels/curves.js); what it moves, here:
+// its moves, each channel amounts moving together, `delay` cycles late.
+import { btn, CARET, h, list, num, row, section, text } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { isProcedural, makeClip, PRESETS } from "../gait.js";
-import { clone, EASES, uniqueName } from "../model.js";
+import { clone, flatValues, packValues, uniqueName } from "../model.js";
+import { motionLabel } from "../shapes.js";
 import { driverValues } from "./driverValues.js";
-
-const KEYFRAMED = "Keyframed clip";
 
 export function animSidebar() {
   const a = editor.anim;
@@ -18,183 +17,205 @@ export function animSidebar() {
     editor.edit("anim", () => {
       a.clips ??= [];
       const src = copy ? a.clips[editor.clip] : undefined;
-      const c = src ? clone(src) : { name: "clip", duration: 1, keys: [] };
+      const c = src ? clone(src) : { name: "clip", duration: 1 };
       c.name = uniqueName(c.name, (n) => a.clips.some((/** @type {any} */ x) => x.name === n));
       a.clips.push(c);
       editor.clip = a.clips.length - 1;
-      editor.keys = [];
     });
   const removeClip = () => {
     if (!confirm(`Delete clip ${a.clips[editor.clip].name}?`)) return;
     editor.edit("anim", () => {
       a.clips.splice(editor.clip, 1);
       editor.clip = Math.max(0, editor.clip - 1);
-      editor.keys = [];
-    });
-  };
-  /** @param {string} label */
-  const addProcedural = (label) => {
-    const preset = PRESETS.find((p) => p.label === label);
-    if (!preset) return;
-    let made = /** @type {number | string} */ ("");
-    // a preset may make the legs' IK targets: the model changes too
-    editor.edit("both", () => (made = makeClip(editor.model, a, preset)));
-    if (typeof made === "string") return editor.flash(made);
-    editor.select(() => {
-      editor.clip = /** @type {number} */ (made);
-      editor.keys = [];
-      editor.time = 0;
-      editor.playing = true;
-      editor.loop = true;
     });
   };
   const clip = editor.clipData;
-  const add = select({
-    value: "",
-    none: "+ clip…",
-    options: [KEYFRAMED, ["procedural", PRESETS.map((p) => p.label)]],
-    onchange: (v) => (v === KEYFRAMED ? addClip(false) : addProcedural(v)),
-  });
   return [
     section(
       "Clips",
       [
         list(
           a.clips ?? [],
-          (c) => [
-            h("span", { class: "name", style: { flex: "1" } }, c.name),
-            h("span", { class: "tag" }, `${+(c.duration ?? 0).toFixed(2)}s`),
-            isProcedural(c)
-              ? h("span", { class: "tag", title: "procedural: tuned by its numbers" }, "procedural")
-              : h("span", { class: "tag count-key", title: `${c.keys?.length ?? 0} key frames` }, icon("key", 12), c.keys?.length ?? 0),
-          ],
+          (c) => [h("span", { class: "name", style: { flex: "1" } }, c.name), h("span", { class: "tag" }, `${+(c.duration ?? 0).toFixed(2)}s`)],
           (i) => i === editor.clip,
-          (i) =>
-            editor.select(() => {
-              editor.clip = i;
-              editor.keys = [];
-              editor.time = 0;
-            }),
+          (i) => editor.pickClip(i),
         ),
         clip && h("div", { style: { marginTop: "8px" } }, row("name", text({ value: clip.name, onchange: (v) => editor.edit("anim", () => (clip.name = v)) }))),
-        h("div", { style: { marginTop: "6px" } }, add),
       ],
       {
         actions: [
+          btn(icon("plus"), () => addClip(false), { kind: "icon", title: "Add an empty clip" }),
           btn(icon("copy"), () => addClip(true), { kind: "icon", title: "Duplicate the clip", disabled: !clip }),
           btn(icon("trash"), removeClip, { kind: "icon", title: "Delete the clip", disabled: !clip }),
         ],
       },
     ),
+    clip && motionsSection(clip),
   ];
 }
 
 export function animInspector() {
-  const keys = editor.clipData?.keys ?? [];
-  if (isProcedural(editor.clipData) && editor.keys.length !== 1) return gaitInspector(editor.clipData);
-  if (editor.keys.length === 1 && keys[editor.keys[0]]) {
-    const k = editor.keys[0];
-    const key = keys[k];
-    /** @param {(x: any) => void} change @param {string} [coalesce] */
-    const set = (change, coalesce) => editor.edit("anim", () => change(key), coalesce);
-    const capture = () => {
-      const shown = editor.shown();
-      set((x) => {
-        for (const n of Object.keys(x.values ?? {})) x.values[n] = Math.round((shown[n] ?? 0) * 100) / 100;
-      });
-    };
-    return [
-      section(`Key ${k}`, [
-        row("at", num({ value: key.at ?? 0, step: 0.01, min: 0, onchange: (v) => set((x) => (x.at = v), "at") }), "seconds into the clip"),
-        row("duration", num({ value: key.duration ?? 0, step: 0.01, min: 0, onchange: (v) => set((x) => (x.duration = v), "duration") }), "seconds to blend in; 0 snaps"),
-        row("ease", select({ value: key.ease ?? "SMOOTH", options: EASES, onchange: (v) => set((x) => (x.ease = v)) })),
-      ]),
-      section(
-        "Key values",
-        driverValues(key.values, {
-          onset: (n, v) => set((x) => ((x.values ??= {})[n] = v), `key-${k}-${n}`),
-          onremove: (n) => set((x) => delete x.values?.[n]),
-        }),
-        { actions: [btn(icon("capture"), capture, { kind: "icon", title: "Capture: set this key's drivers to what the view shows now", disabled: !Object.keys(key.values ?? {}).length })] },
+  return editor.clipData ? motionsInspector(editor.clipData) : [];
+}
+
+/** a click that adds to what is picked (shift, cmd or ctrl) @param {MouseEvent} e */
+const adds = (e) => e.shiftKey || e.metaKey || e.ctrlKey;
+
+/**
+ * motionsSection lists the clip's motions (the engine's Motion), in the sidebar: click picks one
+ * (the dock and the inspector show it), shift- or cmd-click picks several. Isolate plays only those
+ * picked; merge appends the others' moves to the last picked, and removes them.
+ * @param {any} clip
+ */
+function motionsSection(clip) {
+  const motions = clip.motions ?? [];
+  const picked = editor.pickedMotions();
+  /** @param {() => void} change */
+  const set = (change) => editor.edit("anim", change);
+  /** after an edit, motion `i` alone is picked @param {number} i */
+  const only = (i) => ((editor.motion = i), (editor.picked = [i]), (editor.moves = []), (editor.openMoves = []));
+  // a new motion holds a pose: drag the view's handles to set it, or give it a shape in the dock
+  const add = () =>
+    set(() => {
+      (clip.motions ??= []).push({ moves: [{ by: {} }] });
+      only(clip.motions.length - 1);
+      editor.openMoves = [0];
+    });
+  const merge = () => {
+    const into = /** @type {number} */ (picked.at(-1));
+    const from = picked.slice(0, -1).sort((p, q) => p - q);
+    set(() => {
+      const target = clip.motions[into];
+      for (const k of from) target.moves = [...(target.moves ?? []), ...(clip.motions[k].moves ?? [])];
+      clip.motions = clip.motions.filter((/** @type {any} */ _, /** @type {number} */ k) => !from.includes(k));
+      only(into - from.filter((k) => k < into).length);
+    });
+  };
+  const remove = () =>
+    set(() => {
+      clip.motions = motions.filter((/** @type {any} */ _, /** @type {number} */ k) => !picked.includes(k));
+      only(Math.max(0, Math.min(...picked) - 1));
+      if (!clip.motions.length) delete clip.motions;
+    });
+  const into = picked.length > 1 ? picked.at(-1) : -1;
+  return section(
+    "Motions",
+    [
+      motions.length === 0 && h("div", { class: "muted", style: { padding: "4px 0" } }, "A shape over time added onto some channels: a pose held, a step, a swing, a strike. Add one with +, then pose it with the view's handles."),
+      list(
+        motions,
+        (m, i) => [h("span", { class: "name", style: { flex: "1" } }, motionLabel(m)), i === into && h("span", { class: "tag", title: "Merge appends the other picked motions' moves to this one" }, "into")],
+        (i) => picked.includes(i),
+        (i, e) => editor.pickMotion(i, adds(e)),
       ),
-    ];
-  }
-  return [];
+    ],
+    {
+      actions: [
+        btn(icon("eye"), () => editor.setIsolate(!editor.isolate), { kind: "icon", on: editor.isolate, title: "Isolate: play only the picked motions (shift-click to pick several)", disabled: !motions.length }),
+        btn(icon("merge"), merge, { kind: "icon", title: "Merge: append the other picked motions' moves to the last one picked, and remove them", disabled: picked.length < 2 }),
+        btn(icon("plus"), add, { kind: "icon", title: "Add a motion holding a pose: set it with the view's handles, shape it in the dock" }),
+        btn(icon("trash"), remove, { kind: "icon", title: "Remove the picked motions", disabled: !picked.length }),
+      ],
+    },
+  );
 }
 
 /**
- * gaitInspector tunes a procedural clip: its cycle, its legs' path and timing, the root's crouch
- * and bob, its waves and swings. Every change plays at once.
+ * motionsInspector shows the clip's length and the motion shown: its rate and what it moves (its
+ * moves' amounts and delays). Its shape is drawn in the dock; the motions are listed in the
+ * sidebar. Every change plays at once.
  * @param {any} clip
  */
-function gaitInspector(clip) {
-  const m = editor.model;
-  const g = clip.gait;
-  /** @param {(g: any) => void} change @param {string} key */
-  const set = (change, key) => editor.edit("anim", () => change(g), `gait-${key}`);
-  /** a slider over [min, max] for field `k` of `o` @param {any} o @param {string} k @param {number} min @param {number} max @param {string} key @param {boolean} [deg] */
-  const field = (o, k, min, max, key, deg = false) => slider({ value: o[k] ?? 0, min, max, deg, onchange: (v) => set(() => (o[k] = Math.round(v * 1000) / 1000), key) });
-  // lengths range over a few times the stride the preset chose (or the model's size)
-  const size = Math.max(g.stride ?? 0, 1);
-  const channels = editor.channels().map((c) => c.name);
-  const instances = (m.assembly ?? []).map((/** @type {any} */ x) => x.name);
-  const out = [
-    section("Cycle", [
-      row("duration", num({ value: clip.duration ?? 1, step: 0.05, min: 0.05, onchange: (v) => editor.edit("anim", () => (clip.duration = v), "gait-duration") }), "seconds a cycle takes; the clip loops"),
-    ]),
+function motionsInspector(clip) {
+  const motions = clip.motions ?? [];
+  const k = Math.min(editor.motion, Math.max(motions.length - 1, 0));
+  const mo = motions[k];
+  /** @param {() => void} change @param {string} [key] */
+  const set = (change, key) => editor.edit("anim", change, key && `motion-${key}`);
+  return [
+    section("Clip", [row("duration", num({ value: clip.duration ?? 1, step: 0.05, min: 0.05, onchange: (v) => set(() => (clip.duration = v), "duration") }), "seconds; a motion's rate counts its cycles over it")]),
+    mo && motionPanel(clip, mo, k, set),
   ];
-  if (g.legs?.length)
-    out.push(
-      section("Legs", [
-        row("stride", field(g, "stride", 0, 3 * size, "stride"), "how far each foot travels per step (model units)"),
-        row("lift", field(g, "lift", 0, size, "lift"), "how high a foot swings"),
-        row("duty", field(g, "duty", 0.05, 0.95, "duty"), "share of the cycle a foot is down: over 0.5 walks, under runs"),
-        row("crouch", field(g, "crouch", 0, size, "crouch"), "how far the body sinks while moving: the knees bend"),
-        row("bob", field(g, "bob", 0, size / 2, "bob"), "how far it dips more as each foot touches down"),
-        ...g.legs.map((/** @type {any} */ l, /** @type {number} */ k) => row(`${l.ik} phase`, field(l, "phase", 0, 1, `phase${k}`), "when in the cycle this foot touches down")),
-      ]),
-    );
-  if (g.waves?.length)
-    out.push(
-      section(
-        "Waves",
-        g.waves.map((/** @type {any} */ w, /** @type {number} */ k) =>
-          h(
-            "div",
-            { class: "joint-item" },
-            row("chain", [select({ value: w.from, options: instances, onchange: (v) => set(() => (w.from = v), `wf${k}`) }), select({ value: w.to, options: instances, onchange: (v) => set(() => (w.to = v), `wt${k}`) })], "from the head down to the tail"),
-            row("axis", select({ value: w.axis ?? "X", options: ["X", "Y", "Z"], onchange: (v) => set(() => (w.axis = v), `wa${k}`) }), "Y: side to side (a snake); X: up and down (a fish's tail, a caterpillar)"),
-            row("amount", field(w, "amount", 0, 1.2, `wm${k}`, true), "how far the body heads off to each side at the head (each joint turns only by the difference from the segment before, so turns do not pile up down the chain)"),
-            row("length", field(w, "length", 0, 3, `wl${k}`), "wavelengths along the chain: more makes tighter S curves"),
-            row("growth", field(w, "taper", -1, 3, `wp${k}`), "how the swing changes toward the tail: 0 the same all along, above 0 bigger (a whipping tail), -1 dying out at the tail"),
-          ),
-        ),
+}
+
+/**
+ * the motion shown: its rate, then its moves (channels moving together, each `delay` cycles
+ * late), picked by clicking their heads (shift- or cmd-click for several). Split moves the picked
+ * moves into a motion of their own, shaped as this one.
+ * @param {any} clip @param {any} mo @param {number} k @param {(change: () => void, key?: string) => void} set
+ */
+function motionPanel(clip, mo, k, set) {
+  const moves = mo.moves ?? [];
+  const picked = editor.pickedMoves();
+  const split = () =>
+    set(() => {
+      const { moves: all, ...rest } = mo;
+      clip.motions.splice(k + 1, 0, { ...clone(rest), moves: picked.map((n) => all[n]) });
+      mo.moves = all.filter((/** @type {any} */ _, /** @type {number} */ n) => !picked.includes(n));
+      editor.motion = k + 1;
+      editor.picked = [k + 1];
+      editor.moves = [];
+      editor.openMoves = [];
+    });
+  const removeMoves = () =>
+    set(() => {
+      mo.moves = moves.filter((/** @type {any} */ _, /** @type {number} */ n) => !picked.includes(n));
+      editor.moves = [];
+      editor.openMoves = [];
+    });
+  const addMove = () =>
+    set(() => {
+      (mo.moves ??= []).push({ by: {} });
+      // a new move opens, to add its channels
+      editor.openMoves = [...editor.openMoves, mo.moves.length - 1];
+    });
+  return section(
+    "Motion",
+    [
+      row(
+        "rate",
+        num({ value: mo.rate ?? 1, step: 1, min: 1, digits: 0, onchange: (v) => set(() => ((v = Math.max(1, Math.round(v))), v === 1 ? delete mo.rate : (mo.rate = v)), `rate${k}`) }),
+        "whole cycles of its shape over the clip, so a loop never jumps: 1 a step or a swing, 2 a biped's bob (one a step)",
       ),
-    );
-  out.push(
-    section(
-      "Swings",
-      [
-        ...(g.swings ?? []).map((/** @type {any} */ w, /** @type {number} */ k) =>
+      ...moves.map((/** @type {any} */ mv, /** @type {number} */ n) => {
+        // folded, a move shows its channels' names; unfolded (the caret), their amounts to edit
+        const open = editor.openMoves.includes(n);
+        const names = Object.keys(mv.by ?? {});
+        return h(
+          "div",
+          { class: `joint-item ${picked.includes(n) ? "on" : ""}` },
           h(
-            "div",
-            { class: "joint-item" },
-            row("channel", [select({ value: w.channel, options: channels, onchange: (v) => set(() => (w.channel = v), `sc${k}`) }), btn(icon("x"), () => set(() => (g.swings.splice(k, 1), g.swings.length || delete g.swings), `sx${k}`), { kind: "icon", title: "Remove this swing" })]),
-            row("amount", field(w, "amount", -1, 1, `sm${k}`), "how far it swings (radians for a turn)"),
-            row("rate", field(w, "rate", 0, 4, `sr${k}`), "times a cycle: 1 an arm's swing, 2 a bob"),
-            row("phase", field(w, "phase", 0, 1, `sp${k}`), "when in the cycle it peaks"),
+            "button",
+            { class: `item ${picked.includes(n) ? "on" : ""}`, title: "Pick this move (shift- or cmd-click: pick several, to split them off). The view's handles pose the move picked", onclick: (/** @type {MouseEvent} */ e) => editor.pickMove(n, adds(e)) },
+            h(
+              "span",
+              { class: "name", style: { display: "flex", alignItems: "center", gap: "6px", flex: "1", minWidth: "0" } },
+              h("span", { class: `caret ${open ? "open" : ""}`, title: open ? "Fold: show its channels' names only" : "Unfold: edit its amounts", onclick: (/** @type {MouseEvent} */ e) => (e.stopPropagation(), editor.toggleMove(n)) }, CARET),
+              h("span", { style: { flex: "none" } }, `move ${n + 1}`),
+              // folded, its channels' names follow the title, cut off where the line ends (all in the tooltip)
+              !open && h("span", { class: "muted name", style: { flex: "1", minWidth: "0" }, title: names.join(", ") }, names.length ? names.join(", ") : "no channels yet"),
+            ),
           ),
-        ),
+          row(
+            "delay",
+            num({ value: mv.delay ?? 0, step: 0.05, digits: 3, onchange: (v) => set(() => ((v = Math.round(v * 1e4) / 1e4), v ? (mv.delay = v) : delete mv.delay), `delay${k}-${n}`) }),
+            "cycles late: the other foot half a cycle, a strike's next link a little; or drag its lane in the dock",
+          ),
+          ...(open
+            ? driverValues(flatValues(mv.by), {
+                onset: (vs) => set(() => (mv.by = packValues({ ...flatValues(mv.by), ...vs })), `move${k}-${n}-${Object.keys(vs).join()}`),
+                onremove: (names) => set(() => (mv.by = packValues(Object.fromEntries(Object.entries(flatValues(mv.by)).filter(([c]) => !names.includes(c)))))),
+              })
+            : []),
+        );
+      }),
+    ],
+    {
+      actions: [
+        btn(icon("split"), split, { kind: "icon", title: "Split: move the picked moves into a motion of their own, shaped as this one", disabled: !picked.length || picked.length === moves.length }),
+        btn(icon("x"), removeMoves, { kind: "icon", title: "Remove the picked moves", disabled: !picked.length }),
+        btn(icon("plus"), addMove, { kind: "icon", title: "Add a move: channels moving together, at a delay of their own" }),
       ],
-      {
-        actions: [
-          btn(icon("plus"), () => set(() => (g.swings ??= []).push({ channel: channels.find((n) => n === "root_turn_z") ?? channels[0], amount: 0.05, rate: 1 }), "swing-add"), {
-            kind: "icon",
-            title: "Swing a channel with the cycle: a sway, arms or a hull against the legs",
-          }),
-        ],
-      },
-    ),
+    },
   );
-  return out;
 }

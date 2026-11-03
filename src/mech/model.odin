@@ -131,25 +131,17 @@ Instance :: struct {
   mirror:      bool,
 }
 
-// Drive is how a driver moves one joint of one instance: the driver's value running over `from`
-// maps linearly onto 0..`turn` (radians), clamped to the ends when `clamp`, about `axis` of joint
-// `joint` of instance `part`. The axis must be one the joint has. Drives on one axis add up, and
-// onto the joint's own channel (model_channels).
-Drive :: struct {
-  part, joint: string,
-  axis:        Axis,
-  from:        [2]f32,
-  turn:        f32,
-  clamp:       bool,
-}
-
 // Driver is one value that moves several joints at once (a curl closing nine knuckles), keyed by
 // name like any channel. A single joint needs none: each of its axes is a channel of its own.
-// min/max bound editor sliders.
+// Each of its moves names joints' channels (`l_thumb_1.knuckle`, `torso.waist.y`) and how far each
+// turns per unit of the driver's value (radians), once the value is past the move's `delay`:
+//   turn += by * sign(value) * max(|value| - delay, 0)
+// so moves with later delays follow (the tip knuckles closing after the first ones). A drive adds
+// onto the joint's own channel; the joint's range holds it. min/max bound editor sliders.
 Driver :: struct {
   name:     string,
   min, max: f32,
-  drives:   [dynamic]Drive,
+  moves:    [dynamic]Move,
 }
 
 // Ik reaches instance `tip`'s frame for a target by turning every joint from instance `root`'s
@@ -158,11 +150,14 @@ Driver :: struct {
 // instead: a planted foot, however the knee bends), each about the axes it has. Its channels are
 // named after it (IK_CHANNELS): <name>_x, _y, _z, the target in the model's space (model units)
 // as an offset from where the tip is at rest (0: the foot where it stands), <name>_weight, 0
-// leaving the chain as its joints' channels put it, 1 reaching; and with `pole`, <name>_pole_x,
-// _y, _z, the point the chain bends toward, from the same place.
+// leaving the chain as its joints' channels put it, 1 reaching; and, reaching, <name>_pole_x,
+// _y, _z, moving the point the chain bends toward from where it is by default.
+// With `aim`, the chain (the tip's own joints too: a neck) turns the tip to face the target
+// instead of reaching it: a head looking, a gun aiming. The target is then an offset from a
+// point ahead of the tip at rest (+z, as far ahead as the tip is high), and it has no pole.
 Ik :: struct {
-  name, root, tip: string,
-  hold, pole:      bool,
+  name, root, tip:  string,
+  hold, aim:       bool,
 }
 
 // Hardware: the materials joint hardware is painted in.
@@ -179,6 +174,10 @@ Model :: struct {
   hardware:  Hardware,
   drivers:   [dynamic]Driver,
   iks:       [dynamic]Ik,
+  // pose is the rest pose clips start from and add onto: channel values by name (as a motion's
+  // moves write them), every other channel 0. A character's stance: its arms hanging, its legs
+  // reaching for the ground (their IK weights 1).
+  pose:      map[string]Value,
   parts:     [dynamic]Part,
   assembly:  [dynamic]Instance,
   arena:     mem.Dynamic_Arena `json:"-"`,
@@ -245,14 +244,14 @@ slot_face :: proc(s: Slot) -> geometry.Face {
 
 // A pose holds one value per channel (model_channels), in this order:
 //   - each driver
-//   - each IK target's (IK_CHANNELS): its target, weight, and pole when it has one
+//   - each IK target's (IK_CHANNELS): its target, weight, and pole unless it aims
 //   - the root's six (ROOT_CHANNELS)
 //   - every axis of every instance's joints, in assembly order: `<instance>.<joint>` for a joint
 //     with one, `<instance>.<joint>.x` (.y, .z) for a ball. A mirrored instance turns the mirrored
 //     way, so twins take the same values.
 // Clips key them all by name alike.
 
-// IK_CHANNELS: an IK target's channels, after its name; the last three only with a pole.
+// IK_CHANNELS: an IK target's channels, after its name; the last three (its pole) unless it aims.
 IK_CHANNELS :: [7]string{"_x", "_y", "_z", "_weight", "_pole_x", "_pole_y", "_pole_z"}
 
 // ROOT_CHANNELS: where the model's origin is moved (x, y, z in model units) and turned (euler
@@ -266,8 +265,13 @@ AXIS_NAMES :: [Axis]string{.X = "x", .Y = "y", .Z = "z"}
 // ik_channel is the first of IK target `k`'s channels; k = len(m.iks) is the root's first.
 ik_channel :: proc(m: ^Model, k: int) -> int {
   n := len(m.drivers)
-  for ik in m.iks[:k] do n += 7 if ik.pole else 4
+  for ik in m.iks[:k] do n += ik_channel_count(ik)
   return n
+}
+
+// ik_channel_count is how many channels IK target `ik` has: 4 aiming, 7 reaching (its pole too).
+ik_channel_count :: proc(ik: Ik) -> int {
+  return 4 if ik.aim else 7
 }
 
 // root_channel is the first of the root's channels.
@@ -296,7 +300,7 @@ model_channel :: proc(m: ^Model, name: string) -> int {
   suffixes := IK_CHANNELS
   for ik, k in m.iks {
     if len(name) <= len(ik.name) || name[:len(ik.name)] != ik.name do continue
-    for x, n in suffixes[:7 if ik.pole else 4] do if name[len(ik.name):] == x do return ik_channel(m, k) + n
+    for x, n in suffixes[:ik_channel_count(ik)] do if name[len(ik.name):] == x do return ik_channel(m, k) + n
   }
   roots := ROOT_CHANNELS
   for r, k in roots do if r == name do return root_channel(m) + k
@@ -313,13 +317,28 @@ model_channel :: proc(m: ^Model, name: string) -> int {
   return -1
 }
 
+// model_channel3 is the three channels a vector named `name` sets: <name>_x, _y, _z (an IK
+// target, its pole, the root) or <name>.x, .y, .z (a BALL joint).
+model_channel3 :: proc(m: ^Model, name: string) -> (chs: [3]int, ok: bool) {
+  axes := AXIS_NAMES
+  for sep in ([2]string{"_", "."}) {
+    ok = true
+    for axis in Axis {
+      chs[axis] = model_channel(m, fmt.tprint(name, sep, axes[axis], sep = ""))
+      ok &&= chs[axis] >= 0
+    }
+    if ok do return
+  }
+  return
+}
+
 // channel_name is channel `i`'s name, allocated with `allocator` when it is made up.
 channel_name :: proc(m: ^Model, i: int, allocator := context.temp_allocator) -> string {
   if i < len(m.drivers) do return m.drivers[i].name
   suffixes, roots := IK_CHANNELS, ROOT_CHANNELS
   for ik, k in m.iks {
     first := ik_channel(m, k)
-    if i < first + (7 if ik.pole else 4) do return fmt.aprint(ik.name, suffixes[i - first], sep = "", allocator = allocator)
+    if i < first + ik_channel_count(ik) do return fmt.aprint(ik.name, suffixes[i - first], sep = "", allocator = allocator)
   }
   root := root_channel(m)
   if i < root + len(ROOT_CHANNELS) do return roots[i - root]

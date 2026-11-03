@@ -1,14 +1,15 @@
 // @ts-check
 // The Rig tab. Every axis of every joint is a channel clips key by itself (`l_forearm.elbow`), so
 // rigging is only what moves several joints at once: drivers (a curl closing nine knuckles), each
-// with its slider range and its drives; and IK targets (a chain reaching for a point, its point,
+// with its slider range and its moves (joints' channels turning per unit of it, each move starting
+// once the driver passes its delay); and IK targets (a chain reaching for a point, its point,
 // weight and pole channels named after it). Selecting an instance lists its joints' channels and
-// the drivers moving them. The pose test in the dock tries them. Keys and timing are the Animate
-// tab's.
+// the drivers moving them. The pose test in the dock tries them, and saves the rest pose clips
+// start from. Motions are the Animate tab's.
 import { btn, check, h, list, num, row, section, select, text } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { addIk, exposedJoints, IK_SUFFIXES, instanceIndex, jointAxes, jointChannel, jointRange, newDriver, POLE_SUFFIXES, renameDriver, renameIk } from "../model.js";
+import { addIk, driverChannels, exposedJoints, flatValues, IK_SUFFIXES, instanceIndex, jointAxes, jointChannel, jointRange, newDriver, packValues, POLE_SUFFIXES, renameDriver, renameIk } from "../model.js";
 import { partTree } from "./partTree.js";
 
 /** @param {any} kind @param {number} i */
@@ -25,7 +26,7 @@ export function rigSidebar() {
       const i = editor.part;
       const j = exposedJoints(m, i)[0];
       const d = newDriver(m, "driver", j && jointRange(j, jointAxes(j)[0] ?? "X"));
-      if (j && m.assembly[i]) d.drives = [{ part: m.assembly[i].name, joint: j.name, axis: jointAxes(j)[0] ?? "X", from: [0, 1], turn: 1 }];
+      if (j && m.assembly[i]) /** @type {any} */ (d).moves = [{ by: { [jointChannel(m.assembly[i].name, j, jointAxes(j)[0] ?? "X")]: 1 } }];
       editor.inspect = "driver";
       editor.driver = m.drivers.length - 1;
     });
@@ -36,8 +37,8 @@ export function rigSidebar() {
       list(
         m.drivers ?? [],
         (d) => {
-          const n = d.drives?.length ?? 0;
-          return [h("span", { class: "name", style: { flex: "1" } }, d.name), h("span", { class: "tag" }, n === 0 ? "moves nothing" : n > 1 ? `${n} joints` : `${d.drives[0].part}.${d.drives[0].joint}`)];
+          const chs = driverChannels(d);
+          return [h("span", { class: "name", style: { flex: "1" } }, d.name), h("span", { class: "tag" }, chs.length === 0 ? "moves nothing" : chs.length > 1 ? `${chs.length} joints` : chs[0])];
         },
         (i) => editor.inspect === "driver" && editor.driver === i,
         (i) => pick("driver", i),
@@ -77,27 +78,6 @@ function newIk() {
   });
 }
 
-/** a drive's mapping drawn over a little past its driver range @param {any} d */
-function driveCurve(d) {
-  const [f0, f1] = d.from ?? [0, 0];
-  const [t0, t1] = [0, d.turn ?? 0];
-  const lo = Math.min(t0, t1);
-  const span = Math.abs(t1 - t0) || 1;
-  const pts = [];
-  for (let i = 0; i <= 40; i++) {
-    const x = i / 40;
-    const s = f0 - (f1 - f0) * 0.25 + (f1 - f0) * 1.5 * x;
-    let t = f1 !== f0 ? (s - f0) / (f1 - f0) : 0;
-    if (d.clamp) t = Math.min(1, Math.max(0, t));
-    pts.push(`${x * 200},${56 - ((t0 + (t1 - t0) * t - lo) / span) * 48}`);
-  }
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 200 60");
-  svg.setAttribute("class", "curve");
-  svg.innerHTML = `<line x1="40" x2="40" y1="0" y2="60"/><line x1="160" x2="160" y1="0" y2="60"/><polyline points="${pts.join(" ")}"/>`;
-  return svg;
-}
-
 export function rigInspector() {
   const m = editor.model;
   /** @param {() => void} change @param {string} [key] */
@@ -106,8 +86,7 @@ export function rigInspector() {
   if (editor.inspect === "part" && m.assembly?.[editor.part]) {
     const inst = m.assembly[editor.part];
     const joints = exposedJoints(m, editor.part);
-    const driving = (/** @type {string} */ joint, /** @type {string} */ axis) =>
-      (m.drivers ?? []).map((/** @type {any} */ d, /** @type {number} */ k) => ({ d, k })).filter(({ d }) => (d.drives ?? []).some((/** @type {any} */ x) => x.part === inst.name && x.joint === joint && (x.axis ?? "X") === axis));
+    const driving = (/** @type {string} */ ch) => (m.drivers ?? []).map((/** @type {any} */ d, /** @type {number} */ k) => ({ d, k })).filter(({ d }) => driverChannels(d).includes(ch));
     const NEW = "(a new driver)";
     /** @param {string} joint @param {string} axis @param {string} v */
     const drive = (joint, axis, v) =>
@@ -115,7 +94,8 @@ export function rigInspector() {
         const jj = joints.find((/** @type {any} */ j) => j.name === joint);
         const d = v === NEW ? newDriver(m, `${inst.name}_${joint}${jointAxes(jj).length > 1 ? `_${axis.toLowerCase()}` : ""}`, jointRange(jj, axis)) : m.drivers.find((/** @type {any} */ x) => x.name === v);
         if (!d) return;
-        (d.drives ??= []).push({ part: inst.name, joint, axis, from: [0, 1], turn: 1 });
+        const mv = ((d.moves ??= [])[0] ??= { by: {} });
+        mv.by = packValues({ ...flatValues(mv.by), [jointChannel(inst.name, jj, axis)]: 1 });
         editor.inspect = "driver";
         editor.driver = m.drivers.indexOf(d);
       });
@@ -125,7 +105,7 @@ export function rigInspector() {
         jointAxes(j).map((axis) =>
           row(`${j.name} ${axis.toLowerCase()}`, [
             h("span", { class: "tag", title: "its own channel: clips key it by this name" }, jointChannel(inst.name, j, axis)),
-            ...driving(j.name, axis).map(({ d, k }) => btn(d.name, () => pick("driver", k), { title: `Driven by ${d.name}: click to edit it` })),
+            ...driving(jointChannel(inst.name, j, axis)).map(({ d, k }) => btn(d.name, () => pick("driver", k), { title: `Driven by ${d.name}: click to edit it` })),
             select({
               value: "",
               none: "+ driver",
@@ -135,44 +115,34 @@ export function rigInspector() {
           ]),
         ),
       ),
-      inst.mirror && h("div", { class: "muted", style: { padding: "4px 10px" } }, "Mirrored: the engine turns over the drives the reflection needs, so keep the other side's signs."),
+      inst.mirror && h("div", { class: "muted", style: { padding: "4px 10px" } }, "Mirrored: the engine turns over the turns the reflection needs, so keep the other side's signs."),
     ]);
   }
 
   if (editor.inspect === "ik" && m.iks?.[editor.ik]) {
     const ik = m.iks[editor.ik];
     const names = (m.assembly ?? []).map((/** @type {any} */ x) => x.name);
-    // a pole starts where the engine puts one by default: in front of the chain's middle joint,
-    // the way its stops let it bend (its channels are offsets from there)
-    const addPoleNow = () => {
-      edit(() => (ik.pole = true));
-      editor.select(() => POLE_SUFFIXES.forEach((x) => (editor.test[ik.name + x] = 0)));
-    };
     // the target where the tip is now: its channels are offsets from where the tip is at rest
     const toTip = () => {
       const at = frameNow(ik.tip);
       const s = m.scale ?? 1;
       const rest = editor.ask({ q: "handles" })?.iks?.find((/** @type {any} */ x) => x.name === ik.name)?.rest ?? [0, 0, 0];
       editor.select(() => {
-        ["_x", "_y", "_z"].forEach((x, i) => (editor.test[ik.name + x] = Math.round((at[i] - rest[i] / s) * 1e4) / 1e4));
+        // an aim's target starts where it looks at rest: straight ahead
+        ["_x", "_y", "_z"].forEach((x, i) => (editor.test[ik.name + x] = ik.aim ? 0 : Math.round((at[i] - rest[i] / s) * 1e4) / 1e4));
         editor.test[`${ik.name}_weight`] = 1;
       });
     };
     return section(
       "IK target",
       [
-        row("name", text({ value: ik.name, onchange: (v) => editor.edit("both", () => renameIk(editor.anim, ik, v)) }), "its channels are renamed with it, through the open animation"),
+        row("name", text({ value: ik.name, onchange: (v) => editor.edit("both", () => renameIk(m, editor.anim, ik, v)) }), "its channels are renamed with it, through the rest pose and the open animation"),
         row("root", select({ value: ik.root, options: names, onchange: (v) => edit(() => (ik.root = v)) }), "the top of the chain: every joint from its slot down to the tip turns"),
         row("tip", select({ value: ik.tip, options: names, onchange: (v) => edit(() => (ik.tip = v)) }), "the instance whose frame reaches the target"),
-        row("", check({ value: ik.hold, label: "hold its facing", onchange: (v) => edit(() => (v ? (ik.hold = true) : delete ik.hold)) }), "the tip's own joints (an ankle) keep it facing as the clip has it in the model's space, however the chain bends: a planted foot"),
+        row("", check({ value: ik.aim, label: "aim: look at the target", onchange: (v) => edit(() => (v ? ((ik.aim = true), delete ik.hold) : delete ik.aim)) }), "the chain, the tip's own joints too (a neck), turns the tip to face the target instead of reaching it: a head looking, a gun aiming. Its target is then an offset from a point ahead of the tip at rest"),
+        !ik.aim && row("", check({ value: ik.hold, label: "hold its facing", onchange: (v) => edit(() => (v ? (ik.hold = true) : delete ik.hold)) }), "the tip's own joints (an ankle) keep it facing as the clip has it in the model's space, however the chain bends: a planted foot"),
         row("channels", h("span", { class: "tag" }, IK_SUFFIXES.map((x) => ik.name + x).join(", ")), "x, y, z: the target, in the model's space, as an offset from where the tip is at rest (0: where it stands); weight: 0 as the joints' channels put it, 1 reaching"),
-        row(
-          "pole",
-          ik.pole
-            ? [h("span", { class: "tag" }, `${ik.name}_pole_x, _y, _z`), btn(icon("x"), () => edit(() => delete ik.pole), { kind: "icon", title: "Take the pole away" })]
-            : btn("+ pole", addPoleNow, { title: "Key where the chain bends toward (the knee, the elbow): without one it bends the way its middle joint's stops allow" }),
-          "the chain bends in the plane through it, so the knee points at it and never flips",
-        ),
+        !ik.aim && row("pole", h("span", { class: "tag" }, POLE_SUFFIXES.map((x) => ik.name + x).join(", ")), "moves the point the chain bends toward (the knee, the elbow) from where it is by default: in front of its middle joint, the way its stops let it bend. The chain bends in the plane through it, so the knee points at it and never flips"),
         row("", btn("Try it at the tip", toTip, { title: "Put the pose test's target on the tip as it is now, at full weight; then drag x, y, z in the dock" })),
       ],
       { actions: [btn(icon("trash"), () => edit(() => (m.iks.splice(editor.ik, 1), (editor.inspect = "character"))), { kind: "icon", title: "Delete this IK target" })] },
@@ -181,59 +151,52 @@ export function rigInspector() {
 
   if (editor.inspect === "driver" && m.drivers?.[editor.driver]) {
     const d = m.drivers[editor.driver];
-    const drives = d.drives ?? [];
-    const deg = drives.length > 0;
-    const movable = (m.assembly ?? []).filter((/** @type {any} */ x, /** @type {number} */ i) => exposedJoints(m, i).length > 0).map((/** @type {any} */ x) => x.name);
-    /** @param {number} k @param {(x: any) => void} change @param {string} [key] */
-    const set = (k, change, key) => edit(() => change(drives[k]), key);
-    const add = () =>
+    const moves = d.moves ?? [];
+    const deg = moves.length > 0;
+    // every joint's channel, the engine's names, for adding one to a move
+    const joints = editor.channels().filter((c) => c.kind === "joint").map((c) => c.name);
+    /** @param {number} k @param {(mv: any) => void} change @param {string} [key] */
+    const set = (k, change, key) => edit(() => change(moves[k]), key);
+    /** @param {any} mv @param {(flat: Record<string, number>) => void} change */
+    const by = (mv, change) => {
+      const flat = flatValues(mv.by);
+      change(flat);
+      mv.by = packValues(flat);
+    };
+    const addMove = () =>
       edit(() => {
-        const i = editor.part >= 0 && exposedJoints(m, editor.part).length ? editor.part : instanceIndex(m, movable[0]);
-        const j = exposedJoints(m, i)[0];
-        if (!j) return;
-        (d.drives ??= []).push({ part: m.assembly[i].name, joint: j.name, axis: jointAxes(j)[0] ?? "X", from: [0, 1], turn: 1 });
+        const last = moves.at(-1);
+        (d.moves ??= []).push({ ...(last ? { delay: Math.round(((last.delay ?? 0) + 0.2) * 100) / 100 } : {}), by: {} });
       });
-    const blocks = drives.map((/** @type {any} */ x, /** @type {number} */ k) => {
-      const joints = exposedJoints(m, instanceIndex(m, x.part));
-      const joint = joints.find((/** @type {any} */ j) => j.name === x.joint);
-      const axes = jointAxes(joint);
-      /** @param {number} n @param {number} v */
-      const from = (n, v) => set(k, (y) => ((y.from ??= [0, 0]), (y.from[n] = v)), `from${k}`);
-      const fix = (/** @type {any} */ y) => {
-        // keep the joint and axis ones the instance exposes
-        const js = exposedJoints(m, instanceIndex(m, y.part));
-        if (!js.some((/** @type {any} */ j) => j.name === y.joint)) y.joint = js[0]?.name;
-        const as = jointAxes(js.find((/** @type {any} */ j) => j.name === y.joint));
-        if (!as.includes(y.axis ?? "X")) y.axis = as[0] ?? "X";
-      };
+    const blocks = moves.map((/** @type {any} */ mv, /** @type {number} */ k) => {
+      const flat = flatValues(mv.by);
+      const has = Object.keys(flat);
       return h(
         "div",
         { class: "joint-item" },
-        row(`${k + 1}`, [
-          select({ value: x.part, options: movable.includes(x.part) ? movable : [...movable, x.part], onchange: (v) => set(k, (y) => ((y.part = v), fix(y))) }),
-          btn(icon("x"), () => edit(() => (drives.splice(k, 1), drives.length || delete d.drives)), { kind: "icon", title: "Remove this drive" }),
-        ]),
-        row("joint", [
-          select({ value: x.joint, options: joints.some((/** @type {any} */ j) => j.name === x.joint) ? joints.map((/** @type {any} */ j) => j.name) : [...joints.map((/** @type {any} */ j) => j.name), x.joint], onchange: (v) => set(k, (y) => ((y.joint = v), fix(y))) }),
-          select({ value: x.axis ?? "X", options: axes.length ? axes : [x.axis ?? "X"], onchange: (v) => set(k, (y) => (y.axis = v)) }),
-        ], "an exposed joint of the instance, and the axis it turns about"),
-        !joint && h("div", { class: "muted", style: { padding: "2px 0" } }, `${x.part} does not expose a joint ${x.joint}: the engine skips this drive`),
-        row("from", [0, 1].map((n) => num({ value: x.from?.[n] ?? 0, step: 0.05, digits: 4, onchange: (v) => from(n, v) })), "the driver's values…"),
-        row("turn", num({ value: x.turn ?? 0, step: 5, digits: 4, deg: true, onchange: (v) => set(k, (y) => (y.turn = v), `turn${k}`) }), "…map onto 0 to this turn (degrees)"),
-        row("", [check({ value: x.clamp, label: "clamp to the ends", onchange: (v) => set(k, (y) => (v ? (y.clamp = true) : delete y.clamp)) })]),
-        x.clamp || (x.from?.[0] ?? 0) !== 0 || (x.from?.[1] ?? 0) !== 1 ? driveCurve(x) : null,
+        row(`move ${k + 1}`, [
+          num({ value: mv.delay ?? 0, step: 0.05, digits: 3, onchange: (v) => set(k, (x) => (v ? (x.delay = v) : delete x.delay), `delay${k}`) }),
+          btn(icon("x"), () => edit(() => (moves.splice(k, 1), moves.length || delete d.moves)), { kind: "icon", title: "Remove this move" }),
+        ], "its delay: it starts once the driver passes this, in the driver's units"),
+        ...has.map((ch) =>
+          row(ch, [
+            num({ value: flat[ch], step: 5, digits: 4, deg: true, onchange: (v) => set(k, (x) => by(x, (f) => (f[ch] = v)), `turn${k}-${ch}`) }),
+            btn(icon("x"), () => set(k, (x) => by(x, (f) => delete f[ch])), { kind: "icon", title: "Take this joint out of the move" }),
+          ], joints.includes(ch) ? "degrees it turns per unit of the driver, past the delay" : "not a joint's channel in the model: the engine skips it"),
+        ),
+        row("", select({ value: "", none: "+ joint", options: joints.filter((c) => !has.includes(c)), onchange: (c) => c && set(k, (x) => by(x, (f) => (f[c] = 1))) })),
       );
     });
     return section(
       "Driver",
       [
-        row("name", text({ value: d.name, onchange: (v) => editor.edit("both", () => (renameDriver(editor.anim, d.name, v), (d.name = v))) }), "renames carry through the open animation"),
+        row("name", text({ value: d.name, onchange: (v) => editor.edit("both", () => (renameDriver(m, editor.anim, d.name, v), (d.name = v))) }), "renames carry through the rest pose and the open animation"),
         row(
           "slider range",
           [num({ value: d.min ?? 0, step: deg ? 5 : 0.05, digits: 4, deg, onchange: (v) => edit(() => (d.min = v), "min") }), num({ value: d.max ?? 0, step: deg ? 5 : 0.05, digits: 4, deg, onchange: (v) => edit(() => (d.max = v), "max") })],
           "its own units",
         ),
-        row("drives", btn(icon("plus"), add, { kind: "icon", title: "Drive another joint (the selected instance's first, else any)", disabled: movable.length === 0 }), drives.length ? "each moves one joint about one axis, adding onto that joint's own channel" : "none yet: + drives a joint"),
+        row("moves", btn(icon("plus"), addMove, { kind: "icon", title: "Add a move: joints that start turning once the driver passes its delay (a finger's tip after its base)" }), moves.length ? "each turns its joints per unit of the driver once the driver passes its delay, adding onto the joints' own channels; the joints' ranges stop them" : "none yet: + adds one"),
         blocks,
       ],
       { actions: [btn(icon("trash"), () => edit(() => (m.drivers.splice(editor.driver, 1), (editor.inspect = "character"))), { kind: "icon", title: "Delete this driver" })] },

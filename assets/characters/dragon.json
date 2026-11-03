@@ -22,6 +22,17 @@
       {"name": "charcoal", "color": [0.22, 0.28, 0.31], "metallic": 0.2, "roughness": 0.45}
     ],
     "hardware": {"female": "charcoal", "male": "slate", "metal": "cream"},
+    "pose": {
+      "jaw.jaw": 0.2094,
+      "l_forearm.elbow": 0.7854,
+      "l_shin.knee": 0.6109,
+      "l_thigh.disc": -0.4363,
+      "l_upper_arm.disc": 0.5236,
+      "r_forearm.elbow": 0.7854,
+      "r_shin.knee": 0.6109,
+      "r_thigh.disc": -0.4363,
+      "r_upper_arm.disc": 0.5236
+    },
     "parts": [
       {
         "name": "head",
@@ -764,20 +775,365 @@
     "clips": [
       {
         "name": "idle",
-        "duration": 2.4,
-        "keys": [
+        "duration": 4.8,
+        "motions": [
           {
-            "values": {
-              "jaw.jaw": 0.2094,
-              "l_forearm.elbow": 0.7854,
-              "l_shin.knee": 0.6109,
-              "l_thigh.disc": -0.4363,
-              "l_upper_arm.disc": 0.5236,
-              "r_forearm.elbow": 0.7854,
-              "r_shin.knee": 0.6109,
-              "r_thigh.disc": -0.4363,
-              "r_upper_arm.disc": 0.5236
-            }
+            "shape": [
+              {"v": -1, "ease": "SETTLE"},
+              {"u": 0.1667, "v": -0.3333, "ease": "SETTLE"},
+              {"u": 0.3333, "v": 0.3333, "ease": "SETTLE"},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.6667, "v": 0.3333, "ease": "SETTLE"},
+              {"u": 0.8333, "v": -0.3333, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root_turn_y": 0.3
+                }
+              },
+              {
+                "by": {
+                  "segment_1.spine.z": -0.3
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.125, "v": 1, "ease": "SETTLE"},
+              {"u": 0.375, "v": 1},
+              {"u": 0.625, "v": -1, "ease": "SETTLE"},
+              {"u": 0.875, "v": -1}
+            ],
+            "rate": 2,
+            "moves": [
+              {
+                "by": {
+                  "taper_1.spine.z": 0.06,
+                  "taper_2.spine2.z": -0.06
+                }
+              },
+              {
+                "delay": 0.125,
+                "by": {
+                  "taper_2.spine2.z": 0.06,
+                  "taper_3.spine2.z": -0.06
+                }
+              },
+              {
+                "delay": 0.25,
+                "by": {
+                  "taper_3.spine2.z": 0.06,
+                  "taper_4.spine2.z": -0.06
+                }
+              },
+              {
+                "delay": 0.375,
+                "by": {
+                  "tail.spine2.z": -0.06,
+                  "taper_4.spine2.z": 0.06
+                }
+              },
+              {
+                "delay": 0.5,
+                "by": {
+                  "tail.spine2.z": 0.06
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "combat_idle",
+        "duration": 2.4,
+        "motions": [
+          {
+            "moves": [
+              {
+                "by": {
+                  "jaw.jaw": 0.2406,
+                  "l_forearm.elbow": 0.4146,
+                  "l_upper_arm.disc": -1.1236,
+                  "r_forearm.elbow": 0.4146,
+                  "r_upper_arm.disc": -1.1236,
+                  "root_turn_x": -0.3,
+                  "root_y": 1.4,
+                  "segment_3.spine.x": 0.3
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.15, "v": 1, "ease": "SETTLE"},
+              {"u": 0.35, "v": 1},
+              {"u": 0.65, "v": -1, "ease": "SETTLE"},
+              {"u": 0.85, "v": -1}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root_x": 0.35
+                }
+              },
+              {
+                "delay": 0.08,
+                "by": {
+                  "root_turn_y": -0.08,
+                  "segment_1.spine.z": 0.08
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.125, "v": 1, "ease": "SETTLE"},
+              {"u": 0.375, "v": 1},
+              {"u": 0.625, "v": -1, "ease": "SETTLE"},
+              {"u": 0.875, "v": -1}
+            ],
+            "rate": 2,
+            "moves": [
+              {
+                "by": {
+                  "taper_1.spine.z": 0.12,
+                  "taper_2.spine2.z": -0.12
+                }
+              },
+              {
+                "delay": 0.15,
+                "by": {
+                  "taper_2.spine2.z": 0.12,
+                  "taper_3.spine2.z": -0.12
+                }
+              },
+              {
+                "delay": 0.3,
+                "by": {
+                  "taper_3.spine2.z": 0.12,
+                  "taper_4.spine2.z": -0.12
+                }
+              },
+              {
+                "delay": 0.45,
+                "by": {
+                  "tail.spine2.z": -0.12,
+                  "taper_4.spine2.z": 0.12
+                }
+              },
+              {
+                "delay": 0.6,
+                "by": {
+                  "tail.spine2.z": 0.12
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"v": -1, "ease": "SETTLE"},
+              {"u": 0.25, "ease": "SETTLE"},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.75, "ease": "SETTLE"}
+            ],
+            "rate": 2,
+            "moves": [
+              {
+                "by": {
+                  "jaw.jaw": 0.12
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "slither",
+        "duration": 1.6,
+        "motions": [
+          {
+            "moves": [
+              {
+                "by": {
+                  "jaw.jaw": -0.1094,
+                  "l_forearm.elbow": 0.2146,
+                  "l_shin.knee": 0.2891,
+                  "l_thigh.disc": 1.5363,
+                  "l_upper_arm.disc": 0.7764,
+                  "r_forearm.elbow": 0.2146,
+                  "r_shin.knee": 0.2891,
+                  "r_thigh.disc": 1.5363,
+                  "r_upper_arm.disc": 0.7764
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.2, "v": 1, "ease": "SETTLE"},
+              {"u": 0.3, "v": 1},
+              {"u": 0.7, "v": -1, "ease": "SETTLE"},
+              {"u": 0.8, "v": -1}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "segment_1.spine.z": 0.22,
+                  "segment_2.spine.z": -0.22
+                }
+              },
+              {
+                "delay": 0.1,
+                "by": {
+                  "segment_2.spine.z": 0.2288,
+                  "segment_3.spine.z": -0.2288
+                }
+              },
+              {
+                "delay": 0.2,
+                "by": {
+                  "segment_3.spine.z": 0.2376,
+                  "segment_4.spine.z": -0.2376
+                }
+              },
+              {
+                "delay": 0.3,
+                "by": {
+                  "segment_4.spine.z": 0.2464,
+                  "segment_5.spine.z": -0.2464
+                }
+              },
+              {
+                "delay": 0.4,
+                "by": {
+                  "segment_5.spine.z": 0.2552,
+                  "segment_6.spine.z": -0.2552
+                }
+              },
+              {
+                "delay": 0.5,
+                "by": {
+                  "segment_6.spine.z": 0.264,
+                  "taper_1.spine.z": -0.264
+                }
+              },
+              {
+                "delay": 0.6,
+                "by": {
+                  "taper_1.spine.z": 0.2728,
+                  "taper_2.spine2.z": -0.2728
+                }
+              },
+              {
+                "delay": 0.7,
+                "by": {
+                  "taper_2.spine2.z": 0.2816,
+                  "taper_3.spine2.z": -0.2816
+                }
+              },
+              {
+                "delay": 0.8,
+                "by": {
+                  "taper_3.spine2.z": 0.2904,
+                  "taper_4.spine2.z": -0.2904
+                }
+              },
+              {
+                "delay": 0.9,
+                "by": {
+                  "tail.spine2.z": -0.2992,
+                  "taper_4.spine2.z": 0.2992
+                }
+              },
+              {
+                "delay": 1,
+                "by": {
+                  "tail.spine2.z": 0.308
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "attack",
+        "duration": 1.2,
+        "motions": [
+          {
+            "shape": [
+              {},
+              {"u": 0.025},
+              {"u": 0.25, "v": 1, "ease": "OUT"},
+              {"u": 0.325, "v": 1},
+              {"u": 0.5}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root": [0, 1.4, -1],
+                  "root_turn_x": -0.3,
+                  "segment_3.spine.x": 0.3
+                }
+              },
+              {
+                "delay": 0.025,
+                "by": {
+                  "segment_2.spine.z": 0.35,
+                  "segment_4.spine.z": -0.5,
+                  "segment_6.spine.z": 0.35
+                }
+              },
+              {
+                "delay": 0.05,
+                "by": {
+                  "jaw.jaw": 0.6
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {},
+              {"u": 0.4},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.7, "v": 1},
+              {"u": 0.94}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root": [0, -0.2, 2.2],
+                  "root_turn_x": 0.15,
+                  "segment_2.spine.x": -0.15
+                }
+              },
+              {
+                "delay": 0.06,
+                "by": {
+                  "l_forearm.elbow": -0.4,
+                  "l_upper_arm.disc": -1,
+                  "r_forearm.elbow": -0.4,
+                  "r_upper_arm.disc": -1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.45},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.75, "v": 1},
+              {"u": 1}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "jaw.jaw": -0.2094
+                }
+              }
+            ]
           }
         ]
       }

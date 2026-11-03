@@ -78,6 +78,9 @@ body[data-dock="right"] #inspector, body[data-dock="both"] #inspector { border-b
 #viewport-tools .btn:not(.on) { background: var(--glass); backdrop-filter: blur(4px); }
 #viewport-tools .explode { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; background: var(--glass); backdrop-filter: blur(4px); color: var(--muted); }
 #viewport-tools .explode input { width: 110px; }
+#player { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 8px; background: var(--glass); backdrop-filter: blur(4px); }
+#player[hidden] { display: none; }
+#player select { flex: 0 0 auto; }
 #dock { grid-area: dock; background: var(--panel); border-top: 1px solid var(--line); min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 
 /* header: the character on the left, the tabs centred, actions on the right */
@@ -112,7 +115,7 @@ button.btn.icon { padding: 2px 7px; background: transparent; border-color: trans
 button.btn.icon:hover:not(:disabled) { color: var(--text); border-color: var(--line); }
 select, input[type="text"] { background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; min-width: 0; outline: none; }
 select:focus, input[type="text"]:focus { border-color: var(--accent); }
-select { flex: 1; }
+select { flex: 1; max-width: 100%; text-overflow: ellipsis; }
 input[type="text"] { flex: 1; width: 100%; }
 input[type="range"] { flex: 1; min-width: 40px; accent-color: var(--accent); }
 input[type="checkbox"] { accent-color: var(--accent); }
@@ -158,8 +161,6 @@ input[type="color"] { width: 36px; height: 24px; padding: 0; border: 1px solid v
 .item.tree:hover > .guide::before, .item.tree.on > .guide::before { border-left-color: var(--muted); }
 .tag { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); flex: none; }
-.group-title { width: 100%; text-align: left; background: none; border: 0; color: var(--muted); font: 600 11px system-ui; padding: 6px 0 3px; cursor: pointer; display: flex; gap: 6px; align-items: center; }
-.group-title .count { margin-left: auto; font-weight: 400; opacity: 0.7; }
 .channel { display: grid; grid-template-columns: 110px 1fr auto; gap: 6px; align-items: center; padding: 1px 0; }
 .channel .name { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .channel.missing { color: var(--warn); }
@@ -173,15 +174,11 @@ input[type="color"] { width: 36px; height: 24px; padding: 0; border: 1px solid v
 .dock-title { font: 600 11px system-ui; letter-spacing: 0.06em; text-transform: uppercase; }
 .dock-scroll { flex: 1; overflow: auto; min-height: 0; }
 .columns { padding: 4px 12px; columns: 340px; column-gap: 24px; }
-.columns .group { break-inside: avoid; }
 .time { font-variant-numeric: tabular-nums; min-width: 96px; margin-left: 4px; }
 .muted { color: var(--muted); }
 .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .timeline-space { position: relative; }
 .timeline { display: block; position: sticky; top: 0; left: 0; outline: none; }
-.pop { position: relative; }
-.menu { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 10; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 4px; min-width: 220px; box-shadow: 0 8px 24px var(--shadow); }
-.menu label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
 
 /* icons (js/icons.js) */
 .icon { display: block; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -194,7 +191,6 @@ button.btn.icon:has(> .icon) { padding: 3px 4px; }
 .dirty { display: inline-flex; }
 .prim { color: var(--muted); }
 .item.on .prim { color: var(--accent); }
-.count-key { display: inline-flex; align-items: center; gap: 2px; }
 /* socket snapping: the six faces of a parent shape */
 .snap { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; flex: 1; }
 .snap .btn { padding: 2px 0; font-size: 11px; }
@@ -219,3 +215,4 @@ dialog.kit footer .row { grid-template-columns: 40px 90px; }
 #gizmo .hit { pointer-events: all; cursor: grab; }
 #gizmo .handle:hover path:first-child { stroke-width: 4; }
 #viewport-tools .segmented { margin-right: 6px; }
+.subhead { padding: 10px 10px 2px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; }
