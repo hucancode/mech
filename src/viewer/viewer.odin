@@ -36,7 +36,7 @@ App :: struct {
   // what to show; the page sets these
   show:       character.Show,
   clip:       int,
-  values:     [dynamic]f32, // for Show.VALUES, one per driver
+  values:     [dynamic]f32, // for Show.VALUES, a pose's values
   time:       f32,
   playing:    bool,
   speed:      f32,
@@ -266,15 +266,18 @@ set_animation :: proc(text: []u8) -> bool {
 // leaves out are at the rest pose (Model.pose).
 set_values :: proc(text: []u8) -> bool {
   if !app.has_asset do return false
-  values: map[string]f32
-  defer delete(values)
+  // by channel, shaped as it is (mech.Value): each replaces the rest pose's
+  values: map[string]mech.Value
   if err := json.unmarshal(text, &values, allocator = context.temp_allocator); err != nil {
     log.errorf("bad values: %v", err)
     return false
   }
   m := app.asset.model
   resize(&app.values, mech.model_channels(m))
-  for &v, i in app.values do v = values[mech.channel_name(m, i)] or_else app.asset.clips.pose[i]
+  copy(app.values[:], app.asset.clips.pose[:])
+  targets := make([dynamic]mech.Target, context.temp_allocator)
+  mech.targets_resolve(m, "values", values, &targets)
+  for t in targets do app.values[t.index] = t.value
   app.show = .VALUES
   apply_show()
   return true

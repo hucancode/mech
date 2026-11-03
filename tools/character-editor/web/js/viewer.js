@@ -74,7 +74,7 @@ export class Viewer {
     return this.withText(JSON.stringify(anim), (p, n) => this.x.viewer_set_animation(p, n)) !== 0;
   }
 
-  /** showValues holds the mech in these channel values; others at the rest pose (the model's `pose`). @param {Record<string, number>} values */
+  /** showValues holds the mech in these channel values (by channel: a number or [x, y, z]); others at the rest pose (the model's `pose`). @param {Record<string, number | number[]>} values */
   showValues(values) {
     return this.withText(JSON.stringify(values), (p, n) => this.x.viewer_set_values(p, n)) !== 0;
   }

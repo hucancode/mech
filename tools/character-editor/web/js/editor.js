@@ -5,7 +5,7 @@
 
 import { listCharacters, readFile } from "./api.js";
 import { fromQuat } from "./math3.js";
-import { clone, flatValues, jointAxes, jointChannel, packValues, respan, uniqueName, vectors } from "./model.js";
+import { addValue, clone, respan, setDofsSource, uniqueName, zipValue } from "./model.js";
 import { blankCharacter, exportFile, loadLocal, localNames, pickFile, saveLocal } from "./store.js";
 import { Viewer } from "./viewer.js";
 
@@ -13,7 +13,7 @@ import { Viewer } from "./viewer.js";
 export const ALONE_SCALE = 1;
 
 /** @typedef {"model" | "assemble" | "rig" | "animation"} Tab */
-/** @typedef {"character" | "part" | "material" | "driver" | "ik"} Inspect */
+/** @typedef {"character" | "part" | "material" | "ik" | "arc"} Inspect */
 /** @typedef {"data" | "select" | "time" | "status"} Change */
 
 class Editor {
@@ -43,17 +43,17 @@ class Editor {
     this.def = 0;
     this.shape = -1;
     this.slot = -1;
-    /** @type {{move: string[], turn: string[]} | undefined} the root's channels, from the engine (rootChannels) */
-    this.root = undefined;
-    /** @type {string} what the view's handles move in the rig and animate tabs: "root", an IK target's name, or "" */
+    /** @type {string} what the view's handles move in the rig and animate tabs: "root", an IK target's name, an arc's point (gizmo.arcHandle), or "" */
     this.handle = "";
     /** @type {number[]} shapes selected with the selected one (shift-click) */
     this.also = [];
     /** @type {{spanned: any, flat: any}[]} shapes copied (Cmd-C): as they were, and in their part's frame */
     this.clipShapes = [];
     this.joint = -1; // of the joints the part hangs by, the one selected (the joint tool)
-    /** @type {Record<string, number>} the part's joints tried, never saved: by their channels (jointChannel) */
+    /** @type {Record<string, import("./model.js").Value>} the part's joints tried, never saved: by their channels (jointChannel) */
     this.tries = {};
+    // joints' channels are named as the engine has them
+    setDofsSource((j) => this.viewer?.query({ q: "dofs", joint: j }) ?? null);
     this.explode = 0; // the part's shapes pushed apart, 0 to 1
     this.mirrored = false; // preview the part as a mirrored instance shows it (the right side)
     /** @type {"hidden" | "point" | "label"} IK targets and poles in the view (rig and animate tabs), kept in this browser */
@@ -63,9 +63,12 @@ class Editor {
     this.inspect = "character";
     this.part = -1; // an instance of the assembly
     this.material = -1;
-    this.driver = -1;
     this.ik = -1;
-    /** @type {Record<string, number>} the pose test: channel values tried on the rest pose */
+    /** @type {string} the arc being edited (Animation.arcs), "" for none */
+    this.arc = "";
+    /** @type {string} the position the edited arc is shown on when the motion shown doesn't use it */
+    this.arcOn = "";
+    /** @type {Record<string, import("./model.js").Value>} the pose test: channel values tried on the rest pose */
     this.test = {};
 
     // animation
@@ -164,7 +167,7 @@ class Editor {
     this.modelDirty = this.animDirty = false;
     this.undoStack = [];
     this.redoStack = [];
-    this.part = this.shape = this.slot = this.material = this.driver = this.ik = -1;
+    this.part = this.shape = this.slot = this.material = this.ik = -1;
     this.also = [];
     this.def = 0;
     this.inspect = "character";
@@ -250,7 +253,7 @@ class Editor {
   // alone is the model the model tab shows: the selected library part, placed once at the origin,
   // hanging by its joints; mirrored, as the other side shows it, when previewing that. It shows in model units
   // (ALONE_SCALE), not scaled to the character's size.
-  // Each axis of the joints it hangs by is a channel of its own (jointChannel), which the joints' try sliders
+  // Each joint it hangs by is a channel of its own (jointChannel), which the joints' try sliders
   // and the joint tool set (this.tries), so a joint can be tried before it is rigged.
   alone() {
     const m = this.model;
@@ -261,15 +264,14 @@ class Editor {
       materials: m.materials,
       hardware: m.hardware,
       parts: part ? [part] : [],
-      assembly: part ? [{ name: part.name, part: part.name, ...(this.mirrored ? { mirror: true } : {}) }] : [],
+      // mirroring names a twin; alone, it names its own part (no twin there): reflected only
+      assembly: part ? [{ name: part.name, part: part.name, ...(this.mirrored ? { mirror: part.name } : {}) }] : [],
     };
   }
 
-  /** setTry turns a joint the model tab shows, to try it; never saved @param {string} joint @param {string} axis @param {number} v */
-  setTry(joint, axis, v) {
-    const part = this.model.parts?.[this.def];
-    const j = part?.joints?.find((/** @type {any} */ x) => x.name === joint);
-    if (j) this.tries[jointChannel(part.name, j, axis)] = v;
+  /** setTry moves a joint the model tab shows, to try it; never saved @param {string} channel its channel (the joints query's) @param {import("./model.js").Value} v */
+  setTry(channel, v) {
+    if (channel) this.tries[channel] = v;
     this.viewer?.showValues(this.tries);
   }
 
@@ -523,11 +525,11 @@ class Editor {
   }
 
   /**
-   * setChannels sets channel values from the view's handles: the pose test's in the rig tab; in
-   * the animate tab, the shown motion's move (the one picked, else its first) changes its amounts
-   * so the pose shown now becomes these values: by the change over how much of them the move adds
-   * now (its shape at the playhead). `coalesce` makes a drag one undo step.
-   * @param {Record<string, number>} values @param {string} [coalesce]
+   * setChannels sets channel values from the view's handles (by channel: a number or [x, y, z]):
+   * the pose test's in the rig tab; in the animate tab, the shown motion's move (the one picked,
+   * else its first) changes its amounts so the pose shown now becomes these values: by the change
+   * over how much of them the move adds now (its shape at the playhead). `coalesce` makes a drag
+   * one undo step. @param {Record<string, import("./model.js").Value>} values @param {string} [coalesce]
    */
   setChannels(values, coalesce) {
     if (this.tab === "rig") {
@@ -542,42 +544,49 @@ class Editor {
     // how much of its amounts the move adds now
     const d = this.clipData.duration || 1;
     const lane = this.ask({ q: "motion", clip: this.clipData.name, motion: this.motion, n: 201 })?.moves?.[k];
-    const f = lane ? lane.values[Math.round((Math.min(Math.max(this.time / d, 0), 1)) * 200)] : 1;
+    const at = Math.round(Math.min(Math.max(this.time / d, 0), 1) * 200);
+    const f = lane ? lane.values[at] : 1;
     if (Math.abs(f) < 0.05) return this.flash("This move adds nothing now: move the playhead to where it acts");
-    // a vector (an IK target, a ball joint) moves whole: its other axes as shown now
     const shown = this.shown();
-    /** @type {Record<string, number>} */
-    const whole = {};
-    for (const e of vectors(this.channels().map((c) => c.name))) if (e.names.some((n) => n in values)) for (const n of e.names) whole[n] = values[n] ?? shown[n] ?? 0;
+    // a twin move: a channel the move moves only as its twin's twin goes into its twin's amount, by
+    // how much of it the twins add now (half a cycle on when OPPOSITE), x mirrored
+    const twins = mv.twin && mv.twin !== "NONE" ? (this.ask({ q: "twins" }) ?? {}) : {};
+    const ft = lane?.twin ? lane.twin.values[at] : f;
+    const r4 = (/** @type {number} */ x) => Math.round(x * 1e4) / 1e4;
     this.edit(
       "anim",
       () => {
-        const by = flatValues(mv.by);
-        for (const [n, v] of Object.entries(whole)) by[n] = Math.round(((by[n] ?? 0) + (v - (shown[n] ?? 0)) / f) * 1e4) / 1e4;
-        mv.by = packValues(by);
+        mv.by ??= {};
+        for (const [n, v] of Object.entries(values)) {
+          const change = zipValue(v, shown[n], (x, y) => x - y);
+          const t = twins[n];
+          if (!(n in mv.by) && t && typeof mv.by[t.twin] !== "string" && t.twin in mv.by) {
+            if (Math.abs(ft) >= 0.05) mv.by[t.twin] = zipValue(addValue(mv.by[t.twin], zipValue(change, t.flip, (x, fl) => x / (ft * fl))), 0, r4);
+            continue;
+          }
+          if (typeof mv.by[n] === "string") continue; // on an arc: drag its points
+          mv.by[n] = zipValue(addValue(mv.by[n], zipValue(change, 0, (x) => x / f)), 0, r4);
+        }
       },
       coalesce,
     );
   }
 
-  /** the root's channels, the values after the drivers (the engine's "info"): those moving it (model units) and turning it (radians) @returns {{move: string[], turn: string[]}} */
+  /** the root's channels (the "channels" query: the position and the rotation no IK target or joint owns): {move, turn} names @returns {{move: string, turn: string}} */
   rootChannels() {
-    if (!this.root) {
-      const info = this.viewer?.query({ q: "info" });
-      if (info?.root) this.root = info.root;
-    }
-    return this.root ?? { move: [], turn: [] };
+    const cs = this.channels().filter((c) => !c.ik && !c.part);
+    return { move: cs.find((c) => c.kind === "POSITION")?.name ?? "", turn: cs.find((c) => c.kind === "BALL")?.name ?? "" };
   }
 
-  /** every channel of the character, in the engine's order (the "channels" query): {name, kind, angle, min, max, part?, ik?} @returns {any[]} */
+  /** every channel of the character, in the engine's order (the "channels" query): {name, kind, size, min, max, part?, ik?} @returns {any[]} */
   channels() {
     return this.viewer?.query({ q: "channels" }) ?? [];
   }
 
   // shown is the channels as the viewer shows them now.
-  /** @returns {Record<string, number>} */
+  /** @returns {Record<string, import("./model.js").Value>} */
   shown() {
-    return this.viewer?.query({ q: "state" }).drivers ?? {};
+    return this.viewer?.query({ q: "state" }).values ?? {};
   }
 
   /** @param {Tab} tab */

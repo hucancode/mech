@@ -9,23 +9,25 @@ import "../mjolnir/geometry"
 import "../mjolnir/render"
 import "../mjolnir/world"
 
-// A Rig is a Model in a scene: a bone per moving joint and a node per piece. Bones are flat
+// A Rig is a Model in a scene: a bone per joint and a node per piece. Bones are flat
 // children of the rig's `frame` node (scaled by the model's scale); pieces are children of their
 // bone, so posing writes one transform per bone and none per piece.
 //
-// rig_pose takes one value per model channel (its drivers, then the root's) and solves, in order: each bone's motion from the
+// rig_pose takes a pose's values (model_channel_table) and solves, in order: each bone's motion from the
 // drives, then IK, then each bone from its parent.
 
-// Bone is one per moving joint (and an anchor at the origin per root), at the joint's pivot:
-// `offset` and `rest` on its parent, then moved by its drives, then turned about the axes in
-// `turns` by IK, its turns held within `lo`..`hi` (its joint's range, turned over where a mirror
-// turns the axis over; an axis whose ends are equal is free).
+// Bone is one per joint (and an anchor at the origin per root), at the joint's pivot:
+// `offset` and `rest` on its parent, then moved by its drives (turned, or a linear actuator's slid
+// out along its -y), then turned about the axes in `turns` by IK, its turns held within `lo`..`hi`
+// (its joint's range, turned over where a mirror turns the axis over; an axis whose ends are equal
+// is free) and its slide within `stroke`.
 Bone :: struct {
   parent: int,
   offset: [3]f32,
   rest:   quaternion128,
   turns:  bit_set[Axis],
   lo, hi: [3]f32,
+  stroke: [2]f32, // a linear actuator's: how far it slides out, its min and max (equal: free)
   part:   int, // the instance whose joint it is
   joint:  int, // which of its instance's joints (instance_joints); -1: a root's anchor
   node:   world.NodeHandle,
@@ -41,31 +43,36 @@ Piece :: struct {
   node:      world.NodeHandle,
 }
 
-// RigDrive is a driver's move on one joint axis, resolved: channel `channel` past `delay` turns bone
-// `bone` by `turn` per unit, mirrored instances' already turned over. A joint's own channels are
-// drives too, 1 radian per unit.
+// RigDrive is a joint's value `channel` (a pose's) turning bone `bone` about `axis`, a radian a
+// unit, `turn` -1 where a mirrored instance turns it over; or, `slide`, sliding it out (a model
+// unit a unit).
 @(private)
 RigDrive :: struct {
   bone, channel: int,
   axis:          Axis,
-  delay, turn:   f32,
+  turn:          f32,
+  slide:         bool,
 }
 
 // RigIk: the chain's bones are chains[first:][:count], root first, down to the tip's own; IK reaches
-// with the first `turning`, and turns the tip's own (an ankle, a wrist) only to `hold` the tip
-// facing as its channels turned it, in the model's space. `tip` is the instance whose frame
-// reaches; `channel` is the first of its channels (IK_CHANNELS), its target an offset from
-// `rest`, where the tip is at rest (in the frame node's space, lifted). `mid` is the chain's
-// middle joint (chain_middle; -1 for none), which bends toward a pole: `pole_rest`, in front of
-// that joint at rest the way its stops let it bend, moved by the pole's channels.
+// with the first `turning`; when it `holds` (its end stands on the ground at rest: a foot), it turns
+// the tip's own joints (an ankle) only to hold the tip facing as its channels turned it, in the
+// model's space; otherwise (a hand, a gun) they keep their channels' turns. `tip` is the instance that reaches, with
+// its end (`point`, in its frame: ik_point); `channel` is the first of its values (IK_VALUES),
+// its target an offset from `rest`, where that end is at rest (in the frame node's space, lifted). `mid` is the chain's
+// middle joint (chain_middle; -1 for none), which bends toward a pole (ik_pole): `bend` is the way
+// its stops let it bend at rest, in the model's space, `line` the way from the joint above the
+// middle one to the tip at rest, and `length` the chain's, root to tip.
 // An aiming one (`aim`) turns its whole chain so the tip's `look` (a direction in its frame: ahead
 // at rest) points at the target, `rest` then being a point ahead of the tip.
 RigIk :: struct {
   first, count, turning, tip: int,
   channel:                    int,
-  hold, aim:                  bool,
+  aim, holds:                 bool,
   mid:                        int,
-  rest, pole_rest, look:      [3]f32,
+  rest, bend, look, line:     [3]f32,
+  point:                      [3]f32,
+  length:                     f32,
 }
 
 Rig :: struct {
@@ -76,7 +83,8 @@ Rig :: struct {
   frames:  [dynamic]Frame, // per instance: where its part's shapes and slots sit
   poses:   [dynamic]geometry.Transform, // per bone, in the frame node's space, from the last pose
   motion:  [dynamic][3]f32, // per bone, its turns from rest about x, y, z (euler), IK included
-  values:  [dynamic]f32, // the drivers the last pose showed
+  slide:   [dynamic]f32, // per bone, how far it slid out (a linear actuator's), model units
+  values:  [dynamic]f32, // the values the last pose showed
   drives:  [dynamic]RigDrive,
   iks:     [dynamic]RigIk,
   chains:  [dynamic]int,
@@ -120,14 +128,9 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
 
   // per instance, its last joint's mirror: how its part's shapes and slots show
   mirrors := make([]Mirror, len(m.assembly), context.temp_allocator)
-  // every joint of every instance as built, instance i's from firsts[i], each with its own mirror
-  Placed :: struct {
-    bone:   int,
-    joint:  Joint,
-    mirror: Mirror,
-  }
-  placed := make([dynamic]Placed, context.temp_allocator)
-  firsts := make([]int, len(m.assembly), context.temp_allocator)
+  resize(&rig.values, model_channels(m))
+  // each joint's channel, its values moving its bone, in the order of the pose
+  ch := joint_channel(m, 0)
   for inst, i in m.assembly {
     b.part, b.joint = i, -1
     parent := model_instance(m, inst.parent) if inst.parent != "" else -1
@@ -145,68 +148,52 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
       if k := part_slot(m, pp, inst.parent_slot); k >= 0 do socket = slot_face(m.parts[pp].slots[k])
       else do log.warnf("model %s: %s matches unknown slot %s of %s", m.name, inst.name, inst.parent_slot, inst.parent)
     }
-    if parent >= 0 && m.assembly[parent].mirror do socket = mirror_face(mirrors[parent], socket)
-    // its part's joints; none bolts the part on rigid, as a FIXED joint
+    if parent >= 0 && m.assembly[parent].mirror != "" do socket = mirror_face(mirrors[parent], socket)
+    // its part's joints; none bolts the part straight onto the socket, rigid
+    mirrored := inst.mirror != ""
     stack := instance_joints(m, i)
-    if len(stack) == 0 do stack = {{}}
-    firsts[i] = len(placed)
+    for x in inst.joints {
+      known := false
+      for j in stack do known ||= j.name == x.name
+      if !known do log.warnf("model %s: %s sets joint %s at rest, which part %s lacks", m.name, inst.name, x.name, inst.part)
+    }
     mi := MIRROR_NONE
-    for unscaled, k in stack {
-      j := joint_scaled(unscaled)
+    if len(stack) == 0 {
+      frame = {frame.bone, geometry.transform_mul(frame.place, geometry.seat(socket, PART_FACE))}
+      if mirrored do mi = face_mirror(SLOT_FACE.forward, SLOT_FACE)
+    }
+    for j, k in stack {
       b.joint = k
-      if k > 0 do socket = mirror_face(mi, SLOT_FACE) if inst.mirror else SLOT_FACE
-      // a twist reflected turns the other way
-      socket = twist_face(socket, -j.twist if inst.mirror else j.twist)
-      frame = joint_build(&b, frame, socket, j)
-      if inst.mirror do mi = joint_mirror(j)
-      append(&placed, Placed{frame.bone, j, mi})
-      // its range, on the bone it moves (a FIXED joint has none of its own)
-      if _, count := joint_dofs(j); count > 0 do bone_limit(&rig.bones[frame.bone], j, mi)
+      // how the instance sets it at rest: its twist turns its socket (reflected, the other way),
+      // its bend its first axis
+      twist, bend := instance_rest(inst, j.name)
+      if k > 0 do socket = mirror_face(mi, SLOT_FACE) if mirrored else SLOT_FACE
+      socket = twist_face(socket, -twist if mirrored else twist)
+      // a pin hinge's base plates are round where a turntable next to it in the stack turns them
+      round := [2]bool{k > 0 && joint_turntable(stack[k - 1]), k + 1 < len(stack) && joint_turntable(stack[k + 1])}
+      frame = joint_build(&b, frame, socket, j, bend, round)
+      if mirrored do mi = joint_mirror(j, bend)
+      // its stops, on the bone it moves, and its channel's values driving it
+      bone_limit(&rig.bones[frame.bone], j, mi)
+      axes, count := joint_axes(j)
+      for axis in axes[:count] {
+        append(&rig.drives, RigDrive{frame.bone, ch, axis, -1 if mi.turn[axis] && j.kind != .LINEAR else 1, j.kind == .LINEAR})
+        ch += 1
+      }
     }
     // the part's origin sits on the last joint's male half (PART_FACE on SLOT_FACE: as it is)
-    mirrors[i] = mi if inst.mirror else MIRROR_NONE
+    mirrors[i] = mi if mirrored else MIRROR_NONE
     append(&rig.frames, frame)
     if part < 0 do continue
     for s, k in m.parts[part].shapes {
       for name in s.span do if _, known := part_point(m.parts[part], name); !known do log.warnf("model %s: a shape of part %s spans unknown slot %s", m.name, inst.part, name)
       at, turn, size := shape_place(m.parts[part], s)
       place := geometry.Transform{at, turn, primitive_scale(s.primitive, size)}
-      if inst.mirror do place = mirror_shape(mirrors[i], place, s.primitive)
+      if mirrored do place = mirror_shape(mirrors[i], place, s.primitive)
       add_piece(&b, frame.bone, geometry.transform_mul(frame.place, place), s.primitive, s.param, paint(&b, s.material), k)
     }
   }
 
-  resize(&rig.values, model_channels(m))
-  // each joint's own channels, then the drivers'
-  ch := joint_channel(m, 0)
-  for _, i in m.assembly {
-    for j, k in instance_joints(m, i) {
-      p := placed[firsts[i] + k]
-      dofs, count := joint_dofs(j)
-      for d in dofs[:count] {
-        append(&rig.drives, RigDrive{p.bone, ch, d.axis, 0, -1 if p.mirror.turn[d.axis] else 1})
-        ch += 1
-      }
-    }
-  }
-  // a driver's moves name joints' channels, whose own drives say which bone and axis they turn
-  own := rig.drives[:]
-  first := joint_channel(m, 0)
-  targets := make([dynamic]Target, context.temp_allocator)
-  for d, di in m.drivers {
-    for mv in d.moves {
-      clear(&targets)
-      targets_resolve(m, fmt.tprint("driver", d.name), mv.by, &targets)
-      for t in targets {
-        if t.driver < first {
-          log.warnf("model %s: driver %s moves %s, which is not a joint's", m.name, d.name, channel_name(m, t.driver))
-          continue
-        }
-        j := own[t.driver - first]
-        append(&rig.drives, RigDrive{j.bone, di, j.axis, mv.delay, j.turn * t.value})
-      }
-    }
-  }
   for _, k in m.iks do ik_add(rig, k)
 
   // the lowest point at rest, and where each IK's tip and pole are then
@@ -223,7 +210,8 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
   }
   for &ik in rig.iks {
     ik.rest.y += rig.lift
-    ik.pole_rest.y += rig.lift
+    // a foot: its end stands on the ground at rest
+    ik.holds = !ik.aim && m.ground && abs(ik.rest.y) < 0.05 * ik.length
   }
   rig_pose(w, rig, rest)
   return rig, true
@@ -239,6 +227,7 @@ rig_destroy :: proc(rig: ^Rig, w: ^world.World) {
   delete(rig.values)
   delete(rig.drives)
   delete(rig.motion)
+  delete(rig.slide)
   delete(rig.iks)
   delete(rig.chains)
   free(rig)
@@ -257,20 +246,29 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
   s := rig.values[:]
   copy(s, values)
   resize(&rig.motion, len(rig.bones))
+  resize(&rig.slide, len(rig.bones))
   for &mo in rig.motion do mo = {}
+  for &sl in rig.slide do sl = 0
   for d in rig.drives {
     v := s[d.channel]
-    rig.motion[d.bone][d.axis] += math.sign(v) * max(abs(v) - d.delay, 0) * d.turn
+    if d.slide do rig.slide[d.bone] += v
+    else do rig.motion[d.bone][d.axis] += v * d.turn
   }
-  for b, i in rig.bones do rig.motion[i] = limit(b, rig.motion[i])
+  for b, i in rig.bones {
+    rig.motion[i] = limit(b, rig.motion[i])
+    if b.stroke[0] != b.stroke[1] do rig.slide[i] = clamp(rig.slide[i], b.stroke[0], b.stroke[1])
+  }
   origin := rig_origin(rig)
   solve(rig, origin)
   for ik in rig.iks {
     c := s[ik.channel:]
-    weight := clamp(c[3], 0, 1)
+    weight := clamp(c[IK_WEIGHT], 0, 1)
     if weight <= 0 do continue
     if ik.aim do aim(rig, ik, ik.rest + {c[0], c[1], c[2]}, weight, origin)
-    else do reach(rig, ik, ik.rest + {c[0], c[1], c[2]}, ik.pole_rest + {c[4], c[5], c[6]}, weight, origin)
+    else {
+      target := ik.rest + {c[0], c[1], c[2]}
+      reach(rig, ik, target, ik_pole(rig, ik, target, c[IK_SWIVEL], origin), weight, origin)
+    }
     solve(rig, origin)
   }
 }
@@ -297,7 +295,7 @@ rig_bounds :: proc(rig: ^Rig) -> (lo, hi: [3]f32) {
 }
 
 // rig_moves is which of a pose's values (model_channels) move instance `inst`: the drives on the
-// bones its frame rides on (its own joints' and every parent's, their channels and drivers), the
+// bones its frame rides on (its own joints' and every parent's), the
 // channels of every IK whose chain has one of them, and the root's channels.
 rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []bool {
   m := rig.model
@@ -308,9 +306,9 @@ rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []boo
   for ik in rig.iks {
     moves := false
     for c in rig.chains[ik.first:][:ik.count] do moves ||= above[c]
-    if moves do for &o in out[ik.channel:][:4 if ik.aim else 7] do o = true
+    if moves do for &o in out[ik.channel:][:IK_VALUES] do o = true
   }
-  for &o in out[root_channel(m):][:len(ROOT_CHANNELS)] do o = true
+  for &o in out[root_channel(m):][:ROOT_VALUES] do o = true
   return out
 }
 
@@ -318,8 +316,9 @@ rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []boo
 // joint's axes are in (on its parent, by its rest), for drawing them.
 rig_bone_base :: proc(rig: ^Rig, i: int) -> geometry.Transform {
   x, mo := rig.poses[i], rig.motion[i]
+  at := x.position - linalg.mul(x.rotation, [3]f32{0, -rig.slide[i], 0})
   turn := linalg.normalize(x.rotation * linalg.quaternion_inverse(euler(mo)))
-  return {x.position, turn, 1}
+  return {at, turn, 1}
 }
 
 // rig_frame is where instance `i`'s frame was by the last pose, in the frame node's space.
@@ -330,7 +329,7 @@ rig_frame :: proc(rig: ^Rig, i: int) -> geometry.Transform {
 
 // rig_origin is where the last pose put the model's origin: the root's channels, lifted.
 rig_origin :: proc(rig: ^Rig) -> geometry.Transform {
-  root := rig.values[root_channel(rig.model):][:len(ROOT_CHANNELS)]
+  root := rig.values[root_channel(rig.model):][:ROOT_VALUES]
   return {{root[0], root[1] + rig.lift, root[2]}, euler({root[3], root[4], root[5]}), 1}
 }
 
@@ -358,21 +357,24 @@ pose_bone :: proc(rig: ^Rig, i: int, origin: geometry.Transform) {
   position += linalg.mul(rotation, b.offset)
   rotation *= b.rest
   rotation *= euler(mo)
+  // a linear actuator slides out, away from its socket (-y)
+  if i < len(rig.slide) && rig.slide[i] != 0 do position += linalg.mul(rotation, [3]f32{0, -rig.slide[i], 0})
   rig.poses[i] = {position, linalg.normalize(rotation), 1}
 }
 
-// ik_add finds IK target `k`'s chain: the bones from the tip's last joint up to the root's first,
-// the root above the tip.
+// ik_add finds IK target `k`'s chain: the bones from the tip's last joint up to its root's first
+// (ik_root).
 @(private = "file")
 ik_add :: proc(rig: ^Rig, k: int) {
   m := rig.model
   ik := m.iks[k]
-  root, tip := model_instance(m, ik.root), model_instance(m, ik.tip)
-  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, k), hold = ik.hold, aim = ik.aim}
-  if root < 0 || tip < 0 {
-    log.warnf("model %s: ik %s names an unknown instance", m.name, ik.name)
+  tip := model_instance(m, ik.tip)
+  if tip < 0 {
+    log.warnf("model %s: ik %s reaches with unknown instance %s", m.name, ik.name, ik.tip)
     return
   }
+  root := ik_root(m, tip)
+  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, k), aim = ik.aim}
   base := instance_base(rig, root)
   for bone := rig.frames[tip].bone; bone >= 0; bone = rig.bones[bone].parent {
     if bone == base {
@@ -387,31 +389,42 @@ ik_add :: proc(rig: ^Rig, k: int) {
     append(&rig.chains, bone)
   }
   resize(&rig.chains, out.first)
-  log.warnf("model %s: ik %s: %s is not above %s", m.name, ik.name, ik.root, ik.tip)
+  log.warnf("model %s: ik %s: no chain above %s", m.name, ik.name, ik.tip)
 }
 
 // ik_rest finds, from the rest pose (rig.poses, unlifted), where IK target ik's tip is, its chain's
-// middle joint, and its default pole: in front of the middle joint by the length from it to the
-// tip, on the side the joint's stops let it bend (a knee forward, a hock back), so a chain bends
-// the way it is built with no pole given.
+// middle joint and length, and the way the middle joint bends: the way it is bent at rest (a
+// strider's zigzag), or for a chain straight at rest, the side its stops let it (a knee forward, a
+// hock back). So a chain bends the way it is built with no pole given.
 @(private = "file")
 ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
-  ik.rest = rig_frame(rig, ik.tip).position
+  if !ik.aim do ik.point = ik_end(rig, ik^)
+  ik.rest = ik_point(rig, ik^)
   if ik.aim {
     // it looks ahead (+z) at rest, at a point as far ahead as it is high
     x := rig_frame(rig, ik.tip)
     ik.look = linalg.mul(linalg.quaternion_inverse(x.rotation), [3]f32{0, 0, 1})
     ik.rest += {0, 0, max(x.position.y, 1)}
     ik.mid = -1
-    ik.pole_rest = ik.rest
     return
   }
   ik.mid = chain_middle(rig, ik^, rig_origin(rig))
-  ik.pole_rest = ik.rest
+  chain := rig.chains[ik.first:][:ik.count]
+  ik.length = 0
+  for k in 1 ..< len(chain) do ik.length += linalg.length(rig.poses[chain[k]].position - rig.poses[chain[k - 1]].position)
+  ik.length += linalg.length(ik.rest - rig.poses[chain[len(chain) - 1]].position)
   if ik.mid < 0 do return
-  bone := rig.chains[ik.first + ik.mid]
+  bone := chain[ik.mid]
   b := rig.bones[bone]
   at := rig.poses[bone].position
+  above := rig.poses[chain[ik.mid - 1]].position
+  line := linalg.normalize0(ik.rest - above)
+  ik.line = line
+  off := (at - above) - linalg.dot(at - above, line) * line
+  if linalg.length(off) > 1e-3 * ik.length {
+    ik.bend = linalg.normalize(off)
+    return
+  }
   d := ik.rest - at
   for axis in b.turns {
     e: [3]f32
@@ -420,9 +433,58 @@ ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
     if abs(linalg.dot(a, linalg.normalize0(d))) >= 0.7 do continue
     // turning about a by +θ swings the tip along a × d, and the joint itself out the other way
     side := f32(-1) if b.lo[axis] + b.hi[axis] < 0 else 1
-    ik.pole_rest = at - side * linalg.normalize(linalg.cross(a, d)) * linalg.length(d)
+    ik.bend = -side * linalg.normalize(linalg.cross(a, d))
     return
   }
+}
+
+// ik_end is where IK ik reaches with, in its tip's frame: the end of the tip, as far along its last
+// link (from the joint above the tip's own toward the tip, at rest) as the tip's pieces and those of
+// what hangs from it reach, on that line, so a chain straight at rest stays straight to its end. A hand reaches with its fingertips, a foot with its sole, a gun with
+// its muzzle, not with the joint at their base.
+@(private = "file")
+ik_end :: proc(rig: ^Rig, ik: RigIk) -> [3]f32 {
+  m := rig.model
+  x := rig_frame(rig, ik.tip)
+  dir := linalg.normalize0(x.position - rig.poses[rig.chains[ik.first + max(ik.turning - 1, 0)]].position)
+  far: f32 = 0
+  for p, i in rig.pieces {
+    below := false
+    for j := p.part; j >= 0; j = model_instance(m, m.assembly[j].parent) {
+      if j == ik.tip do below = true
+      if below do break
+    }
+    if !below do continue
+    place := rig_piece(rig, i)
+    for c in primitive_corners(p.primitive) do far = max(far, linalg.dot(geometry.transform_point(place, c) - x.position, dir))
+  }
+  return linalg.mul(linalg.quaternion_inverse(x.rotation), dir * far)
+}
+
+// ik_point is where IK ik's tip reaches with, as last posed: its end (ik_end) on its frame.
+ik_point :: proc(rig: ^Rig, ik: RigIk) -> [3]f32 {
+  x := rig_frame(rig, ik.tip)
+  return x.position + linalg.mul(x.rotation, ik.point)
+}
+
+// ik_pole is the point IK ik's chain bends toward, reaching for `target` (as last posed): off the
+// middle of the line from the joint above its middle one to the target, by the chain's length, the
+// way its middle joint bends at rest, turned with the model (`origin`) and swung as the limb swings
+// (the shortest turn from its line at rest to the line to the target). It goes where the target
+// goes, so the bend never flips as a foot steps far ahead or back, and an arm hanging with its
+// elbow back, swung forward to punch, has its elbow down; it needs no placing. Straight back
+// against its rest line, the swing has no one way to go: the bend is then only turned with the model.
+// `swivel` (the IK's _swivel channel, radians) then turns the bend about that line, from the joint
+// above the middle one to the target: an elbow flared or rolled up, a knee swung out. The middle
+// joint goes round the circle its two segments allow, the tip staying on the target.
+ik_pole :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin: geometry.Transform) -> [3]f32 {
+  if ik.mid <= 0 do return target
+  above := rig.poses[rig.chains[ik.first + ik.mid - 1]].position
+  bend := linalg.mul(origin.rotation, ik.bend)
+  from, to := linalg.mul(origin.rotation, ik.line), linalg.normalize0(target - above)
+  if linalg.dot(from, to) > -0.99 && to != 0 do bend = linalg.mul(linalg.quaternion_between_two_vector3(from, to), bend)
+  if swivel != 0 && to != 0 do bend = linalg.mul(linalg.quaternion_angle_axis(swivel, to), bend)
+  return (above + target) / 2 + bend * ik.length
 }
 
 // reach turns the chain's bones toward `target` by cyclic coordinate descent, each about the axes
@@ -430,20 +492,63 @@ ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
 // middle, each pass first swings the chain's middle joint (the knee, the elbow: the pivot halfway along it),
 // with the joints above it, to where it must be for the tip to reach: as for two segments, off the
 // line from the joint above it to the target, toward the pole. The chain then bends in the plane
-// through the pole, and by as much as the target needs, even from straight.
+// through the pole, and by as much as the target needs, even from straight. Fallen short from the
+// pose the drives gave, it starts again from its first joint turned a quarter, half and three
+// quarters across its range (in that order, so a pose always solves the same way), keeping the
+// first that reaches, else the nearest: a fold of the chain the passes can't turn out of (an arm
+// hanging, reaching ahead and across).
 @(private = "file")
 reach :: proc(rig: ^Rig, ik: RigIk, target, pole: [3]f32, weight: f32, origin: geometry.Transform) {
-  ITERATIONS :: 16
   chain := rig.chains[ik.first:][:ik.count]
   from := make([][3]f32, len(chain), context.temp_allocator)
   for bone, k in chain do from[k] = rig.motion[bone]
-  // held, the tip faces as the drives turned it, in the model's space: a planted foot stays as the
-  // clip angles it however the knee bends
+  // a foot holds facing as the drives turned it, in the model's space: planted, it stays as the clip
+  // angles it however the knee bends. A hand keeps its wrist's turns, its fingertips reaching.
   keep := rig_frame(rig, ik.tip).rotation
+  near := 0.01 * ik.length
+  reach_from(rig, ik, chain, target, pole, keep, near, origin)
+  if miss := linalg.length(ik_point(rig, ik) - target); miss > near {
+    best := make([][3]f32, len(chain), context.temp_allocator)
+    for bone, k in chain do best[k] = rig.motion[bone]
+    first := rig.bones[chain[0]]
+    for f in ([3]f32{0.25, 0.5, 0.75}) {
+      for bone, k in chain do rig.motion[bone] = from[k]
+      for axis in first.turns do if first.lo[axis] != first.hi[axis] do rig.motion[chain[0]][axis] = math.lerp(first.lo[axis], first.hi[axis], f)
+      for c in chain do pose_bone(rig, c, origin)
+      reach_from(rig, ik, chain, target, pole, keep, near, origin)
+      d := linalg.length(ik_point(rig, ik) - target)
+      if d < miss {
+        miss = d
+        for bone, k in chain do best[k] = rig.motion[bone]
+      }
+      if d <= near do break
+    }
+    for bone, k in chain do rig.motion[bone] = best[k]
+  }
+  for bone, k in chain {
+    mo := &rig.motion[bone]
+    mo^ = linalg.lerp(from[k], mo^, weight)
+  }
+}
+
+// reach_from reaches from the chain as it is now: its passes with the middle held where the pole
+// puts it; then, if the tip is still more than `near` off (the joints' stops keep the middle from
+// just there, and holding it there stalls the joints above it), on with the middle let go.
+@(private = "file")
+reach_from :: proc(rig: ^Rig, ik: RigIk, chain: []int, target, pole: [3]f32, keep: quaternion128, near: f32, origin: geometry.Transform) {
+  reach_passes(rig, ik, chain, target, pole, keep, true, origin)
+  if linalg.length(ik_point(rig, ik) - target) > near do reach_passes(rig, ik, chain, target, pole, keep, false, origin)
+}
+
+// reach_passes is reach's cyclic coordinate descent, from the chain as it is now; `pin`: the middle
+// held where the pole puts it, once it gets there.
+@(private = "file")
+reach_passes :: proc(rig: ^Rig, ik: RigIk, chain: []int, target, pole: [3]f32, keep: quaternion128, pin: bool, origin: geometry.Transform) {
+  ITERATIONS :: 16
   mid := ik.mid
   for _ in 0 ..< ITERATIONS {
     // the tip's own joints turn it back to face as it did (first: reaching has the last word)
-    if ik.hold do for k in ik.turning ..< ik.count {
+    if ik.holds do for k in ik.turning ..< ik.count {
       for axis in Axis {
         if axis not_in rig.bones[chain[k]].turns do continue
         for e in ([2][3]f32{{0, 1, 0}, {0, 0, 1}}) {
@@ -465,14 +570,14 @@ reach :: proc(rig: ^Rig, ik: RigIk, target, pole: [3]f32, weight: f32, origin: g
       }
       // pinned only when it got there (its joints' stops may not let it)
       for c in chain[:mid + 1] do pose_bone(rig, c, origin)
-      if want, ok := middle_place(rig, ik, chain, mid, target, p); ok do placed = linalg.length(rig.poses[chain[mid]].position - want) < 0.02
+      if want, ok := middle_place(rig, ik, chain, mid, target, p); ok do placed = pin && linalg.length(rig.poses[chain[mid]].position - want) < 0.02
     }
     for k := ik.turning - 1; k >= 0; k -= 1 {
       for axis in Axis {
         if axis not_in rig.bones[chain[k]].turns do continue
         for c in chain[k:] do pose_bone(rig, c, origin)
         was, at := rig.motion[chain[k]], rig.poses[chain[mid]].position if mid >= 0 else 0
-        turn_toward(rig, chain[k], axis, rig_frame(rig, ik.tip).position, target)
+        turn_toward(rig, chain[k], axis, ik_point(rig, ik), target)
         // above the middle, only a turn that keeps the middle where the pole put it (a thigh's
         // twist, about the line through the knee)
         if placed && k < mid {
@@ -481,10 +586,6 @@ reach :: proc(rig: ^Rig, ik: RigIk, target, pole: [3]f32, weight: f32, origin: g
         }
       }
     }
-  }
-  for bone, k in chain {
-    mo := &rig.motion[bone]
-    mo^ = linalg.lerp(from[k], mo^, weight)
   }
 }
 
@@ -522,7 +623,7 @@ aim :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, weight: f32, origin: geometry.
 middle_place :: proc(rig: ^Rig, ik: RigIk, chain: []int, mid: int, target, pole: [3]f32) -> (want: [3]f32, ok: bool) {
   r := rig.poses[chain[mid - 1]].position
   at := rig.poses[chain[mid]].position
-  la, lb := linalg.length(at - r), linalg.length(rig_frame(rig, ik.tip).position - at)
+  la, lb := linalg.length(at - r), linalg.length(ik_point(rig, ik) - at)
   d := linalg.length(target - r)
   if d < 1e-5 do return
   line := (target - r) / d
@@ -547,9 +648,12 @@ turn_toward :: proc(rig: ^Rig, bone: int, axis: Axis, at, want: [3]f32) {
   e[axis] = 1
   n := linalg.mul(base * euler(partial), e)
   u, v := at - pivot, want - pivot
+  lu, lv := linalg.length2(u), linalg.length2(v)
   u -= linalg.dot(u, n) * n
   v -= linalg.dot(v, n) * n
-  if linalg.length2(u) < 1e-10 || linalg.length2(v) < 1e-10 do return
+  // a point (nearly) on the axis isn't turned by it: its turn would be noise (a forearm's twist
+  // with the fingertips on its line), flipping it between its stops
+  if linalg.length2(u) < max(1e-10, 1e-4 * lu) || linalg.length2(v) < max(1e-10, 1e-4 * lv) do return
   rig.motion[bone][axis] += math.atan2(linalg.dot(n, linalg.cross(u, v)), linalg.dot(u, v))
   rig.motion[bone] = limit(rig.bones[bone], rig.motion[bone])
 }
@@ -562,7 +666,7 @@ turn_toward :: proc(rig: ^Rig, bone: int, axis: Axis, at, want: [3]f32) {
 chain_middle :: proc(rig: ^Rig, ik: RigIk, origin: geometry.Transform) -> int {
   chain := rig.chains[ik.first:][:ik.turning]
   for c in rig.chains[ik.first:][:ik.count] do pose_bone(rig, c, origin)
-  tip := rig_frame(rig, ik.tip).position
+  tip := ik_point(rig, ik)
   along := make([]f32, len(chain) + 1, context.temp_allocator)
   for k in 1 ..< len(chain) do along[k] = along[k - 1] + linalg.length(rig.poses[chain[k]].position - rig.poses[chain[k - 1]].position)
   along[len(chain)] = along[len(chain) - 1] + linalg.length(tip - rig.poses[chain[len(chain) - 1]].position)
@@ -583,9 +687,13 @@ chain_middle :: proc(rig: ^Rig, ik: RigIk, origin: geometry.Transform) -> int {
 }
 
 // bone_limit gives a joint's bone its range, each axis turned over (and its ends swapped) where the
-// joint's mirror turns drives on it over.
+// joint's mirror turns drives on it over; a linear actuator's, its stroke (its y's, as it is).
 @(private)
 bone_limit :: proc(b: ^Bone, j: Joint, mi: Mirror) {
+  if j.kind == .LINEAR {
+    b.stroke = {j.min[1], j.max[1]}
+    return
+  }
   for k in Axis {
     lo, hi := j.min[k], j.max[k]
     if mi.turn[k] do lo, hi = -hi, -lo

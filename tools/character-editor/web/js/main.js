@@ -3,14 +3,14 @@
 // animation, edited in the browser and shown by the game's own code in wasm (see viewer.js). This
 // file lays out the page and wires the shortcuts:
 //   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 4 tabs
-//   Esc back to the character's settings (assemble and rig tabs)    I show/hide the inspector
+//   Esc back to the character's settings (assemble and rig tabs), out of an arc's edit mode (animate)    I show/hide the inspector
 //   W E R T move, rotate, scale a shape, place slots (model tab; see gizmo.js)    click the view to pick
-//   space play/pause   Delete remove the shape's point (animate tab)   F frame
+//   space play/pause   Delete remove the arc point picked in the view, else the shape's point (animate tab)   F frame
 import { btn, h, segmented, ui } from "./dom.js";
 import { icon } from "./icons.js";
 import { inspectorButton, refit, toggleInspector } from "./layout.js";
 import { editor } from "./editor.js";
-import { gizmo, install as installGizmo, setMode } from "./gizmo.js";
+import { gizmo, install as installGizmo, removePickedArcPoint, setMode } from "./gizmo.js";
 import { install as installViewGizmo } from "./viewGizmo.js";
 import { animInspector, animSidebar } from "./panels/animation.js";
 import { assembleInspector, assembleSidebar } from "./panels/assemble.js";
@@ -96,7 +96,7 @@ function renderDock() {
     curves.refresh();
   } else {
     // the pose test (rig tab) keeps its sliders' state: rebuild it only when the model changes
-    const stamp = `pose:${JSON.stringify([editor.model.drivers ?? [], editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
+    const stamp = `pose:${JSON.stringify([editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
     if (dockTab !== stamp) dock.replaceChildren(...poseTest());
     dockTab = stamp;
   }
@@ -175,7 +175,10 @@ window.addEventListener("keydown", (e) => {
     editor.redo();
   } else if (!cmd && ["1", "2", "3", "4"].includes(key)) {
     editor.setTab(TABS[Number(key) - 1][0]);
-  } else if (key === "escape" && editor.tab !== "animation") {
+  } else if (key === "escape" && editor.tab === "animation") {
+    // out of an arc's edit mode
+    if (editor.arc) editor.select(() => ((editor.arc = ""), (editor.handle = ""), editor.inspect === "arc" && (editor.inspect = "character")));
+  } else if (key === "escape") {
     editor.select(() => {
       if (editor.tab === "model") (editor.shape = editor.slot = -1), (editor.also = []);
       else editor.part = -1;
@@ -201,7 +204,8 @@ window.addEventListener("keydown", (e) => {
       e.preventDefault();
       editor.togglePlay();
     } else if (key === "delete" || key === "backspace") {
-      curves.deletePoint();
+      // the arc point picked in the view, else the shape's point
+      if (!removePickedArcPoint()) curves.deletePoint();
     }
   }
 });

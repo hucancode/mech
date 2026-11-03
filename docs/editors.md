@@ -48,12 +48,15 @@ To put a character in the game, export it and copy the file into `assets/charact
   to work on the value there (`*2`, `/2`, `+0.05`; a leading `-` is a negative number). Use the
   arrow keys (shift for 10×), or drag the x/y/z label (shift for fine, alt for coarse). A size's
   🔗 lock changes all three in proportion.
-- Angles are shown and typed in **degrees**: shape rotations, and the ranges, driver ends and
-  pose values of joints' channels and drivers that turn a joint, and joint twists. Files keep radians.
+- Angles are shown and typed in **degrees**: shape rotations, joints' ranges, the values of turns
+  and rotations (a joint's, an IK target's swivel, the root's turn), and instances' joint twists
+  and bends. Files keep radians.
+- Values go by channel, shaped as it is ([modeling.md](modeling.md#rigging-channels-ik-targets)):
+  a turn, a slide or a weight is a slider, a rotation or a position an x/y/z row.
 - Exports are written by the engine's own writer, so copying one over an asset only diffs where
   you changed something.
 - Warnings from the engine (a motion naming a channel the model lacks, an instance matched with a
-  slot its parent's part lacks, a driver moving a channel that is not a joint's, and so on) collect under ⚠ in the header.
+  slot its parent's part lacks, a value shaped otherwise than its channel, an arc the animation lacks, and so on) collect under ⚠ in the header.
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
 The Model tab makes parts, their slots and their joints; the Assemble tab only hangs parts on
@@ -77,16 +80,19 @@ previewing. Nothing about the view is saved.
     bigger or smaller, select its shapes (Cmd-A selects them all) and drag the size tool's middle
     box: they scale together about their middle. A joint stack is listed from the parent's
     side, each joint on the one before, edited in place: its **name** (unique in the part;
-    its channels and drivers name it by it), its **kind** (spin, hinge or ball; a new joint is a hinge
-    sized to the first shape, and switching kind drops the old kind's fields and fills in
-    default proportions at the current size), ↑ to move it up, ✕, a **twist** about the socket's
-    normal first (degrees) with its axes, **bend** (a turn at rest), its **range** on each axis
-    (its stops, from rest; equal ends leave it free; drives and IK stay inside, and a driver made
-    for it in the Rig tab takes the range as its slider's), **size** (the hardware
+    its channel, `<instance>.<joint>`, is named by it), its **kind** (hinge, linear or ball) and a
+    hinge's **axis** (X a pin, Y a turntable; a new joint is a pin sized to the first shape with
+    room for lugs, and switching kind or axis keeps the size and drops a pin's reach), ↑ to move it up, ✕, its **range** on each axis it moves
+    (its stops, from rest; equal ends leave it free; drives and IK stay inside; a linear's is its
+    **stroke**, in model units), **size** (the hardware
     scales with it; 0 builds none; **fit** sizes it to the face of the part's shapes where it
-    sits, as a clevis is sized by its link, and a new joint or kind starts fitted) and its proportions (times the size) under "proportions" (a hinge with no lugs, shank or base plate is a
-    bare pin on the slot, like the knuckles). Joints live on the part, so every instance of the
-    part shares them.
+    sits, as a clevis is sized by its link, and a new joint or kind starts fitted), and for a
+    hinge its **reach** (how far out from the slot it pivots, times the size; too little for lugs
+    and it is a bare pin on the slot, like the knuckles, which the hint says). A **turntable** is a
+    hinge about Y stacked before the pin (turning it on its socket) or after it (turning the part
+    after the pin); the pin's plate next to it shows round. The engine measures every other piece of hardware from these, so they always fit
+    together: a ball's neck, for one, is as long as its range needs ([modeling.md](modeling.md#joints)).
+    Joints live on the part, so every instance of the part shares them.
   - its **slots**: the named faces it is matched with other parts by; the origin needs no name.
     Select one to rename it (carried to the instances matched on it), **snap** it to one of the
     six faces of a shape (**inset** moves the next snap in toward the shape's centre), or type
@@ -116,12 +122,13 @@ previewing. Nothing about the view is saved.
   to 0.01.
 - **slots** (T): a ring on each slot (click to select it) and a dot on each face of the shapes
   that faces you: click one to put the selected slot there, or a new slot when none is selected.
-- **joints** (J): at each pivot of the joints the part hangs by, a ring per axis it turns about
-  its range as a thick arc and where it is now as a spoke. Click one to
-  select the joint; drag it to try the joint (shift: 15° steps), held in its range.
+- **joints** (J): at each pivot of the joints the part hangs by, a ring per axis it turns about,
+  its range as a thick arc and where it is now as a spoke; a linear's, an arrow out along its
+  stroke. Click one to select the joint; drag it to try the joint (shift: 15° steps, 0.01
+  slides), held in its range.
 
 Trying joints with J is never saved; ↺ by "joints" puts them back at rest, and choosing another
-part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
+part does too. A part's joints show straight here: how they sit at rest is each instance's (Assemble).
 
 ## Assemble
 
@@ -134,14 +141,12 @@ part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
   - **⇋ mirror** copies the selected limb (from the topmost `l_`/`r_` instance, or
     `left`/`right`) to the other side of the body, replacing what is there. The copies place the
     **same parts**, mirrored, so editing a left hand edits both. They get the other side's names,
-    and their joints' channels are the other side's (`r_forearm.elbow`); driver moves on them are copied
-    to the other side's drivers (made when missing; a driver with no side, like `pelvis_turn`,
-    moves both) with the same numbers: the engine turns over the ones a reflection needs. IK targets come along. The limb is matched with the other side's slot of the
+    and their joints' channels are the other side's (`r_forearm.elbow`), with the same numbers:
+    the engine turns over the ones a reflection needs. IK targets come along. The limb is matched with the other side's slot of the
     parent's part (`l_shoulder` to `r_shoulder`), which is made, reflected, when the part has none.
   - **kit** adds any instance of any character (this one, those saved here and those in
     assets/), with what hangs from it, under the selection: the parts they place, their joints,
-    materials, the drivers moving them (with only their moves on the copies) and IK targets come
-    along, all can be scaled on the way in, and it is matched with the selection's slot of the
+    materials and IK targets come along, all can be scaled on the way in, and it is matched with the selection's slot of the
     same name, else its first free one.
   - ⧉ duplicates an instance without its children; ✕ deletes it and everything under it (the
     parts stay in the library).
@@ -149,50 +154,64 @@ part does too. Twist and bend have 0 / 90 / 180 / −90 buttons.
     free one), or onto "make root". The tree stays parents first.
 - **The selected instance**: name (renaming carries to its children, its channels and IK targets),
   **part** (from the library, or a new one), **parent**, **matched with** (a slot of the parent's part, or its origin),
-  **mirrored**, and its part's joints.
+  **mirror of** (its twin on the other side of the body: it shows the twin's part reflected, and
+  twin moves in clips move both; a mirror copy sets it), and how it sets its part's joints at rest: per joint, a **twist** (turning it on
+  its socket first, about the socket's normal) and a **bend** (turning its first axis), in degrees,
+  each with 0 / 90 / 180 / −90 buttons. The joint's range is from there. A mirror copy keeps them.
 
 The view shows the character at rest, with no dock: the tree has the sidebar's full height.
 Bend joints to check clearances in the Rig tab's pose test.
 
 ## Rig
 
-Every joint axis is already a channel motions name (`l_forearm.elbow`), so rigging is only what
-moves several joints at once (drivers and IK targets) and the rest pose clips start from.
-Motions are the Animate tab's.
+Every joint is already a channel motions name (`l_forearm.elbow`), so rigging is only IK targets
+and the rest pose clips start from. Several joints moving together (a hand closing) are a
+motion's move. Motions are the Animate tab's.
 
-- **Drivers**: values that move several joints at once (a curl). Each row says what it moves.
-  **+** adds one moving the selected instance's first joint. Its inspector sets the name
-  (renaming carries through the rest pose and the open animation), the slider range and its
-  **moves**. Each move has a **delay** (the driver's value it starts at: a finger's tip closing
-  after its base) and its joints' channels, each with the turn per unit of the driver (degrees);
-  **+ joint** adds one. Moves add onto the joints' own channels, and the joints' ranges stop
-  them.
-- **An instance**: its part's joints, one row per axis, with the axis's own channel, the drivers
-  also moving it (click one to edit it) and **+ driver** to drive it with an existing driver or a
-  new one.
-- **IK targets**: **+** makes one for the selected instance (the tip), its chain from two
-  instances above. Its channels are named after it (`_x`, `_y`, `_z`, `_weight`, and a reaching
-  one's pole `_pole_x`, `_y`, `_z`: moving the point in front of the chain's middle that the knee
-  or elbow bends toward). Its inspector sets the name (carried through the rest pose and the open
-  animation), **root**, **tip**, **aim** (look at the target instead of reaching it: a head, with
-  root and tip both the head) and **hold its facing** (for a planted foot: its ankle keeps it as
-  the clip angles it to the ground). **Try it at the tip** puts the pose test's target on the tip
-  at full weight, to drag from there. ✕ deletes the target.
+- **An instance**: its part's joints, one row each, with its channel and what kind it is (a turn,
+  a rotation, a slide).
+- **IK targets**: **+** makes one for the selected instance (the tip). Its channels are named
+  after it: `<name>` (the target, a position), `<name>.swivel`, `<name>.weight`. Its inspector sets the name (carried through the rest
+  pose and the open animation), **tip** and **aim** (look at the target instead of reaching it: a
+  head), and shows its **root**, which the engine finds (`mech.ik_root`: below the nearest branch
+  above the tip, a pelvis or a torso). It reaches with the tip's end (`mech.ik_end`: a hand's
+  fingertips, a foot's sole), a foot's own joints hold its facing (planted, it stays as the clip
+  angles it), a hand's keep their turns, and the pole the chain bends toward is worked out
+  (`mech.ik_pole`), so there is nothing else to set; its swivel turns it round the limb when a
+  pose wants (drag the pole in the view). **Try it at the tip** puts the pose test's
+  target on the tip at full weight, to drag from there. ✕ deletes the target.
 
-The **pose test** in the dock has a slider per channel (the engine's list), starting from the
-rest pose, to try the rig: a joint's runs over its range. An IK target's x, y, z, a ball's x, y, z
-and the root's move and turn each show as one x/y/z row. It moves the view only, until **Set rest
+The **pose test** in the dock has a row per channel (the engine's list, its control by kind),
+starting from the rest pose, to try the rig: a joint's slider runs over its range, a position or
+a rotation is one x/y/z row. It moves the view only, until **Set rest
 pose** saves what it shows as the model's rest pose: the stance every clip starts from and adds
-onto ([modeling.md](modeling.md#the-rest-pose)). ↺ goes back to the rest pose.
+onto ([modeling.md](modeling.md#the-rest-pose)), one side for both when the two sides match (a
+twin pose; the engine's `twins` query says which channel is whose twin). ↺ goes back to the rest
+pose.
 
 **Handles in the view** (Rig and Animate): a diamond on the model's root, a dot on each IK
-target and a ring on each pole. Click one to select it: arrows move it along the model's axes (shift: 0.01 steps), and
-the root's rings turn it (shift: 15° steps). In the Rig tab they set the pose test. In the
+target, and a ring on each pole. Click a handle to select it: arrows move it along the model's axes (shift: 0.01 steps), and
+the root's rings turn it (shift: 15° steps). Drag a pole round the limb to set its target's
+**swivel** (`<name>.swivel`; shift: 15° steps): while its target is picked or it is dragged, a
+dashed circle shows everywhere it can go (the engine's, query `handles`: `ring`), and it follows
+the pointer to the nearest point of it. In the Rig tab they set the pose test. In the
 Animate tab they pose the motion shown: its picked move (else its first) changes its amounts so
 the view shows what you dragged to, by the change over how much of them the move adds at the
-playhead (a held motion: all of it). A drag is one undo step.
+playhead (a held motion: all of it). Dragging the other side of a twin move changes the amounts
+it is the twin of. A drag is one undo step.
 Three buttons at the top right show the IK targets and poles hidden, as points, or as points
 with their names (remembered in this browser); the root's diamond always shows.
+
+**Arcs in the view** (Animate): the arcs the motion shown puts positions on, each the curve the
+engine samples through its points (query `motion`), on the rest pose; a twin's (mirrored) is
+dashed. Click one to **edit** it (as picking it in the Arcs list does): the arc edited is drawn
+where the motion puts it, else on its **shown on** position (query `arc`), with a numbered dot per
+point. Drag a dot to move its point across the view (its depth kept; shift: 0.01 steps); that
+picks it too (click a picked one to let it go), and the picked one's arrows move it along the
+model's axes. Double-click its curve to add a point there; Delete removes the picked point (an
+arc keeps two). Each is one undo step, and every move naming the arc follows. A point added or
+removed moves the later ones along the shape (point k is at k / (n − 1)). The position follows the
+curve as the motion's shape says, so draw the path where the arm can reach. Esc stops editing.
 
 ## Animate
 
@@ -202,6 +221,15 @@ at a moment is a shape stepping into it there.
 
 - **Clips** in the sidebar. The editor edits one clip at a time. **+** adds an empty clip, ⧉
   duplicates it.
+- **Arcs** (the sidebar, under Motions): the animation's arcs ([animation.md](animation.md#arcs)),
+  shared by every clip, each with its points and how many moves name it. Click one to edit it
+  (again, or Esc, to stop); **+** adds an open arc of two points and edits it; the bin deletes the
+  one edited and the moves' values naming it (asking first when some do). Its inspector, while it
+  is edited: its **name** (renamed through the moves naming it), **shown on** (the position it is
+  drawn on when no move of the motion shown uses it), its **points** (the one picked in the view,
+  else the last: typed in, **+** adds one after it, **−** removes it), **used by** (each move
+  naming it: click to go there) and **+ assign to the picked move** (puts a position of the
+  picked move on it).
 - **Motions** (the sidebar, under Clips): the clip's motions. Click picks one (the dock and the
   inspector show it); shift- or cmd-click picks several, the last picked the one shown.
   - **+** adds a motion holding a pose (no shape, one empty move): pose it with the view's
@@ -214,19 +242,26 @@ at a moment is a shape stepping into it there.
   - The trash removes the picked ones.
 - **The inspector** shows the clip's duration, then the motion shown: its **rate** (whole cycles
   of its shape over the clip, so a loop never jumps) and its **moves**, each with its **delay**
-  (cycles late). Click a move's head to pick it (the view's handles pose it), shift- or
+  (cycles late) and **twin** (none; WITH: the other side of the body too, at the same time;
+  OPPOSITE: half a cycle later, the other foot or arm). Click a move's head to pick it (the view's handles pose it), shift- or
   cmd-click to pick several. **Split** moves the picked moves into a new motion right after it,
   with the same shape; ✕ removes them; + adds a move (unfolded). Moves are folded, showing their
-  channels' names; the caret unfolds one to edit its amounts (+ channel adds one at 0).
+  channels' names; the caret unfolds one to edit its amounts (+ channel adds one at rest) and the
+  positions it puts on **arcs**: each lists the arc it follows (switch it), ✎ edits it, ✕ takes
+  the position off it; **+ arc** puts another position (an IK target, the root) on the arc being
+  edited, else on a new one.
 - **The curve editor** (the dock) shows the motion picked as curves. Everything drawn comes from
   the engine (query `motion`), so it is what plays.
-  - **Shape** (left): one cycle of the motion's shape, repeating. Drag a point (shift snaps to
-    0.05), click empty space to add one, double-click or Delete to remove it. The toolbar sets
+  - **Shape** (left): one cycle of the motion's shape, repeating. Dotted lines mark the values
+    that put the motion's arcs on their points (labelled with them); shift-drag snaps onto them. Drag a point (shift snaps to
+    0.05), click empty space to add one, double-click or Delete to remove it (Delete removes the
+    arc point picked in the view first, if one is). The toolbar sets
     the selected point's ease (how it is reached from the point before: LINEAR, IN, OUT, SETTLE,
     STEP). **Hold, Sine, Slide, Lift, Pulse, Square, Bounce, Hit, Steps** start the shape over
     (the one it matches is lit). A one-shot (a pulse, a hit) is a shape that ends where it
     starts.
-  - **Lanes** (right): what each move adds over the clip, one lane each, the picked moves lit.
+  - **Lanes** (right): what each move adds over the clip, one lane each, the picked moves lit; a
+    twin move's twins show faint in its lane.
     Drag a lane sideways to make its move run later or sooner (its
     delay); click a lane to pick its move. Too many moves for a lane each (a chain's joints)
     share one: a drag there moves them all, a click scrubs.

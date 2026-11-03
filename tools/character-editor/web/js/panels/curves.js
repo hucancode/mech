@@ -4,7 +4,8 @@
 // clip, one lane each, both drawn from what the engine computes (the "motion" query), so what
 // shows is what plays.
 //   shape: drag a point to reshape it        click empty space: add a point there
-//          double-click a point: remove it   shift-drag: snap to 0.05
+//          double-click a point: remove it   shift-drag: snap to 0.05, or onto an arc's point
+//          (the dotted lines: the values that put the motion's arcs on their points)
 //   lanes: drag one sideways to make its move run later or sooner (its delay); click a lane to
 //          pick its move (shift: several, to split them off); too many moves for a lane each
 //          (a chain's joints) share one: a drag there moves them all, a click scrubs
@@ -129,6 +130,29 @@ export class Curves {
 
   // ---- layout --------------------------------------------------------------------------------
 
+  /**
+   * the values of the shape that put the shown motion's arcs on their points (k / (n - 1) for an
+   * arc of n points, mech.arc_at), each labelled with its points: [v, label][]
+   * @returns {[number, string][]}
+   */
+  arcLevels() {
+    /** @type {Map<number, string[]>} */
+    const at = new Map();
+    const seen = new Set();
+    for (const mv of this.mo?.moves ?? [])
+      for (const v of Object.values(mv.by ?? {})) {
+        // a position on an arc: the arc, by name, once
+        const arc = typeof v === "string" && !seen.has(v) && editor.anim.arcs?.find((/** @type {any} */ x) => x.name === v);
+        if (!arc || arc.points.length < 2) continue;
+        seen.add(v);
+        arc.points.forEach((/** @type {any} */ _, /** @type {number} */ k) => {
+          const u = round(k / (arc.points.length - 1));
+          at.set(u, [...(at.get(u) ?? []), `${v} ${k + 1}`]);
+        });
+      }
+    return [...at].map(([v, names]) => [v, names.join(", ")]);
+  }
+
   /** the shape's box and the lanes' box: [x0, x1] each, and the rows' top and bottom */
   get boxes() {
     const w = Math.min(Math.max(220, this.width * 0.3), 380);
@@ -250,6 +274,18 @@ export class Curves {
       g.fillStyle = muted;
       g.fillText(String(v), b.s0 + 3, y - 3);
     }
+    // an arc's points: where the shape puts its target on point k (k / (n - 1))
+    g.strokeStyle = g.fillStyle = "rgba(229,180,91,0.55)";
+    g.setLineDash([2, 4]);
+    for (const [v, label] of this.arcLevels()) {
+      const y = Math.round(this.yv(v)) + 0.5;
+      if (y < b.top || y > b.bottom) continue;
+      g.beginPath();
+      g.moveTo(b.s0, y);
+      g.lineTo(b.s1, y);
+      g.stroke();
+      g.fillText(label, b.s1 - g.measureText(label).width - 3, y - 3);
+    }
     g.setLineDash([]);
     if (data?.shape) this.plot(g, data.shape, (i) => this.xu(i / (data.shape.length - 1)), (v) => this.yv(v), accent, 2);
     const pts = mo.shape ?? [];
@@ -334,10 +370,16 @@ export class Curves {
         g.fillText(`${lanesData.length} moves, overlaid: ${name(lanesData[0])} (bright) to ${name(lanesData[lanesData.length - 1])} (faint)`, b.l0 + 6, y0 + 12);
         return;
       }
+      // a twin move's twins (the other side), faint, under it
+      if (l.twin) {
+        g.globalAlpha = 0.4;
+        this.plot(g, l.twin.values, (i) => this.xt((this.duration * i) / (l.twin.values.length - 1)), y, lit ? text : accent, 1.25);
+        g.globalAlpha = 1;
+      }
       this.plot(g, l.values, (i) => this.xt((this.duration * i) / (l.values.length - 1)), y, lit ? text : accent, lit ? 2 : 1.5);
       // the move's name: its channels
       const names = l.channels.length ? l.channels.map((/** @type {string} */ c) => c.replace(/_[xyz]$/, "")).filter((/** @type {string} */ c, /** @type {number} */ i, /** @type {string[]} */ a) => a.indexOf(c) === i) : ["(no channels)"];
-      const label = `${k + 1}. ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}`;
+      const label = `${k + 1}. ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}${l.twin ? " (and twins, faint)" : ""}`;
       g.fillStyle = lit ? text : muted;
       g.fillText(label, b.l0 + 6, y0 + 12);
     });
@@ -455,11 +497,17 @@ export class Curves {
     const dt = this.tx(x) - this.tx(d.x0);
     if (d.mode === "point") {
       const snap = (/** @type {number} */ v) => (e.shiftKey ? Math.round(v * 20) / 20 : round(v));
+      // shift: a value onto an arc's point when near one (its target held there)
+      const levels = this.arcLevels().map(([v]) => v);
+      const snapV = (/** @type {number} */ v) => {
+        const near = levels.find((l) => Math.abs(l - v) < 0.05);
+        return e.shiftKey && near !== undefined ? round(near) : snap(v);
+      };
       this.set(() => {
         const p = mo.shape[this.point];
         if (!p) return;
         p.u = snap(Math.min(Math.max(this.ux(x), 0), 1));
-        p.v = snap(this.vy(y));
+        p.v = snapV(this.vy(y));
         if (!p.u) delete p.u;
         if (!p.v) delete p.v;
         mo.shape.sort((/** @type {any} */ a, /** @type {any} */ c) => (a.u ?? 0) - (c.u ?? 0));

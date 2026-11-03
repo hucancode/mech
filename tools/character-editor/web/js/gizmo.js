@@ -12,7 +12,9 @@
 //   joint (J)   rings about the axes of the joints the part hangs by, their
 //               ranges as arcs: drag one to try the joint (not saved; shift: 15° steps)
 // In the rig and animate tabs, markers on the model's root and IK targets: click one, then drag
-// its arrows (and the root's rings) to move (turn) it, in the pose test or the selected key.
+// its arrows (and the root's rings) to move (turn) it, in the pose test or the selected key; drag
+// an IK's pole round its ring to swivel the bend. In the animate tab, the shown motion's arcs: drag
+// a point (or its arrows), double-click the curve to add one, Delete to remove the picked one.
 // Shift snaps moves to 0.01 and sizes to 0.01. A drag is one undo step.
 //
 // Everything here is the page's: the engine only says where the part is ({"q": "parts"}) and
@@ -21,7 +23,7 @@
 import { hold, release } from "./dom.js";
 import { ALONE_SCALE, editor } from "./editor.js";
 import { add, apply, cross, euler, eulerFrom, fromQuat, mul, rotation, scale, transpose } from "./math3.js";
-import { addSlot, faceCentre, FACE_NAMES, perpendicular, shapeOnFace, snapSocket, socketFace, stackOn } from "./model.js";
+import { addSlot, faceCentre, FACE_NAMES, insertArcPoint, perpendicular, removeArcPoint, shapeOnFace, snapSocket, socketFace, stackOn } from "./model.js";
 
 /** @typedef {"move" | "rotate" | "scale" | "slot" | "joint"} Mode */
 /** @type {{mode: Mode}} */
@@ -361,8 +363,9 @@ function drawSlots(part, s) {
 
 /**
  * drawJoints: at each pivot of the joints the part hangs by, a ring per axis it turns about, its
- * range as an arc and where it is now as a spoke. Click one to select the
- * joint; drag it to try the joint (shift: 15° steps), held in its range. Trying is never saved.
+ * range as an arc and where it is now as a spoke; a linear actuator's, an arrow out along its
+ * stroke. Click one to select the joint; drag it to try the joint (shift: 15° steps, 0.01
+ * slides), held in its range. Trying is never saved.
  * @param {any} part @param {number} s
  */
 function drawJoints(part, s) {
@@ -378,7 +381,7 @@ function drawJoints(part, s) {
     const k = (LENGTH * R) / (Math.max(...v.map((x) => Math.hypot(x[0], x[1]))) || 1);
     const lit = editor.joint === j.index;
     const pick = () => editor.select(() => (editor.joint = j.index));
-    for (const a of j.axes) {
+    for (const [n, a] of j.axes.entries()) {
       const i = "XYZ".indexOf(a);
       const lo = j.min[i];
       const hi = j.max[i];
@@ -402,8 +405,14 @@ function drawJoints(part, s) {
           step -= Math.round(step / (2 * Math.PI)) * 2 * Math.PI;
           turned += step;
           last = at;
-          const t = now + sign * turned;
-          editor.setTry(j.name, a, clampTo(ev.shiftKey ? Math.round(t / (Math.PI / 12)) * (Math.PI / 12) : t, lo, hi));
+          const t = clampTo(now + sign * turned, lo, hi);
+          const snapped = ev.shiftKey ? Math.round(t / (Math.PI / 12)) * (Math.PI / 12) : t;
+          // a ball's channel is its three turns, a hinge's its one
+          if (j.axes.length === 3) {
+            const all = [...j.at];
+            all[i] = snapped;
+            editor.setTry(j.channel, all);
+          } else editor.setTry(j.channel, snapped);
         }, () => editor.emit("select"));
       }, `turn ${j.name} about ${a} (drag to try it)`);
       if (!lit) g.setAttribute("opacity", "0.6");
@@ -412,6 +421,23 @@ function drawJoints(part, s) {
       const tip = ring(now);
       el("path", { d: `M${c[0]},${c[1]}L${tip[0]},${tip[1]}`, stroke: COLORS[i], "stroke-width": 1.5, "pointer-events": "none" });
     }
+    if (j.kind === "LINEAR") {
+      // out along its -y, as far as its stroke goes (or a handle's length)
+      const out = [-v[1][0], -v[1][1]];
+      const len = Math.hypot(out[0], out[1]) || 1;
+      const reach = Math.max(j.stroke[1] * s * len, LENGTH * R);
+      const end = [c[0] + (out[0] / len) * reach, c[1] + (out[1] / len) * reach];
+      const g = handlePath(`M${c[0]},${c[1]}L${end[0]},${end[1]}`, COLORS[1], (e) => {
+        pick();
+        const at = j.slide;
+        follow(e, (d, ev) => {
+          const by = dot2(d, out) / (dot2(out, out) || 1) / s;
+          const x = clampTo(at + by, j.stroke[0], j.stroke[1]);
+          editor.setTry(j.channel, ev.shiftKey ? Math.round(x * 100) / 100 : x);
+        }, () => editor.emit("select"));
+      }, `slide ${j.name} out (drag to try it)`);
+      if (!lit) g.setAttribute("opacity", "0.6");
+    }
     const dot = el("circle", { cx: c[0], cy: c[1], r: lit ? 6 : 4, fill: lit ? "#6cb6ff" : "#d8dce4", stroke: "#121418", "stroke-width": 1.5, class: "hit" });
     el("title", {}, dot).textContent = `joint ${j.name}`;
     dot.addEventListener("pointerdown", (e) => (e.stopPropagation(), pick()));
@@ -419,23 +445,33 @@ function drawJoints(part, s) {
 }
 
 /**
- * drawHandles (rig and animate tabs): a marker on the model's root and on each IK target. Click
- * one to select it: arrows move it along the model's axes, and the root's rings turn it. They set
- * the root's channels and the targets' drivers: the pose test's (rig), the selected key's
- * (animate).
+ * drawHandles (rig and animate tabs): a marker on the model's root and on each IK target, and its
+ * pole. Click one to select it: arrows move it along the model's axes (its position channel), and
+ * the root's rings turn it (its rotation); drag a pole round its ring to swivel the bend. They set
+ * the pose test (rig), the picked move (animate).
  */
 function drawHandles() {
   const a = editor.viewer?.query({ q: "handles" });
   if (!a || a.error) return;
   const root = editor.rootChannels();
   const s = a.scale;
-  /** @type {{id: string, position: number[], move: string[], turn?: string[]}[]} */
+  if (editor.tab === "animation") drawArcs(s);
+  /** @type {any[]} */
   const iks = editor.ikShow === "hidden" ? [] : a.iks;
+  // a pole's ring: where its swivel can take it, faint, while its target is picked or it is dragged
+  for (const ik of iks) {
+    if (!ik.ring || (editor.handle !== ik.name && poleDrag?.name !== ik.name)) continue;
+    const ring = project(ik.ring);
+    if (ring.some((p) => !p)) continue;
+    el("path", { d: ring.map((p, n) => `${n ? "L" : "M"}${p?.[0]},${p?.[1]}`).join("") + "Z", stroke: "rgba(229,180,91,0.45)", "stroke-width": 1.5, "stroke-dasharray": "3 3", fill: "none", "pointer-events": "none" });
+  }
+  /** @type {{id: string, position: number[], move: string, turn?: string, ik?: any}[]} */
   const handles = [
     { id: "root", position: a.root.position, move: root.move, turn: root.turn },
-    ...iks.map((/** @type {any} */ ik) => ({ id: ik.name, position: ik.position, move: ["x", "y", "z"].map((x) => `${ik.name}_${x}`) })),
-    // a pole: the point its chain bends toward
-    ...iks.filter((/** @type {any} */ ik) => ik.pole).map((/** @type {any} */ ik) => ({ id: `${ik.name} pole`, position: ik.pole, move: ["x", "y", "z"].map((x) => `${ik.name}_pole_${x}`) })),
+    ...iks.map((/** @type {any} */ ik) => ({ id: ik.name, position: ik.position, move: ik.name })),
+    // a pole: the point its chain bends toward, which the engine works out (mech.ik_pole) and its
+    // swivel turns: drag it round its ring
+    ...iks.filter((/** @type {any} */ ik) => ik.pole).map((/** @type {any} */ ik) => ({ id: `${ik.name} pole`, position: ik.pole, move: "", ik })),
   ];
   const at = project(handles.map((x) => x.position));
   handles.forEach((x, n) => {
@@ -447,10 +483,11 @@ function drawHandles() {
       x.id === "root"
         ? el("rect", { x: p[0] - 7, y: p[1] - 7, width: 14, height: 14, transform: `rotate(45 ${p[0]} ${p[1]})`, fill: lit ? "#6cb6ff" : "rgba(216,220,228,0.85)", stroke: "#121418", "stroke-width": 1.5, class: "hit" })
         : pole
-          ? el("circle", { cx: p[0], cy: p[1], r: lit ? 8 : 6, fill: "rgba(18,20,24,0.6)", stroke: lit ? "#6cb6ff" : "rgba(229,180,91,0.9)", "stroke-width": 3, class: "hit" })
+          ? el("circle", { cx: p[0], cy: p[1], r: poleDrag?.name === x.ik?.name ? 7 : 5, fill: "rgba(18,20,24,0.6)", stroke: "rgba(229,180,91,0.85)", "stroke-width": 2, class: "hit" })
           : el("circle", { cx: p[0], cy: p[1], r: lit ? 8 : 6, fill: lit ? "#6cb6ff" : "rgba(229,180,91,0.9)", stroke: "#121418", "stroke-width": 1.5, class: "hit" });
-    el("title", {}, marker).textContent = x.id === "root" ? "the root: click to move and turn the whole model" : pole ? `${x.id}: the point the chain bends toward; click to move it` : `IK target ${x.id}: click to move it`;
-    marker.addEventListener("pointerdown", (e) => {
+    el("title", {}, marker).textContent = x.id === "root" ? "the root: click to move and turn the whole model" : pole ? `${x.id}: the point the chain bends toward, worked out from how it is built; drag it round the limb to swivel the bend (${x.ik.name}.swivel, ${+x.ik.swivel.toFixed(3)} rad; shift: 15° steps)` : `IK target ${x.id}: click to move it`;
+    if (pole) marker.addEventListener("pointerdown", (e) => swivelDrag(/** @type {PointerEvent} */ (e), x.ik));
+    else marker.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       editor.select(() => (editor.handle = lit ? "" : x.id));
     });
@@ -462,33 +499,271 @@ function drawHandles() {
   });
 }
 
+/** the pole being dragged round its ring @type {{name: string} | undefined} */
+let poleDrag;
+
+/**
+ * swivelDrag turns IK target `ik`'s swivel as its pole is dragged: the pole follows the pointer
+ * round its ring (the engine's: the pole at every swivel, a turn from where it was), to the point
+ * of the ring nearest the pointer on screen. One undo step.
+ * @param {PointerEvent} e @param {any} ik {name, swivel, ring}
+ */
+function swivelDrag(e, ik) {
+  const ring = project(ik.ring);
+  if (ring.some((p) => !p)) return;
+  const pts = /** @type {number[][]} */ (ring);
+  const n = pts.length;
+  const box = svg.getBoundingClientRect();
+  const s0 = ik.swivel;
+  const name = `${ik.name}.swivel`;
+  const key = `drag:swivel${++drags}`;
+  poleDrag = { name: ik.name };
+  follow(e, (_, ev) => {
+    const q = [ev.clientX - box.left, ev.clientY - box.top];
+    // the nearest point on the ring's segments: how far round it is, in parts of a turn
+    let best = Infinity;
+    let at = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      const ab = [b[0] - a[0], b[1] - a[1]];
+      const t = Math.min(1, Math.max(0, dot2([q[0] - a[0], q[1] - a[1]], ab) / (dot2(ab, ab) || 1)));
+      const d = Math.hypot(a[0] + ab[0] * t - q[0], a[1] + ab[1] * t - q[1]);
+      if (d < best) [best, at] = [d, (i + t) / n];
+    }
+    // the shorter way round from where it was
+    let by = (at > 0.5 ? at - 1 : at) * 2 * Math.PI;
+    if (ev.shiftKey) by = Math.round((s0 + by) / (Math.PI / 12)) * (Math.PI / 12) - s0;
+    editor.setChannels({ [name]: r5(round(s0 + by)) }, key);
+  }, () => ((poleDrag = undefined), editor.emit("select")));
+}
+
+/** an arc point's handle id: point `i` of arc `name` (Animation.arcs) @param {string} name @param {number} i */
+export const arcHandle = (name, i) => `arc ${name} ${i}`;
+
+/** the arc point picked in the view (editor.handle): its arc's name and the point, or null @returns {{name: string, i: number} | null} */
+export function pickedArcPoint() {
+  const m = /^arc (\S+) (\d+)$/.exec(editor.handle);
+  return m ? { name: m[1], i: Number(m[2]) } : null;
+}
+
+/** the arc of the animation named `name` @param {string} name @returns {any} */
+const arcNamed = (name) => editor.anim?.arcs?.find((/** @type {any} */ x) => x.name === name);
+
+/**
+ * drawArcs (animate tab): the arcs the shown motion's moves put positions on (mech.Arc), each the
+ * curve the engine samples through its points, with a dot per point; a twin's (the other side's,
+ * mirrored) dashed. Click one to edit it (editor.arc): the arc edited is drawn where the motion
+ * puts it, else on its preview position (editor.arcOn, the "arc" query), numbered. Drag a dot to
+ * move its point across the view (it picks it too; click a picked one to let it go); the picked
+ * one's arrows move it along the model's axes. Double-click its curve to add a point there; Delete
+ * removes the picked one (removeArcPoint). Every move naming the arc follows it.
+ * @param {number} s metres per model unit
+ */
+function drawArcs(s) {
+  const clip = editor.clipData;
+  const mo = clip?.motions?.[editor.motion];
+  const lanes = mo ? (editor.ask({ q: "motion", clip: clip.name, motion: editor.motion, n: 2 })?.moves ?? []) : [];
+  /** @type {any} the edited arc as drawn, where the motion shown puts it, else on its preview position */
+  let edited = null;
+  for (const lane of lanes)
+    for (const [own, l] of /** @type {[boolean, any][]} */ ([[true, lane], [false, lane.twin]]))
+      for (const a of l?.arcs ?? []) {
+        if (own && a.arc === editor.arc && !edited) {
+          edited = a;
+          continue;
+        }
+        arcCurve(a, own ? "none" : "4 4", 0.6);
+      }
+  if (editor.arc && !edited && arcNamed(editor.arc)) edited = editor.ask({ q: "arc", arc: editor.arc, on: editor.arcOn });
+  if (edited && !edited.error) editArc(edited, s);
+}
+
+/**
+ * arcCurve draws arc `a` (as the queries give it) to pick: click its curve or a dot to edit it.
+ * @param {any} a @param {string} dash @param {number} alpha
+ */
+function arcCurve(a, dash, alpha) {
+  const curve = project(a.curve);
+  let d = "";
+  curve.forEach((p, n) => p && (d += `${n && curve[n - 1] ? "L" : "M"}${p[0]},${p[1]}`));
+  const pick = (/** @type {Event} */ e) => (e.stopPropagation(), editor.select(() => ((editor.arc = a.arc), (editor.arcOn = a.name), (editor.inspect = "arc"))));
+  const hit = handlePath(d, `rgba(229,180,91,${alpha})`, (e) => pick(e), `arc ${a.arc} (on ${a.name}): click to edit it`);
+  hit.firstElementChild?.setAttribute("stroke-dasharray", dash);
+  for (const p of project(a.points)) if (p) el("circle", { cx: p[0], cy: p[1], r: 3, fill: `rgba(229,180,91,${alpha})`, "pointer-events": "none" });
+  return curve;
+}
+
+/**
+ * editArc draws the arc edited (`a`: as the queries give it) with its points to drag.
+ * @param {any} a @param {number} s
+ */
+function editArc(a, s) {
+  const arc = arcNamed(a.arc);
+  if (!arc) return;
+  const points = arc.points;
+  const curve = project(a.curve);
+  let d = "";
+  curve.forEach((p, n) => p && (d += `${n && curve[n - 1] ? "L" : "M"}${p[0]},${p[1]}`));
+  el("path", { d, stroke: "rgba(229,180,91,0.95)", "stroke-width": 2.5, fill: "none", "pointer-events": "none" });
+  // the curve, wide, to double-click: a point added at the sample nearest the pointer, as an
+  // offset like the others (the points drawn are where they put the position: rest + offset)
+  const hit = el("path", { d, stroke: "transparent", "stroke-width": 12, fill: "none", class: "hit" });
+  el("title", {}, hit).textContent = `arc ${a.arc} (on ${a.name}): double-click to add a point here`;
+  hit.addEventListener("pointerdown", (e) => {
+    const ev = /** @type {PointerEvent} */ (e);
+    ev.stopPropagation();
+    const box = svg.getBoundingClientRect();
+    const q = [ev.clientX - box.left, ev.clientY - box.top];
+    const again = lastCurveDown && lastCurveDown.id === a.arc && performance.now() - lastCurveDown.at < 400 && Math.hypot(q[0] - lastCurveDown.q[0], q[1] - lastCurveDown.q[1]) < 6;
+    lastCurveDown = again ? undefined : { id: a.arc, at: performance.now(), q };
+    if (!again) return;
+    let n = 0;
+    curve.forEach((p, m) => p && Math.hypot(p[0] - q[0], p[1] - q[1]) < Math.hypot((curve[n]?.[0] ?? Infinity) - q[0], (curve[n]?.[1] ?? Infinity) - q[1]) && (n = m));
+    const u = n / Math.max(curve.length - 1, 1);
+    const after = Math.min(Math.floor(u * (points.length - 1)), points.length - 2);
+    const rest = a.points[0].map((/** @type {number} */ x, /** @type {number} */ c) => x - points[0][c] * s);
+    const at = a.curve[n].map((/** @type {number} */ x, /** @type {number} */ c) => r5(round((x - rest[c]) / s)));
+    editor.edit("anim", () => {
+      insertArcPoint(points, after, at);
+      editor.handle = arcHandle(a.arc, after + 1);
+    });
+  });
+  const pts = project(a.points);
+  pts.forEach((p, i) => {
+    if (!p) return;
+    const id = arcHandle(a.arc, i);
+    const lit = editor.handle === id;
+    const dot = el("circle", { cx: p[0], cy: p[1], r: lit ? 7 : 5, fill: lit ? "#6cb6ff" : "#121418", stroke: "rgba(229,180,91,0.95)", "stroke-width": 2, class: "hit" });
+    el("title", {}, dot).textContent = `arc ${a.arc}, point ${i + 1} of ${pts.length} (at ${+(i / Math.max(pts.length - 1, 1)).toFixed(3)} on a shape): drag to move it across the view (shift: 0.01 steps), Delete to remove it`;
+    dot.addEventListener("pointerdown", (e) => {
+      const point = points[i];
+      const axes = screenAxes(a.points[i]);
+      if (!point || !axes) return;
+      if (!lit) editor.select(() => (editor.handle = id));
+      const base = [...point];
+      const key = `drag:arc${++drags}`;
+      let moved = false;
+      follow(
+        /** @type {PointerEvent} */ (e),
+        (d, ev) => {
+          if (!moved && Math.hypot(d[0], d[1]) < 3) return;
+          moved = true;
+          const by = unproject(axes.v, d);
+          editor.edit("anim", () => by.forEach((b, c) => (point[c] = r5(round(base[c] + b / s, ev.shiftKey ? 0.01 : 1e-4)))), key);
+        },
+        () => (!moved && lit ? editor.select(() => (editor.handle = "")) : editor.emit("select")),
+      );
+    });
+    const t = el("text", { x: p[0] + 8, y: p[1] + 14, fill: "rgba(229,180,91,0.95)", stroke: "#121418", "stroke-width": 3, "paint-order": "stroke", "font-size": 10, "pointer-events": "none" });
+    t.textContent = String(i + 1);
+    if (!lit) return;
+    const key = `drag:arc${++drags}`;
+    handleTools(
+      {
+        id,
+        position: a.points[i],
+        move: "",
+        drag: (axis, by, ev) => {
+          const point = points[i];
+          if (!point) return;
+          const base = (drag0 ??= [...point]);
+          editor.edit("anim", () => (point[axis] = r5(round(base[axis] + by, ev.shiftKey ? 0.01 : 1e-4))), key);
+        },
+        done: () => (drag0 = undefined),
+      },
+      s,
+    );
+  });
+}
+
+/** an arc point as its drag started @type {number[] | undefined} */
+let drag0;
+
+/** the last press on an arc's curve, to tell a double-click (the view is redrawn every frame, so the browser's dblclick can't) @type {{id: string, at: number, q: number[]} | undefined} */
+let lastCurveDown;
+
+/**
+ * removePickedArcPoint removes the arc point picked in the view (editor.handle), if one is and its
+ * arc keeps two. Returns whether one was picked (the Delete key's, before the curve editor's).
+ * @returns {boolean}
+ */
+export function removePickedArcPoint() {
+  const p = pickedArcPoint();
+  const arc = p && arcNamed(p.name);
+  if (!p || !arc) return false;
+  if (arc.points.length <= 2) {
+    editor.flash("An arc keeps two points: delete the arc in the Arcs list");
+    return true;
+  }
+  editor.edit("anim", () => {
+    removeArcPoint(arc, p.i);
+    editor.handle = arcHandle(p.name, Math.max(p.i - 1, 0));
+  });
+  return true;
+}
+
+/**
+ * screenAxes: where `position` (metres) shows on the canvas, `c`, and how far each of the model's
+ * axes goes on screen per metre there, `v`; null when it is off screen.
+ * @param {number[]} position @returns {{c: number[], v: number[][]} | null}
+ */
+function screenAxes(position) {
+  const pts = project([position, ...[0, 1, 2].map((k) => add(position, scale(IDENTITY_AXES[k], STEP)))]);
+  if (pts.length < 4 || pts.some((p) => !p)) return null;
+  const c = /** @type {number[]} */ (pts[0]);
+  return { c, v: pts.slice(1).map((p) => [(/** @type {number[]} */ (p)[0] - c[0]) / STEP, (/** @type {number[]} */ (p)[1] - c[1]) / STEP]) };
+}
+
+/**
+ * unproject is the shortest move (metres along the model's axes) that shows as screen offset `d`,
+ * the axes showing as `v` per metre: across the view, its depth kept (v's pseudo-inverse).
+ * @param {number[][]} v @param {number[]} d @returns {number[]}
+ */
+function unproject(v, d) {
+  let a = 0, b = 0, c = 0;
+  for (const q of v) (a += q[0] * q[0]), (b += q[0] * q[1]), (c += q[1] * q[1]);
+  const det = a * c - b * b;
+  if (Math.abs(det) < 1e-9) return [0, 0, 0];
+  const w = [(c * d[0] - b * d[1]) / det, (a * d[1] - b * d[0]) / det];
+  return v.map((q) => dot2(q, w));
+}
+
 /**
  * handleTools: the selected handle's arrows (and the root's rings), along and about the model's
- * axes, at `x.position`. `s`: metres per model unit.
- * @param {{id: string, position: number[], move: string[], turn?: string[]}} x @param {number} s
+ * axes, at `x.position`. `s`: metres per model unit. They set its channels (`move`, `turn`), or,
+ * given `drag`, call it with the axis and how far along it (model units) the drag has gone.
+ * @param {{id: string, position: number[], move: string, turn?: string, drag?: (axis: number, by: number, e: PointerEvent) => void, done?: () => void}} x @param {number} s
  */
 function handleTools(x, s) {
-  const pts = project([x.position, ...[0, 1, 2].map((k) => add(x.position, scale(IDENTITY_AXES[k], STEP)))]);
-  if (pts.length < 4 || pts.some((p) => !p)) return;
-  const c = /** @type {number[]} */ (pts[0]);
-  const v = pts.slice(1).map((p) => [(/** @type {number[]} */ (p)[0] - c[0]) / STEP, (/** @type {number[]} */ (p)[1] - c[1]) / STEP]);
+  const axes = screenAxes(x.position);
+  if (!axes) return;
+  const { c, v } = axes;
   const k = LENGTH / (Math.max(...v.map((q) => Math.hypot(q[0], q[1]))) || 1);
   const key = `drag:handle${++drags}`;
   v.forEach((vv, i) => {
     const end = [c[0] + vv[0] * k, c[1] + vv[1] * k];
     handlePath(`M${c[0]},${c[1]}L${end[0]},${end[1]}`, COLORS[i], (e) => {
-      const name = x.move[i];
-      const v0 = editor.shown()[name] ?? 0;
+      if (x.drag) {
+        const drag = x.drag;
+        follow(e, (d, ev) => drag(i, dot2(d, vv) / (dot2(vv, vv) || 1) / s, ev), () => (x.done?.(), editor.emit("select")));
+        return;
+      }
+      // a position moves whole: this axis of it
+      const name = x.move;
+      const v0 = /** @type {number[]} */ (editor.shown()[name] ?? [0, 0, 0]);
       follow(e, (d, ev) => {
         // world metres along the axis, to model units
         const by = dot2(d, vv) / (dot2(vv, vv) || 1) / s;
-        editor.setChannels({ [name]: r5(round(v0 + by, ev.shiftKey ? 0.01 : 1e-4)) }, key);
+        const v = [...v0];
+        v[i] = r5(round(v0[i] + by, ev.shiftKey ? 0.01 : 1e-4));
+        editor.setChannels({ [name]: v }, key);
       }, () => editor.emit("select"));
     }, `move ${x.id} along ${"xyz"[i]} (shift: 0.01 steps)`);
     el("circle", { cx: end[0], cy: end[1], r: 5, fill: COLORS[i], "pointer-events": "none" });
   });
   const turn = x.turn;
-  if (!turn?.length) return;
+  if (!turn) return;
   v.forEach((_, i) => {
     const u = v[(i + 1) % 3];
     const w = v[(i + 2) % 3];
@@ -499,7 +774,7 @@ function handleTools(x, s) {
     }
     handlePath(ring.join(""), COLORS[i], (e) => {
       const now = editor.shown();
-      const r0 = euler(turn.map((n) => now[n] ?? 0));
+      const r0 = euler(/** @type {number[]} */ (now[turn] ?? [0, 0, 0]));
       const sign = Math.sign(u[0] * w[1] - u[1] * w[0]) || 1;
       const box = svg.getBoundingClientRect();
       const angle = (/** @type {number} */ px, /** @type {number} */ py) => Math.atan2(py - box.top - c[1], px - box.left - c[0]);
@@ -513,7 +788,7 @@ function handleTools(x, s) {
         last = a;
         const theta = ev.shiftKey ? Math.round((sign * turned) / (Math.PI / 12)) * (Math.PI / 12) : sign * turned;
         const r = eulerFrom(mul(rotation(i, theta), r0)).map(r5);
-        editor.setChannels(Object.fromEntries(turn.map((n, j) => [n, r[j]])), key);
+        editor.setChannels({ [turn]: r }, key);
       }, () => editor.emit("select"));
     }, `turn ${x.id} about ${"xyz"[i]} (shift: 15° steps)`);
   });

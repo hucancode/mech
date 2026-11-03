@@ -144,6 +144,8 @@ write_value :: proc(b: ^strings.Builder, v: any, indent: int) {
           write_number(b, f64(c))
         }
         strings.write_byte(b, ']')
+      case string:
+        strings.write_quoted_string(b, x)
       case:
         strings.write_string(b, "null")
       }

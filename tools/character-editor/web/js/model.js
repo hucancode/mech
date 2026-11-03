@@ -1,6 +1,6 @@
 // @ts-check
 // Helpers over model and animation data: the parts library, its slots and the joints they expose,
-// the assembly tree (instances matching slots), drivers, names, renames. Data only; anything the game computes, the viewer computes
+// the assembly tree (instances matching slots), channel values, arcs, names, renames. Data only; anything the game computes, the viewer computes
 // (src/viewer/query.odin).
 
 import { apply, euler, eulerFrom, mul, rotation, transpose } from "./math3.js";
@@ -14,8 +14,17 @@ export const PRIMITIVES = ["BOX", "WEDGE", "CYLINDER", "HALF_CYLINDER", "QUARTER
  * @type {Record<string, "any" | "y">}
  */
 const PRIMITIVE_SYMMETRY = { BOX: "any", SPHERE: "any", CYLINDER: "y" };
-/** the kinds a joint can be; FIXED is no joint at all: an empty stack bolts the part on rigid */
-export const JOINT_KINDS = ["SPIN", "HINGE", "BALL"];
+/** the kinds a joint can be (mech.JointKind): a hinge (one turn: a pin about x, a turntable about y), a linear actuator (one slide), a ball (three turns). HINGE, the default, is left out of files; a part with no joints is bolted on rigid */
+export const JOINT_KINDS = ["HINGE", "LINEAR", "BALL"];
+
+/** the axes a hinge can turn about (Joint.axis): X a pin, Y a turntable. X, the default, is left out of files */
+export const HINGE_AXES = ["X", "Y"];
+
+/** a joint's kind, HINGE when it says none (as the engine reads it) @param {any} j @returns {string} */
+export const jointKind = (j) => j?.kind ?? "HINGE";
+
+/** whether a joint is a turntable: a hinge about y, built as two discs @param {any} j */
+export const isTurntable = (j) => jointKind(j) === "HINGE" && j.axis === "Y";
 /** the eases a shape point is reached by (mech.Ease): mechanical; LINEAR, the default, is left out of files */
 export const EASES = ["LINEAR", "IN", "OUT", "SETTLE", "STEP"];
 
@@ -50,15 +59,29 @@ export function slotUsers(m, part, slot) {
 }
 
 /** the joints instance i moves by: its part's @param {any} m @param {number} i @returns {any[]} */
-export function exposedJoints(m, i) {
+export function instanceJoints(m, i) {
   return partOf(m, i)?.joints ?? [];
 }
 
-/** the axes a joint turns about @param {any} j @returns {string[]} */
+/** @type {(j: any) => any} the engine's "dofs" query, set by the editor once its viewer runs */
+let engineDofs = () => null;
+
+/** setDofsSource makes jointAxes ask the engine (the "dofs" query) @param {(j: any) => any} ask */
+export const setDofsSource = (ask) => (engineDofs = ask);
+
+/**
+ * the axes of its frame a joint moves about (along, for a LINEAR), as the engine has them
+ * (mech.joint_axes; the "dofs" query): its stops are min/max on them. Before the engine runs, by kind.
+ * @param {any} j @returns {string[]}
+ */
 export function jointAxes(j) {
-  const kind = j?.kind ?? "FIXED";
-  return { FIXED: [], SPIN: ["Y"], HINGE: ["X"], BALL: ["X", "Y", "Z"] }[/** @type {"FIXED"} */ (kind)] ?? [];
+  if (!j) return [];
+  const kind = jointKind(j);
+  return engineDofs(j)?.axes ?? (kind === "BALL" ? ["X", "Y", "Z"] : kind === "HINGE" && j.axis !== "Y" ? ["X"] : ["Y"]);
 }
+
+/** a joint's channel: one per joint, `<instance>.<joint>` (a number, or [x, y, z] for a ball) @param {string} inst @param {any} j */
+export const jointChannel = (inst, j) => `${inst}.${j.name}`;
 
 /**
  * treeOrder lists the instances depth first, each under its parent (siblings in list order), with
@@ -135,82 +158,88 @@ export function uniqueName(base, taken) {
   for (let i = 2; ; i++) if (!taken(`${base}_${i}`)) return `${base}_${i}`;
 }
 
-/** The axes of a joint's frame a drive turns about. */
-export const AXES = ["X", "Y", "Z"];
-
-/** a new driver named from `base`, ranged over `range` (a joint's, jointRange), else a quarter turn each way @param {any} m @param {string} base @param {number[]} [range] */
-export function newDriver(m, base, range) {
-  m.drivers ??= [];
-  const [min, max] = range ?? [-1.5708, 1.5708];
-  const d = { name: uniqueName(base, (n) => m.drivers.some((/** @type {any} */ x) => x.name === n)), min, max };
-  m.drivers.push(d);
-  return d;
-}
-
-/**
- * the channel turning joint `j` of instance `inst` about `axis`: `inst.joint`, or `inst.joint.x`
- * for a joint with several axes (a ball). The engine names them so (mech.channel_name); clips key
- * them like drivers.
- * @param {string} inst @param {any} j @param {string} axis
- */
-export const jointChannel = (inst, j, axis) => (jointAxes(j).length > 1 ? `${inst}.${j.name}.${axis.toLowerCase()}` : `${inst}.${j.name}`);
-
 // ---- IK targets ------------------------------------------------------------------------------------
 
-/** an IK target's channels, after its name: the target's x, y, z (model units) and the weight */
-export const IK_SUFFIXES = ["_x", "_y", "_z", "_weight"];
-/** a reaching IK target's pole's (an aiming one has none): x, y, z (model units), moving the point its chain bends toward */
-export const POLE_SUFFIXES = ["_pole_x", "_pole_y", "_pole_z"];
-const ALL_IK_SUFFIXES = [...IK_SUFFIXES, ...POLE_SUFFIXES];
-
-/** addIk adds an IK target reaching instance `tip`'s frame by turning the chain from `root`. Returns its index. @param {any} m @param {string} name @param {string} root @param {string} tip */
-export function addIk(m, name, root, tip) {
+/** addIk adds an IK target reaching instance `tip`'s frame (the engine finds its chain, mech.ik_root, and its pole). Returns its index. @param {any} m @param {string} name @param {string} tip */
+export function addIk(m, name, tip) {
   m.iks ??= [];
   name = uniqueName(name, (n) => m.iks.some((/** @type {any} */ x) => x.name === n));
-  m.iks.push({ name, root, tip });
+  m.iks.push({ name, tip });
   return m.iks.length - 1;
 }
 
-/** renameIk renames an IK target, and its channels through the rest pose and the open animation @param {any} m @param {any} a @param {any} ik @param {string} to */
+/** renameIk renames an IK target, and its channels (`<ik>`, `<ik>.swivel`, `<ik>.weight`) through the rest pose and the open animation @param {any} m @param {any} a @param {any} ik @param {string} to */
 export function renameIk(m, a, ik, to) {
-  for (const x of ALL_IK_SUFFIXES) renameDriver(m, a, ik.name + x, to + x);
+  const from = ik.name;
+  renameChannels(m, a, (n) => (n === from ? to : n.startsWith(`${from}.`) ? to + n.slice(from.length) : undefined));
   ik.name = to;
 }
 
+// ---- channel values: a number, or [x, y, z] (mech.ChannelKind's size); a move's `by` also names
+// arcs, a string under a position --------------------------------------------------------------
+
+/** @typedef {number | number[]} Value a channel's value(s) */
+
+/** a + b, value by value @param {Value | undefined} a @param {Value} b @returns {Value} */
+export const addValue = (a, b) => (Array.isArray(b) ? b.map((x, k) => (/** @type {any} */ (a)?.[k] ?? 0) + x) : /** @type {number} */ (a ?? 0) + b);
+
+/** f of each of a value's values (and of b's, alike) @param {Value} a @param {Value | undefined} b @param {(x: number, y: number) => number} f @returns {Value} */
+export const zipValue = (a, b, f) => (Array.isArray(a) ? a.map((x, k) => f(x, /** @type {any} */ (b)?.[k] ?? 0)) : f(a, /** @type {number} */ (b ?? 0)));
+
+/** a channel's value at rest: 0, or [0, 0, 0] @param {any} c a channel (the "channels" query) @returns {Value} */
+export const zeroValue = (c) => (c?.size === 3 ? [0, 0, 0] : 0);
+
+/** the amounts among a move's values (not its arcs) @param {Record<string, any> | undefined} by @returns {Record<string, Value>} */
+export const amountsOf = (by) => Object.fromEntries(Object.entries(by ?? {}).filter(([, v]) => typeof v !== "string"));
+
+/** the arcs a move's values name, by the position they move @param {Record<string, any> | undefined} by @returns {Record<string, string>} */
+export const arcsOf = (by) => Object.fromEntries(Object.entries(by ?? {}).filter(([, v]) => typeof v === "string"));
+
 /**
- * @typedef {{name: string, names: string[]}} Entry
- * vectors puts channel names into entries: `<stem>_x`, `_y`, `_z` together (an IK target's, the
- * root's), each other name alone, in the order the names come.
- * @param {string[]} names @returns {Entry[]}
+ * A channel's slider range per value (the "channels" query's min and max). Equal ends (a free
+ * joint) give a half turn each way. @param {any} c @param {number} k @returns {[number, number]}
  */
-export function vectors(names) {
-  const has = new Set(names);
-  /** @type {Entry[]} */
-  const out = [];
-  const done = new Set();
-  for (const n of names) {
-    if (done.has(n)) continue;
-    // `_x` (an IK target's, the root's) or `.x` (a ball joint's)
-    const [, stem, sep] = /^(.*)([_.])[xyz]$/.exec(n) ?? [];
-    const three = stem !== undefined ? ["x", "y", "z"].map((a) => `${stem}${sep}${a}`) : [];
-    if (three.length && three.every((x) => has.has(x))) {
-      three.forEach((x) => done.add(x));
-      out.push({ name: /** @type {string} */ (stem), names: three });
-    } else out.push({ name: n, names: [n] });
+export function channelRange(c, k = 0) {
+  const lo = c.min?.[k] ?? 0;
+  const hi = c.max?.[k] ?? 0;
+  if (lo === hi) return [-Math.PI, Math.PI];
+  return lo < hi ? [lo, hi] : [lo, lo + 1];
+}
+
+// ---- twins: the other side of the body (mech.channel_twin, the "twins" query) --------------------
+
+/** @typedef {Record<string, {twin: string, flip: Value}>} Twins each channel's twin and what its values are times there */
+
+/**
+ * moveValues is a move's amounts as the engine moves them, by channel: with a twin (`twin`: WITH
+ * or OPPOSITE), its channels' twins' too, by the same amounts (x mirrored for an IK target). For
+ * a pose, which runs at once. @param {any} mv @param {Twins} twins @returns {Record<string, Value>}
+ */
+export function moveValues(mv, twins) {
+  const own = amountsOf(mv?.by);
+  if (!mv?.twin || mv.twin === "NONE") return own;
+  const out = { ...own };
+  for (const [n, v] of Object.entries(own)) {
+    const t = twins[n];
+    if (t) out[t.twin] = addValue(out[t.twin], zipValue(v, t.flip, (x, f) => x * f));
   }
   return out;
 }
 
 /**
- * A channel's slider range (the "channels" query's min and max). Equal ends (a free joint, a
- * driver without a range) give a half turn each way.
- * @param {any} c @returns {[number, number]}
+ * foldTwins writes values (by channel) as a move: when every channel with a twin has its twin at
+ * the same value (x mirrored), one side of each pair and `twin: "WITH"` (the left side kept, l_
+ * before r_); else every value, with no twin. @param {Record<string, Value>} values @param {Twins} twins @returns {{twin?: string, by: any}}
  */
-export function driverRange(c) {
-  const lo = c.min ?? 0;
-  const hi = c.max ?? 0;
-  if (lo === hi) return [-Math.PI, Math.PI];
-  return lo < hi ? [lo, hi] : [lo, lo + 1];
+export function foldTwins(values, twins) {
+  const near = (/** @type {Value} */ a, /** @type {Value} */ b) => [a].flat().every((x, k) => Math.abs(x - ([b].flat()[k] ?? 0)) < 1e-6);
+  const pairs = Object.entries(values).filter(([n]) => twins[n]);
+  const all = pairs.every(([n, v]) => near(values[twins[n].twin] ?? zipValue(v, v, () => 0), zipValue(v, twins[n].flip, (x, f) => x * f)));
+  if (!pairs.length || !all) return { by: { ...values } };
+  /** @type {Record<string, Value>} */
+  const kept = {};
+  for (const [n, v] of Object.entries(values).sort(([a], [b]) => (a < b ? -1 : 1))) if (!(twins[n] && twins[n].twin in kept)) kept[n] = v;
+  return { twin: "WITH", by: kept };
 }
 
 /** a deep copy of plain data @template T @param {T} v @returns {T} */
@@ -218,14 +247,14 @@ export const clone = (v) => JSON.parse(JSON.stringify(v));
 
 // ---- renames, carried through everything that names the thing --------------------------------
 
-/** an instance's rename, carried to its children, the IK targets on it, and its joints' channels (in the drivers, the rest pose and the open animation `a`) @param {any} m @param {any} a @param {string} from @param {string} to */
+/** an instance's rename, carried to its children, the IK targets on it, and its joints' channels (in the rest pose and the open animation `a`) @param {any} m @param {any} a @param {string} from @param {string} to */
 export function renameInstance(m, a, from, to) {
   renameChannels(m, a, (n) => (n.startsWith(`${from}.`) ? to + n.slice(from.length) : undefined));
-  for (const p of m.assembly ?? []) if (p.parent === from) p.parent = to;
-  for (const ik of m.iks ?? []) {
-    if (ik.root === from) ik.root = to;
-    if (ik.tip === from) ik.tip = to;
+  for (const p of m.assembly ?? []) {
+    if (p.parent === from) p.parent = to;
+    if (p.mirror === from) p.mirror = to;
   }
+  for (const ik of m.iks ?? []) if (ik.tip === from) ik.tip = to;
 }
 
 /** a library part's rename, carried to the instances placing it @param {any} m @param {string} from @param {string} to */
@@ -239,13 +268,42 @@ export function renameSlot(m, part, from, to) {
   for (const x of slotUsers(m, part, from)) x.parent_slot = to;
 }
 
-/** joint `from` of library part `part` renamed, carried to its channels (in the drivers, the rest pose and the open animation `a`) @param {any} m @param {any} a @param {string} part @param {string} from @param {string} to */
+/** joint `from` of library part `part` renamed, carried to its channels (in the rest pose and the open animation `a`) @param {any} m @param {any} a @param {string} part @param {string} from @param {string} to */
 export function renamePartJoint(m, a, part, from, to) {
   for (const x of m.assembly ?? []) {
     if (x.part !== part) continue;
+    for (const r of x.joints ?? []) if (r.name === from) r.name = to;
     const was = `${x.name}.${from}`;
-    renameChannels(m, a, (n) => (n === was || n.startsWith(`${was}.`) ? `${x.name}.${to}${n.slice(was.length)}` : undefined));
+    renameChannels(m, a, (n) => (n === was ? `${x.name}.${to}` : undefined));
   }
+}
+
+/** dropPartJoint forgets how the instances placing `part` set its joint `name` at rest (it is gone) @param {any} m @param {string} part @param {string} name */
+export function dropPartJoint(m, part, name) {
+  for (const x of m.assembly ?? []) if (x.part === part) setInstanceRest(x, name, "twist", 0), setInstanceRest(x, name, "bend", 0);
+}
+
+/** how instance `inst` sets its part's joint `name` at rest: {twist, bend}, radians, 0 when it doesn't say @param {any} inst @param {string} name */
+export function instanceRest(inst, name) {
+  const r = inst.joints?.find((/** @type {any} */ x) => x.name === name);
+  return { twist: r?.twist ?? 0, bend: r?.bend ?? 0 };
+}
+
+/**
+ * setInstanceRest sets how `inst` sets its part's joint `name` at rest: `key` (twist or bend) to
+ * `v` radians. An entry left all 0 goes, and the list with it.
+ * @param {any} inst @param {string} name @param {"twist" | "bend"} key @param {number} v
+ */
+export function setInstanceRest(inst, name, key, v) {
+  let r = inst.joints?.find((/** @type {any} */ x) => x.name === name);
+  if (!r) {
+    if (!v) return;
+    (inst.joints ??= []).push((r = { name }));
+  }
+  if (v) r[key] = r5(v);
+  else delete r[key];
+  if (!r.twist && !r.bend) inst.joints.splice(inst.joints.indexOf(r), 1);
+  if (!inst.joints.length) delete inst.joints;
 }
 
 /** @param {any} m @param {string} from @param {string} to */
@@ -254,71 +312,60 @@ export function renameMaterial(m, from, to) {
   for (const k of ["female", "male", "metal"]) if (m.hardware?.[k] === from) m.hardware[k] = to;
 }
 
-/** A channel's rename (a driver's, an IK target's) carried through the rest pose, the drivers and the open animation (the driver itself is renamed by the caller). @param {any} m @param {any} a @param {string} from @param {string} to */
-export function renameDriver(m, a, from, to) {
-  renameChannels(m, a, (n) => (n === from ? to : undefined));
-}
-
 /**
- * renameChannels renames channels wherever they are named: the model's rest pose, its drivers'
- * moves and the open animation's motions' moves. `rename` gives a name's new one, or undefined to
- * keep it. @param {any} m @param {any} a @param {(name: string) => string | undefined} rename
+ * renameChannels renames channels wherever they are named: the model's rest pose and the open
+ * animation's motions' moves. `rename` gives a name's new one, or undefined to keep it.
+ * @param {any} m @param {any} a @param {(name: string) => string | undefined} rename
  */
 export function renameChannels(m, a, rename) {
-  const renamed = (/** @type {any} */ values) => packValues(Object.fromEntries(Object.entries(flatValues(values)).map(([n, v]) => [rename(n) ?? n, v])));
-  if (m?.pose) m.pose = renamed(m.pose);
-  for (const d of m?.drivers ?? []) for (const mv of d.moves ?? []) mv.by = renamed(mv.by);
+  const renamed = (/** @type {any} */ by) => Object.fromEntries(Object.entries(by ?? {}).map(([n, v]) => [rename(n) ?? n, v]));
+  if (m?.pose?.by) m.pose.by = renamed(m.pose.by);
   for (const c of a?.clips ?? []) for (const mo of c.motions ?? []) for (const mv of mo.moves ?? []) mv.by = renamed(mv.by);
 }
 
 /**
- * Channel amounts are as the files hold them: a number per channel, or `[x, y, z]` under a
- * vector's stem for its three (an IK target `l_leg`: l_leg_x, _y, _z; a pole `l_leg_pole`; the
- * root's `root`, `root_turn`; a ball joint `l_arm.shoulder`: .x, .y, .z), as the engine reads
- * them (mech.Value). flatValues spreads them out, a number per channel name.
- * @param {Record<string, number | number[]> | undefined} values @returns {Record<string, number>}
+ * insertArcPoint adds a point to arc `points` after point `i`: `at`, else halfway to the next (on
+ * past the last, along its last segment). Every later point moves one on along the shape.
+ * @param {number[][]} points @param {number} i @param {number[]} [at]
  */
-export function flatValues(values) {
-  /** @type {Record<string, number>} */
-  const out = {};
-  for (const [n, v] of Object.entries(values ?? {})) {
-    if (Array.isArray(v)) ["x", "y", "z"].forEach((a, k) => (out[`${n}${n.includes(".") ? "." : "_"}${a}`] = v[k] ?? 0));
-    else out[n] = v;
-  }
-  return out;
-}
-
-/** packValues is flatValues undone: each vector's three, when all are set, as one [x, y, z] @param {Record<string, number>} flat @returns {Record<string, number | number[]>} */
-export function packValues(flat) {
-  /** @type {Record<string, number | number[]>} */
-  const out = {};
-  for (const e of vectors(Object.keys(flat))) out[e.name] = e.names.length === 3 ? e.names.map((n) => flat[n]) : flat[e.name];
-  return out;
-}
-
-/** a driver's channels (the joints' it moves), by name, from its moves @param {any} d @returns {string[]} */
-export function driverChannels(d) {
-  return [...new Set((d.moves ?? []).flatMap((/** @type {any} */ mv) => Object.keys(flatValues(mv.by))))];
+export function insertArcPoint(points, i, at) {
+  const p = points[i];
+  const back = points[i - 1] ?? p.map((x, c) => (c === 2 ? x - 0.5 : x));
+  const q = points[i + 1] ?? p.map((x, c) => 2 * x - back[c]);
+  points.splice(i + 1, 0, at ?? p.map((x, c) => Math.round(((x + q[c]) / 2) * 1e4) / 1e4));
 }
 
 /**
- * copyDriverMoves copies the moves of `from` naming instances in `names` (old to new), renamed,
- * into driver `to`, at their delays. @param {any} from @param {any} to @param {Map<string, string>} names
+ * removeArcPoint removes point `i` of arc `arc` (never below two). Returns whether it did.
+ * @param {any} arc @param {number} i
  */
-export function copyDriverMoves(from, to, names) {
-  for (const mv of from.moves ?? []) {
-    const by = Object.fromEntries(
-      Object.entries(flatValues(mv.by)).flatMap(([n, v]) => {
-        const inst = n.slice(0, n.indexOf("."));
-        return names.has(inst) ? [[`${names.get(inst)}${n.slice(inst.length)}`, v]] : [];
-      }),
-    );
-    if (!Object.keys(by).length) continue;
-    to.moves ??= [];
-    const at = to.moves.find((/** @type {any} */ x) => (x.delay ?? 0) === (mv.delay ?? 0));
-    if (at) at.by = packValues({ ...flatValues(at.by), ...by });
-    else to.moves.push({ ...(mv.delay ? { delay: mv.delay } : {}), by: packValues(by) });
-  }
+export function removeArcPoint(arc, i) {
+  if (arc.points.length <= 2) return false;
+  arc.points.splice(i, 1);
+  return true;
+}
+
+/** the moves naming arc `name`, where: {clip, motion, move, mv, on (the position it moves)} @param {any} a @param {string} name */
+export function arcUsers(a, name) {
+  const out = [];
+  for (const [c, clip] of (a?.clips ?? []).entries())
+    for (const [k, mo] of (clip.motions ?? []).entries())
+      for (const [n, mv] of (mo.moves ?? []).entries()) for (const [on, v] of Object.entries(mv.by ?? {})) if (v === name) out.push({ clip: c, motion: k, move: n, mv, on });
+  return out;
+}
+
+/** arc `from` renamed, carried to the moves naming it @param {any} a @param {string} from @param {string} to */
+export function renameArc(a, from, to) {
+  for (const u of arcUsers(a, from)) u.mv.by[u.on] = to;
+  const arc = a.arcs?.find((/** @type {any} */ x) => x.name === from);
+  if (arc) arc.name = to;
+}
+
+/** arc `name` deleted, and the moves' values naming it @param {any} a @param {string} name */
+export function deleteArc(a, name) {
+  for (const u of arcUsers(a, name)) delete u.mv.by[u.on];
+  a.arcs = (a.arcs ?? []).filter((/** @type {any} */ x) => x.name !== name);
+  if (!a.arcs.length) delete a.arcs;
 }
 
 // ---- authoring helpers ---------------------------------------------------------------------------
@@ -559,30 +606,9 @@ export function scalePart(part, f, joints = false) {
   for (const s of part.slots ?? []) s.position = mul(s.position);
 }
 
-// ---- joint defaults ------------------------------------------------------------------------------
+// ---- joint hardware --------------------------------------------------------------------------------
 
-/**
- * Default proportions per joint kind, at size 1 (the engine scales them by the joint's `size`,
- * mech.joint_scaled): after the mech's knee and waist (assets/characters/mech.json).
- * @type {Record<string, any>}
- */
-const JOINT_DEFAULTS = {
-  HINGE: { jaw: 0.5, lug_t: 0.25, lug_d: 1, shank: 0.4, flange_t: 0.55, pin_r: 0.2, clr: 0.1, tang: true, disc_f: true, disc_m: true },
-  BALL: { flange_t: 0.18, ball_r: 0.5, socket_t: 0.2, stud_len: 0.15, flange_w: 1.3 },
-  SPIN: { flange_w: 1, flange_t: 0.25 },
-};
-
-/** The parameters each kind uses; a joint keeps only its kind's (and name, size, twist, bend). @type {Record<string, string[]>} */
-const JOINT_PARAMS = {
-  HINGE: ["jaw", "lug_t", "lug_d", "shank", "flange_t", "pin_r", "clr", "pin_out", "tang", "disc_f", "disc_m"],
-  BALL: ["ball_r", "socket_t", "stud_len", "flange_w", "flange_t"],
-  SPIN: ["flange_w", "flange_t"],
-};
-
-/** the parameters `size` scales (mech.joint_scaled) */
-const JOINT_LENGTHS = ["jaw", "lug_t", "lug_d", "shank", "flange_t", "pin_r", "clr", "pin_out", "ball_r", "socket_t", "stud_len", "flange_w"];
-
-/** jointSize is a joint's size: what its hardware is scaled by (a hinge's width across its lugs, a ball's diameter, at the defaults). 0: no hardware. @param {any} j */
+/** jointSize is a joint's size: what its hardware is scaled by (a hinge's width across its lugs, a ball's, a disc's or a barrel's diameter, at the defaults). 0: no hardware. @param {any} j */
 export const jointSize = (j) => j.size ?? 0;
 
 /** scaleJoint scales a joint's hardware by f. @param {any} j @param {number} f */
@@ -590,14 +616,6 @@ export function scaleJoint(j, f) {
   if (j.size) j.size = r5(j.size * f);
 }
 
-
-/** joint j's range on axis "X", "Y" or "Z" (its stops, radians), undefined when free @param {any} j @param {string} axis */
-export function jointRange(j, axis) {
-  const k = "XYZ".indexOf(axis);
-  const lo = j.min?.[k] ?? 0;
-  const hi = j.max?.[k] ?? 0;
-  return lo === hi ? undefined : [lo, hi];
-}
 
 /** sets one end (0: min, 1: max) of joint j's range on axis k; a range left all zero goes @param {any} j @param {number} k @param {number} end @param {number} v */
 export function setJointRange(j, k, end, v) {
@@ -607,23 +625,29 @@ export function setJointRange(j, k, end, v) {
   for (const x of ["min", "max"]) if (j[x]?.every((/** @type {number} */ c) => c === 0)) delete j[x];
 }
 
-/** whether a kind builds hardware, so has a size @param {string | undefined} kind */
-export const jointHasHardware = (kind) => !!JOINT_DEFAULTS[kind ?? ""];
-
 /**
- * setJointKind makes `j` a `kind` joint: it drops the parameters `kind` does not use, and gives
- * it that kind's default proportions where it has none, and `size` when it has hardware and no
- * size yet. Parameters it already has are kept.
+ * setJointKind makes `j` a `kind` joint: a hinge keeps its axis and a pin its reach (a new one
+ * pivots its own size out: room for lugs), the other kinds drop them; `size` when it has none yet.
+ * Every kind builds hardware, measured from its few values (mech.joint_dims).
  * @param {any} j @param {string} kind @param {number} [size]
  */
 export function setJointKind(j, kind, size) {
-  if (kind === "FIXED") delete j.kind;
+  if (kind === "HINGE") delete j.kind;
   else j.kind = kind;
-  const own = JOINT_PARAMS[kind] ?? [];
-  for (const k of Object.values(JOINT_PARAMS).flat()) if (!own.includes(k)) delete j[k];
-  for (const [k, v] of Object.entries(JOINT_DEFAULTS[kind] ?? {})) j[k] ??= v;
-  if (!jointHasHardware(kind)) delete j.size;
-  else if (!j.size && size) j.size = size;
+  if (kind !== "HINGE") delete j.axis;
+  if (kind === "HINGE" && !isTurntable(j)) j.reach ??= 1;
+  else delete j.reach;
+  if (!j.size && size) j.size = size;
+  return j;
+}
+
+/**
+ * setJointAxis turns a hinge about `axis`: X a pin (its reach, a new one its own size out), Y a
+ * turntable (two discs, no reach). @param {any} j @param {string} axis
+ */
+export function setJointAxis(j, axis) {
+  if (axis === "Y") (j.axis = "Y"), delete j.reach;
+  else delete j.axis, (j.reach ??= 1);
   return j;
 }
 
@@ -634,7 +658,7 @@ export function jointSizeFor(part) {
 }
 
 /** how much of the face it sits on a joint's size fills, per kind: a hinge's lugs nearly its width, a ball's flange (1.3 × its size) a little less */
-const JOINT_FILL = { HINGE: 0.9, BALL: 0.65, SPIN: 0.9 };
+const JOINT_FILL = { HINGE: 0.9, BALL: 0.65 };
 
 /**
  * fitJoint is a size for a `kind` joint that suits the face of the part's shapes at its origin
@@ -688,14 +712,13 @@ export function mirrorRoot(m, i) {
 
 /**
  * mirrorSubtree copies instance i (a mirrorRoot) and everything under it to the other side of
- * the body, replacing what is there. The copies place the same parts with `mirror` turned over,
- * so the engine reflects them and the way drivers move them (docs/modeling.md). The copy is
+ * the body, replacing what is there. The copies place the same parts, each the twin of the one it
+ * copies (`mirror` names the left one), so the engine reflects them and the way their channels move
+ * them, and twin moves move both (docs/modeling.md). The copy is
  * matched with the other side's slot of the parent's part (l_ to r_), made by reflecting this
  * one's across the parent when the part has none. `lateral` is the model's x in the parent's frame
- * at rest. The copies get the other side's names; driver moves on the copied instances are copied to
- * the other side's drivers (made with the same range when missing; a driver with no side moves
- * both), and IK targets on the copied instances too (their targets' x ranges reflected). Returns
- * the copy's index.
+ * at rest. The copies get the other side's names, and IK targets on the copied instances are copied
+ * too. Returns the copy's index.
  * @param {any} m @param {number} i @param {number[]} lateral
  */
 export function mirrorSubtree(m, i, lateral) {
@@ -716,10 +739,6 @@ export function mirrorSubtree(m, i, lateral) {
   }
   for (const [from, to] of names) if (instanceIndex(m, to) >= 0) names.set(from, uniqueName(to, (n) => instanceIndex(m, n) >= 0));
 
-  // the driver moves on what was replaced go with it
-  for (const d of m.drivers ?? [])
-    for (const mv of d.moves ?? []) mv.by = packValues(Object.fromEntries(Object.entries(flatValues(mv.by)).filter(([n]) => instanceIndex(m, n.slice(0, n.indexOf("."))) >= 0)));
-
   // the root's slot on the parent's part: the other side's, reflected from this one's when missing
   const on = partOf(m, instanceIndex(m, root.parent));
   if (on) {
@@ -735,31 +754,22 @@ export function mirrorSubtree(m, i, lateral) {
     }
   }
 
-  /** the other side's driver of `d`, made with d's range when missing; d itself when it has no side @param {any} d */
-  const driverOf = (d) => {
-    const to = mirrorName(d.name);
-    if (!to) return d;
-    let x = m.drivers.find((/** @type {any} */ y) => y.name === to);
-    if (!x) m.drivers.push((x = { ...clone(d), name: to, moves: [] }));
-    return x;
-  };
+  // each copy is its source's twin: a copy of a left instance mirrors it; a copy of a mirrored one
+  // is the side it mirrors, named so (its source keeps naming it)
   for (const p of block) {
+    const from = p.name;
     p.name = names.get(p.name);
     if (p !== root) p.parent = names.get(p.parent) ?? p.parent;
     if (p.mirror) delete p.mirror;
-    else p.mirror = true;
-  }
-  for (const d of [...(m.drivers ?? [])]) {
-    if (!driverChannels(d).some((n) => names.has(n.slice(0, n.indexOf("."))))) continue;
-    copyDriverMoves(d, driverOf(d), names);
+    else p.mirror = from;
   }
   for (const ik of [...(m.iks ?? [])]) {
-    if (!names.has(ik.root) || !names.has(ik.tip)) continue;
+    if (!names.has(ik.tip)) continue;
     const name = mirrorName(ik.name) ?? `${ik.name}_mirror`;
     const at = m.iks.findIndex((/** @type {any} */ x) => x.name === name);
     if (at >= 0) m.iks.splice(at, 1);
-    const k = addIk(m, name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)));
-    for (const f of ["hold", "aim"]) if (ik[f]) m.iks[k][f] = true;
+    const k = addIk(m, name, /** @type {string} */ (names.get(ik.tip)));
+    if (ik.aim) m.iks[k].aim = true;
   }
 
   if (at < 0) {

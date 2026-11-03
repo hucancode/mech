@@ -23,15 +23,14 @@
     ],
     "hardware": {"female": "charcoal", "male": "slate", "metal": "cream"},
     "pose": {
-      "jaw.jaw": 0.2094,
-      "l_forearm.elbow": 0.7854,
-      "l_shin.knee": 0.6109,
-      "l_thigh.disc": -0.4363,
-      "l_upper_arm.disc": 0.5236,
-      "r_forearm.elbow": 0.7854,
-      "r_shin.knee": 0.6109,
-      "r_thigh.disc": -0.4363,
-      "r_upper_arm.disc": 0.5236
+      "twin": "WITH",
+      "by": {
+        "jaw.jaw": 0.2094,
+        "l_forearm.elbow": 0.7854,
+        "l_shin.knee": 0.6109,
+        "l_thigh.hip_top": -0.4363,
+        "l_upper_arm.shoulder_top": 0.5236
+      }
     },
     "parts": [
       {
@@ -198,19 +197,7 @@
       {
         "name": "jaw",
         "joints": [
-          {
-            "name": "jaw",
-            "kind": "HINGE",
-            "size": 0.6,
-            "jaw": 0.66667,
-            "lug_t": 0.16667,
-            "lug_d": 0.53333,
-            "shank": 0.36,
-            "flange_t": 0.26667,
-            "pin_r": 0.15,
-            "clr": 0.05,
-            "pin_out": 0.08333
-          }
+          {"name": "jaw", "size": 0.6, "reach": 0.62667}
         ],
         "shapes": [
           {"material": "orange", "position": [0, 0.136, 0.625], "size": [0.66, 0.22, 1.55]},
@@ -236,16 +223,7 @@
       {
         "name": "segment",
         "joints": [
-          {
-            "name": "spine",
-            "kind": "BALL",
-            "size": 0.52,
-            "flange_t": 0.23077,
-            "ball_r": 0.5,
-            "socket_t": 0.17308,
-            "stud_len": 0.26923,
-            "flange_w": 1.53846
-          }
+          {"name": "spine", "kind": "BALL", "size": 0.52}
         ],
         "slots": [
           {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
@@ -303,16 +281,7 @@
       {
         "name": "segment_limbs",
         "joints": [
-          {
-            "name": "spine",
-            "kind": "BALL",
-            "size": 0.52,
-            "flange_t": 0.23077,
-            "ball_r": 0.5,
-            "socket_t": 0.17308,
-            "stud_len": 0.26923,
-            "flange_w": 1.53846
-          }
+          {"name": "spine", "kind": "BALL", "size": 0.52}
         ],
         "slots": [
           {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
@@ -372,16 +341,7 @@
       {
         "name": "taper_1",
         "joints": [
-          {
-            "name": "spine",
-            "kind": "BALL",
-            "size": 0.52,
-            "flange_t": 0.23077,
-            "ball_r": 0.5,
-            "socket_t": 0.17308,
-            "stud_len": 0.26923,
-            "flange_w": 1.53846
-          }
+          {"name": "spine", "kind": "BALL", "size": 0.52}
         ],
         "slots": [
           {"name": "taper_2", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
@@ -417,16 +377,7 @@
       {
         "name": "taper",
         "joints": [
-          {
-            "name": "spine2",
-            "kind": "BALL",
-            "size": 0.48,
-            "flange_t": 0.25,
-            "ball_r": 0.5,
-            "socket_t": 0.16667,
-            "stud_len": 0.27083,
-            "flange_w": 1.45833
-          }
+          {"name": "spine2", "kind": "BALL", "size": 0.48}
         ],
         "slots": [
           {"name": "next", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
@@ -462,16 +413,7 @@
       {
         "name": "tail",
         "joints": [
-          {
-            "name": "spine2",
-            "kind": "BALL",
-            "size": 0.48,
-            "flange_t": 0.25,
-            "ball_r": 0.5,
-            "socket_t": 0.16667,
-            "stud_len": 0.27083,
-            "flange_w": 1.45833
-          }
+          {"name": "spine2", "kind": "BALL", "size": 0.48}
         ],
         "shapes": [
           {
@@ -521,25 +463,9 @@
       {
         "name": "upper_arm",
         "joints": [
-          {"name": "disc", "kind": "SPIN"},
-          {
-            "name": "shoulder",
-            "kind": "HINGE",
-            "size": 0.21,
-            "bend": 1.5707964,
-            "jaw": 0.47619,
-            "lug_t": 0.2619,
-            "lug_d": 1.04762,
-            "shank": 0.97143,
-            "flange_t": 0.7619,
-            "pin_r": 0.21429,
-            "clr": 0.14286,
-            "pin_out": 0.2381,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
-          },
-          {"name": "twist", "kind": "SPIN"}
+          {"name": "shoulder_top", "axis": "Y"},
+          {"name": "shoulder", "size": 0.21, "reach": 1.73333},
+          {"name": "shoulder_bottom", "axis": "Y"}
         ],
         "slots": [
           {"name": "forearm", "position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
@@ -567,19 +493,7 @@
       {
         "name": "forearm",
         "joints": [
-          {
-            "name": "elbow",
-            "kind": "HINGE",
-            "size": 0.28,
-            "jaw": 0.5,
-            "lug_t": 0.25,
-            "lug_d": 1,
-            "shank": 0.64286,
-            "flange_t": 0.57143,
-            "pin_r": 0.21429,
-            "clr": 0.10714,
-            "pin_out": 0.17857
-          }
+          {"name": "elbow", "size": 0.28, "reach": 1.21429}
         ],
         "shapes": [
           {"material": "yellow", "position": [0, -0.2, 0], "size": [0.3, 0.4, 0.34]},
@@ -637,25 +551,9 @@
       {
         "name": "thigh",
         "joints": [
-          {"name": "disc", "kind": "SPIN"},
-          {
-            "name": "hip",
-            "kind": "HINGE",
-            "size": 0.25,
-            "bend": 1.5707964,
-            "jaw": 0.48,
-            "lug_t": 0.26,
-            "lug_d": 1.04,
-            "shank": 0.912,
-            "flange_t": 0.64,
-            "pin_r": 0.22,
-            "clr": 0.12,
-            "pin_out": 0.2,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
-          },
-          {"name": "twist", "kind": "SPIN"}
+          {"name": "hip_top", "axis": "Y"},
+          {"name": "hip", "size": 0.25, "reach": 1.552},
+          {"name": "hip_bottom", "axis": "Y"}
         ],
         "slots": [
           {"name": "shin", "position": [0, -0.5, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
@@ -675,19 +573,7 @@
       {
         "name": "shin",
         "joints": [
-          {
-            "name": "knee",
-            "kind": "HINGE",
-            "size": 0.31,
-            "jaw": 0.51613,
-            "lug_t": 0.24194,
-            "lug_d": 0.96774,
-            "shank": 0.61935,
-            "flange_t": 0.51613,
-            "pin_r": 0.22581,
-            "clr": 0.09677,
-            "pin_out": 0.16129
-          }
+          {"name": "knee", "size": 0.31, "reach": 1.13548}
         ],
         "shapes": [
           {"material": "navy", "position": [0, -0.225, 0], "size": [0.34, 0.45, 0.4]},
@@ -737,37 +623,59 @@
       {"name": "taper_3", "part": "taper", "parent": "taper_2", "parent_slot": "next"},
       {"name": "taper_4", "part": "taper", "parent": "taper_3", "parent_slot": "next"},
       {"name": "tail", "part": "tail", "parent": "taper_4", "parent_slot": "next"},
-      {"name": "l_upper_arm", "part": "upper_arm", "parent": "segment_2", "parent_slot": "l_limb"},
+      {
+        "name": "l_upper_arm",
+        "part": "upper_arm",
+        "parent": "segment_2",
+        "parent_slot": "l_limb",
+        "joints": [
+          {"name": "shoulder", "bend": 1.5707964}
+        ]
+      },
       {"name": "l_forearm", "part": "forearm", "parent": "l_upper_arm", "parent_slot": "forearm"},
       {
         "name": "r_upper_arm",
         "part": "upper_arm",
         "parent": "segment_2",
         "parent_slot": "r_limb",
-        "mirror": true
+        "mirror": "l_upper_arm",
+        "joints": [
+          {"name": "shoulder", "bend": 1.5707964}
+        ]
       },
       {
         "name": "r_forearm",
         "part": "forearm",
         "parent": "r_upper_arm",
         "parent_slot": "forearm",
-        "mirror": true
+        "mirror": "l_forearm"
       },
-      {"name": "l_thigh", "part": "thigh", "parent": "segment_5", "parent_slot": "l_limb"},
+      {
+        "name": "l_thigh",
+        "part": "thigh",
+        "parent": "segment_5",
+        "parent_slot": "l_limb",
+        "joints": [
+          {"name": "hip", "bend": 1.5707964}
+        ]
+      },
       {"name": "l_shin", "part": "shin", "parent": "l_thigh", "parent_slot": "shin"},
       {
         "name": "r_thigh",
         "part": "thigh",
         "parent": "segment_5",
         "parent_slot": "r_limb",
-        "mirror": true
+        "mirror": "l_thigh",
+        "joints": [
+          {"name": "hip", "bend": 1.5707964}
+        ]
       },
       {
         "name": "r_shin",
         "part": "shin",
         "parent": "r_thigh",
         "parent_slot": "shin",
-        "mirror": true
+        "mirror": "l_shin"
       }
     ]
   },
@@ -789,12 +697,12 @@
             "moves": [
               {
                 "by": {
-                  "root_turn_y": 0.3
+                  "root.turn": [0, 0.3, 0]
                 }
               },
               {
                 "by": {
-                  "segment_1.spine.z": -0.3
+                  "segment_1.spine": [0, 0, -0.3]
                 }
               }
             ]
@@ -810,35 +718,35 @@
             "moves": [
               {
                 "by": {
-                  "taper_1.spine.z": 0.06,
-                  "taper_2.spine2.z": -0.06
+                  "taper_1.spine": [0, 0, 0.06],
+                  "taper_2.spine2": [0, 0, -0.06]
                 }
               },
               {
                 "delay": 0.125,
                 "by": {
-                  "taper_2.spine2.z": 0.06,
-                  "taper_3.spine2.z": -0.06
+                  "taper_2.spine2": [0, 0, 0.06],
+                  "taper_3.spine2": [0, 0, -0.06]
                 }
               },
               {
                 "delay": 0.25,
                 "by": {
-                  "taper_3.spine2.z": 0.06,
-                  "taper_4.spine2.z": -0.06
+                  "taper_3.spine2": [0, 0, 0.06],
+                  "taper_4.spine2": [0, 0, -0.06]
                 }
               },
               {
                 "delay": 0.375,
                 "by": {
-                  "tail.spine2.z": -0.06,
-                  "taper_4.spine2.z": 0.06
+                  "tail.spine2": [0, 0, -0.06],
+                  "taper_4.spine2": [0, 0, 0.06]
                 }
               },
               {
                 "delay": 0.5,
                 "by": {
-                  "tail.spine2.z": 0.06
+                  "tail.spine2": [0, 0, 0.06]
                 }
               }
             ]
@@ -852,15 +760,14 @@
           {
             "moves": [
               {
+                "twin": "WITH",
                 "by": {
                   "jaw.jaw": 0.2406,
                   "l_forearm.elbow": 0.4146,
-                  "l_upper_arm.disc": -1.1236,
-                  "r_forearm.elbow": 0.4146,
-                  "r_upper_arm.disc": -1.1236,
-                  "root_turn_x": -0.3,
-                  "root_y": 1.4,
-                  "segment_3.spine.x": 0.3
+                  "l_upper_arm.shoulder_top": -1.1236,
+                  "root": [0, 1.4, 0],
+                  "root.turn": [-0.3, 0, 0],
+                  "segment_3.spine": [0.3, 0, 0]
                 }
               }
             ]
@@ -875,14 +782,14 @@
             "moves": [
               {
                 "by": {
-                  "root_x": 0.35
+                  "root": [0.35, 0, 0]
                 }
               },
               {
                 "delay": 0.08,
                 "by": {
-                  "root_turn_y": -0.08,
-                  "segment_1.spine.z": 0.08
+                  "root.turn": [0, -0.08, 0],
+                  "segment_1.spine": [0, 0, 0.08]
                 }
               }
             ]
@@ -898,35 +805,35 @@
             "moves": [
               {
                 "by": {
-                  "taper_1.spine.z": 0.12,
-                  "taper_2.spine2.z": -0.12
+                  "taper_1.spine": [0, 0, 0.12],
+                  "taper_2.spine2": [0, 0, -0.12]
                 }
               },
               {
                 "delay": 0.15,
                 "by": {
-                  "taper_2.spine2.z": 0.12,
-                  "taper_3.spine2.z": -0.12
+                  "taper_2.spine2": [0, 0, 0.12],
+                  "taper_3.spine2": [0, 0, -0.12]
                 }
               },
               {
                 "delay": 0.3,
                 "by": {
-                  "taper_3.spine2.z": 0.12,
-                  "taper_4.spine2.z": -0.12
+                  "taper_3.spine2": [0, 0, 0.12],
+                  "taper_4.spine2": [0, 0, -0.12]
                 }
               },
               {
                 "delay": 0.45,
                 "by": {
-                  "tail.spine2.z": -0.12,
-                  "taper_4.spine2.z": 0.12
+                  "tail.spine2": [0, 0, -0.12],
+                  "taper_4.spine2": [0, 0, 0.12]
                 }
               },
               {
                 "delay": 0.6,
                 "by": {
-                  "tail.spine2.z": 0.12
+                  "tail.spine2": [0, 0, 0.12]
                 }
               }
             ]
@@ -956,16 +863,13 @@
           {
             "moves": [
               {
+                "twin": "WITH",
                 "by": {
                   "jaw.jaw": -0.1094,
                   "l_forearm.elbow": 0.2146,
                   "l_shin.knee": 0.2891,
-                  "l_thigh.disc": 1.5363,
-                  "l_upper_arm.disc": 0.7764,
-                  "r_forearm.elbow": 0.2146,
-                  "r_shin.knee": 0.2891,
-                  "r_thigh.disc": 1.5363,
-                  "r_upper_arm.disc": 0.7764
+                  "l_thigh.hip_top": 1.5363,
+                  "l_upper_arm.shoulder_top": 0.7764
                 }
               }
             ]
@@ -980,77 +884,77 @@
             "moves": [
               {
                 "by": {
-                  "segment_1.spine.z": 0.22,
-                  "segment_2.spine.z": -0.22
+                  "segment_1.spine": [0, 0, 0.22],
+                  "segment_2.spine": [0, 0, -0.22]
                 }
               },
               {
                 "delay": 0.1,
                 "by": {
-                  "segment_2.spine.z": 0.2288,
-                  "segment_3.spine.z": -0.2288
+                  "segment_2.spine": [0, 0, 0.2288],
+                  "segment_3.spine": [0, 0, -0.2288]
                 }
               },
               {
                 "delay": 0.2,
                 "by": {
-                  "segment_3.spine.z": 0.2376,
-                  "segment_4.spine.z": -0.2376
+                  "segment_3.spine": [0, 0, 0.2376],
+                  "segment_4.spine": [0, 0, -0.2376]
                 }
               },
               {
                 "delay": 0.3,
                 "by": {
-                  "segment_4.spine.z": 0.2464,
-                  "segment_5.spine.z": -0.2464
+                  "segment_4.spine": [0, 0, 0.2464],
+                  "segment_5.spine": [0, 0, -0.2464]
                 }
               },
               {
                 "delay": 0.4,
                 "by": {
-                  "segment_5.spine.z": 0.2552,
-                  "segment_6.spine.z": -0.2552
+                  "segment_5.spine": [0, 0, 0.2552],
+                  "segment_6.spine": [0, 0, -0.2552]
                 }
               },
               {
                 "delay": 0.5,
                 "by": {
-                  "segment_6.spine.z": 0.264,
-                  "taper_1.spine.z": -0.264
+                  "segment_6.spine": [0, 0, 0.264],
+                  "taper_1.spine": [0, 0, -0.264]
                 }
               },
               {
                 "delay": 0.6,
                 "by": {
-                  "taper_1.spine.z": 0.2728,
-                  "taper_2.spine2.z": -0.2728
+                  "taper_1.spine": [0, 0, 0.2728],
+                  "taper_2.spine2": [0, 0, -0.2728]
                 }
               },
               {
                 "delay": 0.7,
                 "by": {
-                  "taper_2.spine2.z": 0.2816,
-                  "taper_3.spine2.z": -0.2816
+                  "taper_2.spine2": [0, 0, 0.2816],
+                  "taper_3.spine2": [0, 0, -0.2816]
                 }
               },
               {
                 "delay": 0.8,
                 "by": {
-                  "taper_3.spine2.z": 0.2904,
-                  "taper_4.spine2.z": -0.2904
+                  "taper_3.spine2": [0, 0, 0.2904],
+                  "taper_4.spine2": [0, 0, -0.2904]
                 }
               },
               {
                 "delay": 0.9,
                 "by": {
-                  "tail.spine2.z": -0.2992,
-                  "taper_4.spine2.z": 0.2992
+                  "tail.spine2": [0, 0, -0.2992],
+                  "taper_4.spine2": [0, 0, 0.2992]
                 }
               },
               {
                 "delay": 1,
                 "by": {
-                  "tail.spine2.z": 0.308
+                  "tail.spine2": [0, 0, 0.308]
                 }
               }
             ]
@@ -1073,16 +977,16 @@
               {
                 "by": {
                   "root": [0, 1.4, -1],
-                  "root_turn_x": -0.3,
-                  "segment_3.spine.x": 0.3
+                  "root.turn": [-0.3, 0, 0],
+                  "segment_3.spine": [0.3, 0, 0]
                 }
               },
               {
                 "delay": 0.025,
                 "by": {
-                  "segment_2.spine.z": 0.35,
-                  "segment_4.spine.z": -0.5,
-                  "segment_6.spine.z": 0.35
+                  "segment_2.spine": [0, 0, 0.35],
+                  "segment_4.spine": [0, 0, -0.5],
+                  "segment_6.spine": [0, 0, 0.35]
                 }
               },
               {
@@ -1105,17 +1009,16 @@
               {
                 "by": {
                   "root": [0, -0.2, 2.2],
-                  "root_turn_x": 0.15,
-                  "segment_2.spine.x": -0.15
+                  "root.turn": [0.15, 0, 0],
+                  "segment_2.spine": [-0.15, 0, 0]
                 }
               },
               {
                 "delay": 0.06,
+                "twin": "WITH",
                 "by": {
                   "l_forearm.elbow": -0.4,
-                  "l_upper_arm.disc": -1,
-                  "r_forearm.elbow": -0.4,
-                  "r_upper_arm.disc": -1
+                  "l_upper_arm.shoulder_top": -1
                 }
               }
             ]

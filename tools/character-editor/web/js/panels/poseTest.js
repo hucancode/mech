@@ -6,17 +6,25 @@ import { btn, h } from "../dom.js";
 import { dockSpanButtons } from "../layout.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { flatValues, packValues } from "../model.js";
-import { driverValues } from "./driverValues.js";
+import { foldTwins, moveValues, zipValue } from "../model.js";
+import { channelValues } from "./channelValues.js";
 
-/** the pose test's values: the rest pose, with what was tried on top @returns {Record<string, number>} */
-const tried = () => ({ ...flatValues(editor.model.pose), ...editor.test });
+/** the twins of every channel (the engine's "twins" query) @returns {import("../model.js").Twins} */
+const twins = () => editor.ask({ q: "twins" }) ?? {};
 
-/** setRestPose saves the pose test as the model's rest pose (its non-zero channels) */
+/** the pose test's values: the rest pose (both sides of a twin pose), with what was tried on top @returns {Record<string, import("../model.js").Value>} */
+const tried = () => ({ ...moveValues(editor.model.pose, twins()), ...editor.test });
+
+/** setRestPose saves the pose test as the model's rest pose (its non-zero channels), one side for both when they match */
 function setRestPose() {
-  const values = Object.fromEntries(Object.entries(tried()).filter(([, v]) => Math.abs(v) > 1e-6).map(([n, v]) => [n, Math.round(v * 1e4) / 1e4]));
+  const values = Object.fromEntries(
+    Object.entries(tried())
+      .filter(([, v]) => [v].flat().some((x) => Math.abs(x) > 1e-6))
+      .map(([n, v]) => [n, zipValue(v, 0, (x) => Math.round(x * 1e4) / 1e4)]),
+  );
+  const pose = foldTwins(values, twins());
   editor.edit("model", () => {
-    if (Object.keys(values).length) editor.model.pose = packValues(values);
+    if (Object.keys(values).length) editor.model.pose = pose;
     else delete editor.model.pose;
     editor.test = {};
   });
@@ -41,7 +49,7 @@ export function poseTest() {
       h(
         "div",
         { class: "columns" },
-        driverValues(tried(), {
+        channelValues(tried(), {
           full: true,
           onset: (vs) => {
             Object.assign(editor.test, vs);

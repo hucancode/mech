@@ -15,20 +15,27 @@ import "../mjolnir/render"
 // next frame's pose).
 //
 //   {"q": "state"}
-//     the clock, the drivers as shown now, warnings since last asked
-//   {"q": "sample", "clip": "walk", "drivers": ["l_hip"], "n": 60 | "times": [..]}
-//     driver values over a clip (default: the current clip, every driver)
+//     the clock, the channels' values as shown now (`values`), warnings since last asked
+//   {"q": "sample", "clip": "walk", "channels": ["l_leg"], "n": 60 | "times": [..]}
+//     channels' values over a clip (default: the current clip, every channel)
 //   {"q": "pose", "clip": "attack", "time": 0.4}
-//     every driver at one moment: {"drivers": {..}}
+//     every channel at one moment: {"values": {..}}
 //   {"q": "parts", "clip": .., "time": .., "rest": true, "parts": ["l_palm"]}
-//     each instance's frame in the world at that moment (default: now; `rest`: every driver 0),
+//     each instance's frame in the world at that moment (default: now; `rest`: every value 0),
 //     by instance name (default: every instance)
 //   {"q": "trajectory", "clip": "walk", "part": "l_foot", "n": 60}
 //     an instance's world position over a clip: motion paths, foot slide
 //   {"q": "motion", "clip": "walk", "motion": 0, "n": 120}
 //     a clip's motion as the engine reads it, for drawing its curves: {shape: its shape over one
 //     cycle (n values, u 0 to 1), moves: [{channels (names, as resolved), delay, values (n: how
-//     much of its amounts the move adds, over the clip)}]}
+//     much of its amounts the move adds, over the clip), arcs (each arc a position follows: {name
+//     (the channel), arc (its name), points, curve: the arc through them; in metres, where they
+//     put it on the rest pose, for drawing and dragging them}), and for a twin move `twin`, the
+//     same for its twins}], one per move as written}
+//   {"q": "arc", "arc": "strike", "on": "r_hand"}
+//     an arc of the animation as it would put position channel `on` (an IK target, the root) on
+//     the rest pose: {name, arc, points, curve} in metres, as a motion's arcs are; for editing an arc
+//     no motion shown uses
 //   {"q": "bounds", "clip": .., "time": ..}
 //     the box around the posed model
 //   {"q": "faces", "part": "torso"}
@@ -36,19 +43,28 @@ import "../mjolnir/render"
 //     in its frame, model units; +x, -x, +y, -y, +z, -z of the shape's axes, spans resolved; and
 //     `extent`, the face's two widths: the shape's size along its other axes), for snapping slots
 //     and fitting joints to them
+//   {"q": "dofs", "joint": {..}}
+//     a joint's hardware and motion (mech.joint_axes): {bare (a hinge too close for lugs), plates
+//     (whether it has base plates, round next to a turntable), axes (those it moves about or along,
+//     which its stops are on)}
 //   {"q": "joints", "part": "l_shin", "time": ..}
 //     the joints an instance moves by, as posed (default: now), each where its bone pivots before
-//     its own motion: {name, kind, index (in its slot's stack), pivot (metres), rotation (the
-//     frame its axes are in), axes, at (its turns now), min, max (its range there,
-//     mirrored instances' turned over; equal ends: free)}, for drawing and turning joints
+//     its own motion: {name, kind, bare (a hinge too close for lugs: a bare pin), index (in its
+//     part's stack), channel (its own), pivot (metres), rotation (the frame its axes are in), axes
+//     (those it turns about), at (its turns now), min, max (its range there, mirrored instances'
+//     turned over; equal ends: free), slide and stroke (a linear actuator's: how far out now, and
+//     its range)}, for drawing and moving joints
 //   {"q": "moves", "part": "l_foot"}
-//     the channels that move an instance: {channels} (names), the drivers of its joints and its
-//     parents', of the IK targets whose chains pass through them, and the root's
+//     the channels that move an instance: {channels} (names), its joints' and its parents', the
+//     IK targets' whose chains pass through them, and the root's
 //   {"q": "handles", "time": ..}
 //     what can be dragged in the view, as posed (default: now), in metres: the model's root
-//     {position, rotation} (its channels placing it) and each IK target {name, position, rest,
-//     pole} (where its channels put it, where its tip is at rest, which they are offsets from, and
-//     its pole, unless it aims), with the model's `scale` (metres per model unit)
+//     {position, rotation} (its channels placing it) and each IK target {name, root, position,
+//     rest, pole} (the instance its chain starts from, mech.ik_root; where its channels put it,
+//     where its tip is at rest, which they are offsets from, and the pole it bends toward,
+//     mech.ik_pole, worked out and turned by its swivel, unless it aims; then `swivel` and `ring`,
+//     the pole at every swivel from this one on round a whole turn, 48 points), with the model's
+//     `scale` (metres per model unit)
 //   {"q": "span", "part": "shin", "span": ["foot", ""]}
 //     the frame a shape spanning those slots of a library part would sit in: {position, rotation,
 //     length} (mech.span_frame), for changing a shape's span without moving it
@@ -63,15 +79,20 @@ import "../mjolnir/render"
 //     {part, shape}: the instance's index in the assembly and the shape's in its part, shape -1
 //     for joint hardware, both -1 for nothing
 //   {"q": "info"}
-//     counts, clips, drivers that move nothing, and the root's channels {move, turn}
-//     (mech.ROOT_CHANNELS)
+//     counts and clips
+//   {"q": "twins"}
+//     each channel's on the other side of the body (mech.channel_twin), by name: {name: {twin,
+//     flip (what its values are times there, shaped as the channel: [-1, 1, 1] for an IK
+//     target, -1 for its swivel)}}, channels without one left out
 //   {"q": "channels"}
-//     every channel a pose holds, in order (mech.model_channels): {name, kind ("driver", "ik",
-//     "root" or "joint"), angle (radians, else model units or a weight), min, max (a slider's
-//     range: a driver's own, a joint's stops on that axis, the posed model's reach for points;
-//     equal ends: none given), and for joints and IK targets `part`/`ik`, the instance or target}
-// Units: driver values as they are (radians for angles), world positions in metres, rotations as
-// quaternions [x, y, z, w]. Unknown names answer {"error": ".."}.
+//     every channel a pose holds, in order (mech.model_channel_table): {name, kind (HINGE, SLIDE,
+//     BALL, POSITION, WEIGHT: mech.ChannelKind), size (1 or 3 values), min, max (per value: a
+//     joint's stops, a half turn each way for other turns, the posed model's reach for
+//     positions, 0 to 1 for a weight; equal ends: free), and for joints' and IK targets' `part`
+//     or `ik`, the instance or target}
+// Units: channel values as they are (radians for turns, model units for positions), world
+// positions in metres, rotations as quaternions [x, y, z, w]. Values go by channel, shaped as the
+// channel is: a number, or [x, y, z]. Unknown names answer {"error": ".."}.
 
 Query :: struct {
   q:        string,
@@ -79,7 +100,7 @@ Query :: struct {
   time:     Maybe(f32),
   times:    []f32,
   n:        int,
-  drivers:  []string,
+  channels: []string,
   part:     string,
   parts:    []string,
   rest:     bool,
@@ -87,6 +108,8 @@ Query :: struct {
   points:   [][3]f32,
   span:     [2]string,
   motion:   int,
+  arc, on:  string,
+  joint:    mech.Joint,
 }
 
 query :: proc(text: []u8, allocator := context.allocator) -> string {
@@ -122,6 +145,10 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     info(&b)
     return strings.to_string(b)
   }
+  if q.q == "dofs" {
+    dofs(&b, q.joint)
+    return strings.to_string(b)
+  }
   if !app.has_mech {
     strings.write_string(&b, `{"error":"no model"}`)
     return strings.to_string(b)
@@ -141,29 +168,34 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
   }
   values := make([]f32, mech.model_channels(m))
   rig := character.mech_rig(&app.mech)
+  sizes := mech.CHANNEL_SIZE
 
   switch q.q {
   case "sample":
-    picked := pick_drivers(q.drivers)
-    rows := make([][]f32, len(picked))
-    for &r in rows do r = make([]f32, len(times))
-    for t, k in times {
+    picked := pick_channels(q.channels)
+    rows := make([][dynamic]f32, len(picked))
+    for t in times {
       mech.clip_sample(&app.asset.clips, clip, t, values)
-      for d, r in picked do rows[r][k] = values[d]
+      for c, r in picked do append(&rows[r], ..values[c.first:][:sizes[c.kind]])
     }
     strings.write_string(&b, `{"times":`)
     write_floats(&b, times)
-    strings.write_string(&b, `,"drivers":{`)
-    for d, r in picked {
+    strings.write_string(&b, `,"channels":{`)
+    for c, r in picked {
       if r > 0 do strings.write_byte(&b, ',')
-      fmt.sbprintf(&b, "%q:", mech.channel_name(m, d))
-      write_floats(&b, rows[r])
+      fmt.sbprintf(&b, "%q:[", c.name)
+      n := sizes[c.kind]
+      for k in 0 ..< len(times) {
+        if k > 0 do strings.write_byte(&b, ',')
+        write_value(&b, rows[r][k * n:][:n])
+      }
+      strings.write_byte(&b, ']')
     }
     strings.write_string(&b, "}}")
   case "pose":
     mech.clip_sample(&app.asset.clips, clip, q.time.? or_else app.time, values)
-    strings.write_string(&b, `{"drivers":`)
-    write_drivers(&b, values)
+    strings.write_string(&b, `{"values":`)
+    write_values(&b, values)
     strings.write_byte(&b, '}')
   case "parts":
     if q.rest do mech.rig_solve(rig, values)
@@ -203,16 +235,53 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     strings.write_string(&b, `{"shape":`)
     write_floats(&b, row)
     strings.write_string(&b, `,"moves":[`)
-    for mv, k in mo.moves {
-      if k > 0 do strings.write_byte(&b, ',')
-      strings.write_string(&b, `{"channels":[`)
+    // one per move as written; a twin move's twins resolve to a move of their own after it
+    // (mech.move_resolve), shown under it
+    lane :: proc(b: ^strings.Builder, m: ^mech.Model, rig: ^mech.Rig, pose: []f32, mo: ^mech.MotionData, k: int, row: []f32) {
+      mv := mo.moves[k]
+      // its channels, each once (a 3-value one has a target per value)
+      strings.write_string(b, `{"channels":[`)
+      last := ""
       for target, j in mo.targets[mv.first:][:mv.count] {
-        if j > 0 do strings.write_byte(&b, ',')
-        fmt.sbprintf(&b, "%q", mech.channel_name(m, target.driver))
+        c, _, _ := mech.value_channel(m, target.index)
+        if c.name == last do continue
+        if last != "" do strings.write_byte(b, ',')
+        last = c.name
+        fmt.sbprintf(b, "%q", c.name)
       }
-      for &v, i in row do v = mech.motion_move(mo, k, f32(i) / f32(n - 1))
-      fmt.sbprintf(&b, `],"delay":%v,"values":`, mv.delay)
-      write_floats(&b, row)
+      // and the positions on its arcs
+      for a in mo.arcs[mv.arcs_first:][:mv.arcs_count] {
+        c, _, _ := mech.value_channel(m, a.channels[0])
+        if last != "" do strings.write_byte(b, ',')
+        last = c.name
+        fmt.sbprintf(b, "%q", c.name)
+      }
+      for &v, i in row do v = mech.motion_move(mo, k, f32(i) / f32(len(row) - 1))
+      fmt.sbprintf(b, `],"delay":%v,"values":`, mv.delay)
+      write_floats(b, row)
+      // its arcs, where they put their positions
+      strings.write_string(b, `,"arcs":[`)
+      first := true
+      for a in mo.arcs[mv.arcs_first:][:mv.arcs_count] {
+        c, _, _ := mech.value_channel(m, a.channels[0])
+        if !first do strings.write_byte(b, ',')
+        first = false
+        write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], a.flip)
+      }
+      strings.write_byte(b, ']')
+    }
+    k := 0
+    for src, w in app.asset.anim.clips[clip].motions[q.motion].moves {
+      if k >= len(mo.moves) do break
+      if w > 0 do strings.write_byte(&b, ',')
+      lane(&b, m, rig, app.asset.clips.pose[:], mo, k, row)
+      k += 1
+      if src.twin != .NONE && k < len(mo.moves) {
+        strings.write_string(&b, `,"twin":`)
+        lane(&b, m, rig, app.asset.clips.pose[:], mo, k, row)
+        strings.write_byte(&b, '}')
+        k += 1
+      }
       strings.write_byte(&b, '}')
     }
     strings.write_string(&b, "]}")
@@ -244,6 +313,7 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     stack := mech.instance_joints(m, inst)
     strings.write_string(&b, `{"joints":[`)
     first := true
+    // a joint is one bone
     for bone, i in rig.bones {
       if bone.part != inst || bone.joint < 0 || bone.joint >= len(stack) do continue
       if !first do strings.write_byte(&b, ',')
@@ -252,14 +322,14 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       x := mech.rig_bone_base(rig, i)
       pos, r := x.position * m.scale, x.rotation
       at, lo, hi := rig.motion[i], bone.lo, bone.hi
-      fmt.sbprintf(&b, `{{"name":%q,"kind":%q,"index":%d,"pivot":[%v,%v,%v],"rotation":[%v,%v,%v,%v],"axes":[`, j.name, fmt.tprint(j.kind), bone.joint, pos.x, pos.y, pos.z, r.x, r.y, r.z, r.w)
+      fmt.sbprintf(&b, `{{"name":%q,"kind":%q,"bare":%v,"index":%d,"channel":%q,"pivot":[%v,%v,%v],"rotation":[%v,%v,%v,%v],"axes":[`, j.name, fmt.tprint(j.kind), mech.joint_bare(j), bone.joint, fmt.tprint(m.assembly[inst].name, ".", j.name, sep = ""), pos.x, pos.y, pos.z, r.x, r.y, r.z, r.w)
       n := 0
       for axis in mech.Axis do if axis in bone.turns {
         if n > 0 do strings.write_byte(&b, ',')
         n += 1
         fmt.sbprintf(&b, `%q`, fmt.tprint(axis))
       }
-      fmt.sbprintf(&b, `],"at":[%v,%v,%v],"min":[%v,%v,%v],"max":[%v,%v,%v]}}`, at.x, at.y, at.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z)
+      fmt.sbprintf(&b, `],"at":[%v,%v,%v],"min":[%v,%v,%v],"max":[%v,%v,%v],"slide":%v,"stroke":[%v,%v]}}`, at.x, at.y, at.z, lo.x, lo.y, lo.z, hi.x, hi.y, hi.z, rig.slide[i], bone.stroke[0], bone.stroke[1])
     }
     strings.write_string(&b, "]}")
   case "moves":
@@ -267,15 +337,39 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     inst := mech.model_instance(m, q.part)
     if inst < 0 do return fail(&b, "no instance %s", q.part)
     strings.write_string(&b, `{"channels":[`)
+    moves := mech.rig_moves(rig, inst, context.temp_allocator)
     first := true
-    for on, i in mech.rig_moves(rig, inst, context.temp_allocator) do if on {
+    for c in mech.model_channel_table(m) do if moves[c.first] {
       if !first do strings.write_byte(&b, ',')
       first = false
-      fmt.sbprintf(&b, `%q`, mech.channel_name(m, i))
+      fmt.sbprintf(&b, `%q`, c.name)
     }
     strings.write_string(&b, "]}")
   case "channels":
     channels(&b, rig)
+  case "arc":
+    // an arc of the animation, as it would put position `on`
+    k := mech.arc_find(app.asset.anim.arcs[:], q.arc)
+    if k < 0 do return fail(&b, "no arc %s", q.arc)
+    c, ok := mech.model_channel(m, q.on)
+    if !ok || c.kind != .POSITION do return fail(&b, "no position %s", q.on)
+    write_arc(&b, rig, app.asset.clips.pose[:], c, q.arc, app.asset.anim.arcs[k].points[:], 1)
+  case "twins":
+    strings.write_byte(&b, '{')
+    first := true
+    for c in mech.model_channel_table(m) {
+      twin, _ := mech.channel_twin(m, c.first)
+      if twin < 0 do continue
+      other, _, _ := mech.value_channel(m, twin)
+      if !first do strings.write_byte(&b, ',')
+      first = false
+      fmt.sbprintf(&b, `%q:{{"twin":%q,"flip":`, c.name, other.name)
+      flip: [3]f32
+      for k in 0 ..< sizes[c.kind] do _, flip[k] = mech.channel_twin(m, c.first + k)
+      write_value(&b, flip[:sizes[c.kind]])
+      strings.write_string(&b, "}")
+    }
+    strings.write_byte(&b, '}')
   case "handles":
     solve_at(clip, q.time, values)
     s := m.scale
@@ -285,11 +379,24 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       if n > 0 do strings.write_byte(&b, ',')
       name := ""
       for ik, k in m.iks do if mech.ik_channel(m, k) == rik.channel do name = ik.name
+      root := m.assembly[mech.ik_root(m, rik.tip)].name
       c := rig.values[rik.channel:]
       r := rik.rest
-      at, pole := r + {c[0], c[1], c[2]}, rik.pole_rest + {c[4], c[5], c[6]} if !rik.aim else {}
-      fmt.sbprintf(&b, `{{"name":%q,"position":[%v,%v,%v],"rest":[%v,%v,%v]`, name, at.x * s, at.y * s, at.z * s, r.x * s, r.y * s, r.z * s)
-      if !rik.aim do fmt.sbprintf(&b, `,"pole":[%v,%v,%v]`, pole.x * s, pole.y * s, pole.z * s)
+      at := r + {c[0], c[1], c[2]}
+      swivel := c[mech.IK_SWIVEL]
+      pole := mech.ik_pole(rig, rik, at, swivel, o)
+      fmt.sbprintf(&b, `{{"name":%q,"root":%q,"position":[%v,%v,%v],"rest":[%v,%v,%v]`, name, root, at.x * s, at.y * s, at.z * s, r.x * s, r.y * s, r.z * s)
+      if !rik.aim && pole != at {
+        fmt.sbprintf(&b, `,"pole":[%v,%v,%v],"swivel":%v,"ring":[`, pole.x * s, pole.y * s, pole.z * s, swivel)
+        // the pole at every swivel, a turn from where it is, for drawing and turning it
+        RING :: 48
+        for k in 0 ..< RING {
+          if k > 0 do strings.write_byte(&b, ',')
+          p := mech.ik_pole(rig, rik, at, swivel + f32(k) / RING * 2 * math.PI, o)
+          fmt.sbprintf(&b, `[%v,%v,%v]`, p.x * s, p.y * s, p.z * s)
+        }
+        strings.write_byte(&b, ']')
+      }
       strings.write_byte(&b, '}')
     }
     strings.write_string(&b, "]}")
@@ -330,22 +437,45 @@ solve_at :: proc(clip: int, time: Maybe(f32), values: []f32) {
   mech.rig_solve(rig, values)
 }
 
+// write_arc writes arc `name`'s points `pts` as they put position channel `c` (times `flip`: a
+// twin's, mirrored), for drawing and dragging: {name (the channel), arc, points, curve (the arc
+// through them, 64 points)}, in metres. They are offsets from where the channel is at rest (an
+// IK target's tip, or the origin, lifted), with the rest pose's amounts: where the rest pose has it.
 @(private = "file")
-pick_drivers :: proc(names: []string) -> []int {
-  m := app.asset.model
-  if names == nil {
-    picked := make([]int, mech.model_channels(m))
-    for &p, i in picked do p = i
-    return picked
+write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Channel, name: string, pts: [][3]f32, flip: [3]f32) {
+  m := rig.model
+  rest := [3]f32{0, rig.lift, 0}
+  for ik in rig.iks do if ik.channel == c.first do rest = ik.rest
+  for n in 0 ..< 3 do rest[n] += pose[c.first + n]
+  point :: proc(b: ^strings.Builder, p: [3]f32) {fmt.sbprintf(b, `[%v,%v,%v]`, p.x, p.y, p.z)}
+  s := m.scale
+  fmt.sbprintf(b, `{{"name":%q,"arc":%q,"points":[`, c.name, name)
+  for p, i in pts {
+    if i > 0 do strings.write_byte(b, ',')
+    point(b, (rest + p * flip) * s)
   }
-  out := make([dynamic]int)
+  strings.write_string(b, `],"curve":[`)
+  N :: 64
+  for i in 0 ..< N {
+    if i > 0 do strings.write_byte(b, ',')
+    point(b, (rest + mech.arc_at(pts, f32(i) / (N - 1)) * flip) * s)
+  }
+  strings.write_string(b, "]}")
+}
+
+// pick_channels is the channels named, every channel for none.
+@(private = "file")
+pick_channels :: proc(names: []string) -> []mech.Channel {
+  m := app.asset.model
+  if names == nil do return mech.model_channel_table(m)
+  out := make([dynamic]mech.Channel)
   for n in names {
-    d := mech.model_channel(m, n)
-    if d < 0 {
-      log.warnf("query: no driver %s", n)
+    c, ok := mech.model_channel(m, n)
+    if !ok {
+      log.warnf("query: no channel %s", n)
       continue
     }
-    append(&out, d)
+    append(&out, c)
   }
   return out[:]
 }
@@ -366,23 +496,32 @@ write_floats :: proc(b: ^strings.Builder, xs: []f32) {
   strings.write_byte(b, ']')
 }
 
-// write_drivers writes driver values as {name: value}.
+// write_value writes one channel's values: a number, or [x, y, z].
 @(private = "file")
-write_drivers :: proc(b: ^strings.Builder, values: []f32) {
+write_value :: proc(b: ^strings.Builder, xs: []f32) {
+  if len(xs) == 1 do fmt.sbprintf(b, "%v", xs[0] if !math.is_nan(xs[0]) && !math.is_inf(xs[0]) else 0)
+  else do write_floats(b, xs)
+}
+
+// write_values writes a pose's values by channel: {name: value | [x, y, z]}.
+@(private = "file")
+write_values :: proc(b: ^strings.Builder, values: []f32) {
   m := app.asset.model
+  sizes := mech.CHANNEL_SIZE
   strings.write_byte(b, '{')
-  for i in 0 ..< mech.model_channels(m) {
+  for c, i in mech.model_channel_table(m) {
     if i > 0 do strings.write_byte(b, ',')
-    v := values[i] if i < len(values) else 0
-    fmt.sbprintf(b, "%q:%v", mech.channel_name(m, i), v if !math.is_nan(v) else 0)
+    fmt.sbprintf(b, "%q:", c.name)
+    if c.first + sizes[c.kind] <= len(values) do write_value(b, values[c.first:][:sizes[c.kind]])
+    else do strings.write_string(b, "0")
   }
   strings.write_byte(b, '}')
 }
 
 @(private = "file")
 state :: proc(b: ^strings.Builder) {
-  fmt.sbprintf(b, `{{"ready":%v,"time":%v,"duration":%v,"playing":%v,"drivers":`, app.has_mech, app.time, clip_length(app.clip), app.playing)
-  if app.has_mech do write_drivers(b, character.mech_shown(&app.mech))
+  fmt.sbprintf(b, `{{"ready":%v,"time":%v,"duration":%v,"playing":%v,"values":`, app.has_mech, app.time, clip_length(app.clip), app.playing)
+  if app.has_mech do write_values(b, character.mech_shown(&app.mech))
   else do strings.write_string(b, "{}")
   strings.write_string(b, `,"messages":[`)
   for msg, i in app.messages {
@@ -411,65 +550,73 @@ info :: proc(b: ^strings.Builder) {
     if i > 0 do strings.write_byte(b, ',')
     fmt.sbprintf(b, `{{"name":%q,"duration":%v,"motions":%d}}`, c.name, c.duration, len(c.motions))
   }
-  // drivers that move nothing
-  strings.write_string(b, `],"unused_drivers":[`)
-  first := true
-  for c in m.drivers {
-    if len(c.moves) > 0 do continue
-    if !first do strings.write_byte(b, ',')
-    first = false
-    fmt.sbprintf(b, "%q", c.name)
-  }
-  // the root's channels, moving and turning it
-  strings.write_string(b, `],"root":{"move":[`)
-  names := mech.ROOT_CHANNELS
-  for n, k in names {
-    if k == 3 do strings.write_string(b, `],"turn":[`)
-    else if k > 0 do strings.write_byte(b, ',')
-    fmt.sbprintf(b, "%q", n)
-  }
-  strings.write_string(b, "]}}")
+  strings.write_string(b, "]}")
 }
 
-// channels lists every channel of the model with what a slider for it needs (see the top).
+// channels lists every channel of the model (mech.model_channel_table) with what its controls
+// need (see the top).
 @(private = "file")
 channels :: proc(b: ^strings.Builder, rig: ^mech.Rig) {
   m := app.asset.model
-  // points range over the posed model, half its size again each way, in model units
+  // positions range over the posed model, half its size again each way, in model units
   lo, hi := mech.rig_bounds(rig)
   lo, hi = lo / m.scale, hi / m.scale
   pad := (hi - lo) / 2
   lo, hi = lo - pad, hi + pad
-  first := true
-  item :: proc(b: ^strings.Builder, first: ^bool, name, kind: string, angle: bool, min, max: f32, owner := "", owner_key := "") {
-    if !first^ do strings.write_byte(b, ',')
-    first^ = false
-    fmt.sbprintf(b, `{{"name":%q,"kind":%q,"angle":%v,"min":%v,"max":%v`, name, kind, angle, min, max)
-    if owner_key != "" do fmt.sbprintf(b, `,%q:%q`, owner_key, owner)
-    strings.write_byte(b, '}')
+  sizes := mech.CHANNEL_SIZE
+  // each joint value's range, by value
+  joints := make([][2]f32, mech.model_channels(m))
+  n := mech.joint_channel(m, 0)
+  for _, i in m.assembly do for j in mech.instance_joints(m, i) {
+    dofs, count := mech.joint_axes(j)
+    for axis, k in dofs[:count] do joints[n + k] = {j.min[axis], j.max[axis]}
+    n += count
   }
   strings.write_byte(b, '[')
-  for d in m.drivers do item(b, &first, d.name, "driver", len(d.moves) > 0, d.min, d.max)
-  suffixes := mech.IK_CHANNELS
-  for ik in m.iks {
-    for x, n in suffixes[:mech.ik_channel_count(ik)] {
-      // x, y, z, the weight, then the pole's x, y, z
-      a := n if n < 3 else n - 4
-      if n == 3 do item(b, &first, fmt.tprint(ik.name, x, sep = ""), "ik", false, 0, 1, ik.name, "ik")
-      else do item(b, &first, fmt.tprint(ik.name, x, sep = ""), "ik", false, lo[a], hi[a], ik.name, "ik")
+  for c, i in mech.model_channel_table(m) {
+    if i > 0 do strings.write_byte(b, ',')
+    size := sizes[c.kind]
+    min, max: [3]f32
+    owner, key := "", ""
+    switch {
+    case c.first < mech.root_channel(m):
+      owner, key = m.iks[c.first / mech.IK_VALUES].name, "ik"
+    case c.first >= mech.joint_channel(m, 0):
+      inst := 0
+      for k in 0 ..< len(m.assembly) do if c.first >= mech.joint_channel(m, k) do inst = k
+      owner, key = m.assembly[inst].name, "part"
     }
-  }
-  roots := mech.ROOT_CHANNELS
-  for r, k in roots do item(b, &first, r, "root", k >= 3, -math.PI if k >= 3 else lo[k], math.PI if k >= 3 else hi[k])
-  ch := mech.joint_channel(m, 0)
-  for inst, i in m.assembly {
-    for j in mech.instance_joints(m, i) {
-      dofs, count := mech.joint_dofs(j)
-      for d in dofs[:count] {
-        item(b, &first, mech.channel_name(m, ch), "joint", true, j.min[d.axis], j.max[d.axis], inst.name, "part")
-        ch += 1
+    switch c.kind {
+    case .POSITION:
+      min, max = lo, hi
+    case .WEIGHT:
+      min, max = 0, 1
+    case .HINGE, .SLIDE, .BALL:
+      if key == "part" {
+        for k in 0 ..< size do min[k], max[k] = joints[c.first + k][0], joints[c.first + k][1]
+      } else {
+        min, max = -math.PI, math.PI
       }
     }
+    fmt.sbprintf(b, `{{"name":%q,"kind":%q,"size":%d,"min":`, c.name, fmt.tprint(c.kind), size)
+    write_floats(b, min[:size])
+    strings.write_string(b, `,"max":`)
+    write_floats(b, max[:size])
+    if key != "" do fmt.sbprintf(b, `,%q:%q`, key, owner)
+    strings.write_byte(b, '}')
   }
   strings.write_byte(b, ']')
+}
+
+// dofs: a joint's degrees of freedom as the engine has them, for the editors to name channels by
+// (the "dofs" query); it needs no model.
+@(private = "file")
+dofs :: proc(b: ^strings.Builder, j: mech.Joint) {
+  axes, count := mech.joint_axes(j)
+  fmt.sbprintf(b, `{{"bare":%v,"plates":%v,"axes":[`, mech.joint_bare(j), mech.joint_has_plates(j))
+  for axis, k in axes[:count] {
+    if k > 0 do strings.write_byte(b, ',')
+    fmt.sbprintf(b, `%q`, fmt.tprint(axis))
+  }
+  strings.write_string(b, "]}")
 }

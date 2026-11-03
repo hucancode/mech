@@ -1,13 +1,12 @@
 // @ts-check
 // Kits: any instance of any character, with what hangs from it, copied into the open one. They
-// bring the parts they place, with the joints and materials those use, the drivers moving them
-// (only their moves on the copies) and the IK targets on them; all can be scaled on the way in.
+// bring the parts they place, with the joints and materials those use, and the IK targets on them; all can be scaled on the way in.
 // The copy is matched with the selected instance's slot of the same name, else its first free
 // slot, else its origin.
 import { readFile } from "./api.js";
 import { btn, h, num, row } from "./dom.js";
 import { editor } from "./editor.js";
-import { addIk, clone, copyDriverMoves, driverChannels, freeSlot, instanceIndex, partOf, scalePart, subtreeEnd, treeOrder, uniqueName } from "./model.js";
+import { addIk, clone, freeSlot, instanceIndex, partOf, scalePart, subtreeEnd, treeOrder, uniqueName } from "./model.js";
 import { loadLocal } from "./store.js";
 
 /** the same data but for its name @param {any} a @param {any} b */
@@ -51,6 +50,7 @@ export function insertKit(m, src, i, parent, scale = 1) {
   for (const p of block) {
     p.name = names.get(p.name);
     if (p !== root) p.parent = names.get(p.parent) ?? p.parent;
+    if (p.mirror) p.mirror = names.get(p.mirror) ?? p.mirror;
     if (p.part && !parts.has(p.part))
       parts.set(
         p.part,
@@ -61,18 +61,10 @@ export function insertKit(m, src, i, parent, scale = 1) {
       );
     if (p.part) p.part = parts.get(p.part);
   }
-  // drivers moving the copies: ours of the same name, else a copy, with the moves on the copies
-  for (const d of src.drivers ?? []) {
-    if (!driverChannels(d).some((n) => names.has(n.slice(0, n.indexOf("."))))) continue;
-    m.drivers ??= [];
-    let ours = m.drivers.find((/** @type {any} */ x) => x.name === d.name);
-    if (!ours) m.drivers.push((ours = { ...clone(d), moves: [] }));
-    copyDriverMoves(d, ours, names);
-  }
   for (const ik of src.iks ?? []) {
-    if (!names.has(ik.root) || !names.has(ik.tip)) continue;
-    const k = addIk(m, ik.name, /** @type {string} */ (names.get(ik.root)), /** @type {string} */ (names.get(ik.tip)));
-    for (const f of ["hold", "aim"]) if (ik[f]) m.iks[k][f] = true;
+    if (!names.has(ik.tip)) continue;
+    const k = addIk(m, ik.name, /** @type {string} */ (names.get(ik.tip)));
+    if (ik.aim) m.iks[k].aim = true;
   }
 
   m.assembly ??= [];
@@ -165,7 +157,7 @@ export async function openKit() {
   search.addEventListener("input", () => ((filter = search.value.trim()), fill()));
   fill();
   dialog.append(
-    h("header", null, h("strong", null, "Add from a kit"), h("span", { class: "muted" }, "an instance and everything under it, with their parts, joints, materials and drivers")),
+    h("header", null, h("strong", null, "Add from a kit"), h("span", { class: "muted" }, "an instance and everything under it, with their parts, joints, materials and IK targets")),
     search,
     body,
     h(

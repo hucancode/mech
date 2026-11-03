@@ -60,7 +60,8 @@ viewer_set_animation :: proc "contextless" (p: [^]u8, n: int) -> bool {
   return set_animation(p[:n])
 }
 
-// viewer_set_values shows driver values: a JSON object of driver name to value.
+// viewer_set_values shows channel values: a JSON object of channel name to value (a number or
+// [x, y, z], as the channel is shaped); the rest at the rest pose.
 @(export)
 viewer_set_values :: proc "contextless" (p: [^]u8, n: int) -> bool {
   context = ctx

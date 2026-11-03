@@ -31,7 +31,7 @@ calls exports between frames (`src/viewer/web.odin`):
 | --- | --- |
 | `viewer_set_model(text)` | parse a model and rebuild the mech |
 | `viewer_set_animation(text)` | parse an animation and recompile the clips (after every edit) |
-| `viewer_set_values({name: value})` | hold explicit channel values, the rest at the rest pose (the pose test) |
+| `viewer_set_values({name: value})` | hold explicit channel values (a number or `[x, y, z]`, as the channel is shaped), the rest at the rest pose (the pose test) |
 | `viewer_play(clip, time, playing, speed, loops)` | show a clip |
 | `viewer_select(part, shape, isolate)` | outline a part's shapes and draw its frame; `isolate` hides the rest |
 | `viewer_explode(amount)` | push the isolated part's shapes apart (0 to 1) |
@@ -53,15 +53,17 @@ to know something the engine computes.
 
 | query | answers |
 | --- | --- |
-| `{"q":"state"}` | the clock, every driver as shown, warnings since last asked |
-| `{"q":"sample","clip":"walk","drivers":[..],"n":60}` | driver values over a clip (or at `"times"`) |
-| `{"q":"pose","clip":"attack","time":0.4}` | every driver at one moment, `drivers` |
-| `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions); `rest`: every driver 0 |
+| `{"q":"state"}` | the clock, every channel's values as shown (`values`), warnings since last asked |
+| `{"q":"sample","clip":"walk","channels":[..],"n":60}` | channels' values over a clip (or at `"times"`) |
+| `{"q":"pose","clip":"attack","time":0.4}` | every channel at one moment, `values` |
+| `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions); `rest`: every value 0 |
 | `{"q":"trajectory","clip":"walk","part":"l_foot","n":60}` | an instance's path over a clip (foot slide, motion paths) |
-| `{"q":"motion","clip":"walk","motion":1,"n":120}` | a motion as the engine reads it: its shape over one cycle, and each move's channels, delay and what it adds over the clip |
+| `{"q":"motion","clip":"walk","motion":1,"n":120}` | a motion as the engine reads it: its shape over one cycle, and each move's channels, delay, what it adds over the clip and the arcs it puts positions on |
+| `{"q":"arc","arc":"strike","on":"r_hand"}` | an arc as it would put a position, in metres (editing an arc no shown motion uses) |
+| `{"q":"channels"}` | every channel: name, kind (HINGE, SLIDE, BALL, POSITION, WEIGHT), size, range |
 | `{"q":"bounds","clip":..,"time":..}` | the box around the posed character |
 | `{"q":"camera"}` | the main camera's rotation and the view it is in (the view gizmo) |
-| `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips, drivers that move nothing |
+| `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips |
 
 From the browser console: `editor.viewer.query({q: "trajectory", clip: "walk", part: "l_foot", n: 8})`.
 

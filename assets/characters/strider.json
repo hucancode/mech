@@ -11,50 +11,30 @@
       {"name": "eye", "color": [1, 0.42, 0.12], "roughness": 0.3, "emissive": 0.6}
     ],
     "hardware": {"female": "dark", "male": "trim", "metal": "metal"},
-    "drivers": [
-      {
-        "name": "pelvis_turn",
-        "min": -3.1415927,
-        "max": 3.1415927,
-        "moves": [
-          {
-            "by": {
-              "l_thigh.twist": -1,
-              "pelvis.spin": 1,
-              "r_thigh.twist": 1
-            }
-          }
-        ]
-      }
-    ],
     "iks": [
-      {"name": "l_leg", "root": "l_thigh", "tip": "l_foot", "hold": true},
-      {"name": "r_leg", "root": "r_thigh", "tip": "r_foot", "hold": true},
-      {"name": "l_hand", "root": "l_arm", "tip": "l_cannon"},
-      {"name": "r_hand", "root": "r_arm", "tip": "r_cannon"},
-      {"name": "head_aim", "root": "sensor", "tip": "sensor", "aim": true}
+      {"name": "l_leg", "tip": "l_foot"},
+      {"name": "r_leg", "tip": "r_foot"},
+      {"name": "l_hand", "tip": "l_cannon"},
+      {"name": "r_hand", "tip": "r_cannon"},
+      {"name": "head_aim", "tip": "sensor", "aim": true}
     ],
     "pose": {
-      "l_arm.disc": 0.2,
-      "l_arm.shoulder": -0.08,
-      "l_cannon.elbow": 0.7,
-      "l_leg": [0, 0, 0.014],
-      "l_leg_pole": [0, 0.4202, -1.4924],
-      "l_leg_weight": 1,
-      "r_arm.disc": 0.2,
-      "r_arm.shoulder": -0.08,
-      "r_cannon.elbow": 0.7,
-      "r_leg": [0, 0, 0.014],
-      "r_leg_pole": [0, 0.4202, -1.4924],
-      "r_leg_weight": 1,
-      "root_y": -0.12,
-      "sensor.neck.x": 0.05
+      "twin": "WITH",
+      "by": {
+        "l_arm.shoulder": -0.08,
+        "l_arm.shoulder_top": 0.2,
+        "l_cannon.elbow": 0.7,
+        "l_leg": [0, 0, 0.014],
+        "l_leg.weight": 1,
+        "root": [0, -0.12, 0],
+        "sensor.neck": [0.05, 0, 0]
+      }
     },
     "parts": [
       {
         "name": "pelvis",
         "joints": [
-          {"name": "spin", "kind": "SPIN"}
+          {"name": "spin", "axis": "Y"}
         ],
         "slots": [
           {"name": "hull", "normal": [0, 1, 0], "forward": [0, 0, 1]},
@@ -83,16 +63,7 @@
       {
         "name": "hull",
         "joints": [
-          {
-            "name": "waist",
-            "kind": "BALL",
-            "size": 0.42,
-            "flange_t": 0.17647,
-            "ball_r": 0.5,
-            "socket_t": 0.20588,
-            "stud_len": 0.14706,
-            "flange_w": 1.29412
-          }
+          {"name": "waist", "kind": "BALL", "size": 0.42}
         ],
         "slots": [
           {"name": "sensor", "position": [0.35, -1.42, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
@@ -134,16 +105,7 @@
       {
         "name": "sensor",
         "joints": [
-          {
-            "name": "neck",
-            "kind": "BALL",
-            "size": 0.22,
-            "flange_t": 0.17647,
-            "ball_r": 0.5,
-            "socket_t": 0.25,
-            "stud_len": 0.1,
-            "flange_w": 1.4
-          }
+          {"name": "neck", "kind": "BALL", "size": 0.22}
         ],
         "shapes": [
           {"material": "shell", "position": [0, -0.17, 0], "size": [0.55, 0.26, 0.7]},
@@ -164,20 +126,10 @@
         "joints": [
           {
             "name": "mount",
-            "kind": "HINGE",
             "size": 0.3,
+            "reach": 0.96551,
             "min": [-0.3, 0, 0],
-            "max": [0.9, 0, 0],
-            "jaw": 0.51724,
-            "lug_t": 0.24138,
-            "lug_d": 1.03448,
-            "shank": 0.41379,
-            "flange_t": 0.55172,
-            "pin_r": 0.2069,
-            "clr": 0.10345,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [0.9, 0, 0]
           }
         ],
         "shapes": [
@@ -199,26 +151,15 @@
       {
         "name": "arm",
         "joints": [
-          {"name": "disc", "kind": "SPIN", "min": [0, -1.4, 0], "max": [0, 2.6, 0]},
+          {"name": "shoulder_top", "axis": "Y", "min": [0, -1.4, 0], "max": [0, 2.6, 0]},
           {
             "name": "shoulder",
-            "kind": "HINGE",
             "size": 0.3,
-            "bend": 1.5707964,
+            "reach": 1.27272,
             "min": [-0.7, 0, 0],
-            "max": [0.9, 0, 0],
-            "jaw": 0.45455,
-            "lug_t": 0.27273,
-            "lug_d": 1,
-            "shank": 0.54545,
-            "flange_t": 0.72727,
-            "pin_r": 0.22727,
-            "clr": 0.13636,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [0.9, 0, 0]
           },
-          {"name": "twist", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "shoulder_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "slots": [
           {"name": "cannon", "position": [0, -0.62, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
@@ -243,22 +184,12 @@
         "joints": [
           {
             "name": "elbow",
-            "kind": "HINGE",
             "size": 0.34,
+            "reach": 0.96551,
             "min": [-0.1, 0, 0],
-            "max": [2.4, 0, 0],
-            "jaw": 0.51724,
-            "lug_t": 0.24138,
-            "lug_d": 1.03448,
-            "shank": 0.41379,
-            "flange_t": 0.55172,
-            "pin_r": 0.2069,
-            "clr": 0.10345,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [2.4, 0, 0]
           },
-          {"name": "twist", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "elbow_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "slots": [
           {"name": "muzzle", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
@@ -274,32 +205,15 @@
       {
         "name": "thigh",
         "joints": [
-          {
-            "name": "disc",
-            "kind": "SPIN",
-            "bend": -0.55,
-            "min": [0, -1.2, 0],
-            "max": [0, 1.2, 0]
-          },
+          {"name": "hip_top", "axis": "Y", "min": [0, -1.2, 0], "max": [0, 1.2, 0]},
           {
             "name": "hip",
-            "kind": "HINGE",
             "size": 0.26,
-            "bend": 1.5707964,
+            "reach": 1.4,
             "min": [-0.35, 0, 0],
-            "max": [0.35, 0, 0],
-            "jaw": 0.45,
-            "lug_t": 0.275,
-            "lug_d": 1,
-            "shank": 0.6,
-            "flange_t": 0.8,
-            "pin_r": 0.225,
-            "clr": 0.15,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [0.35, 0, 0]
           },
-          {"name": "twist", "kind": "SPIN", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
+          {"name": "hip_bottom", "axis": "Y", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
         ],
         "slots": [
           {"name": "shin", "position": [0, -0.68, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
@@ -328,21 +242,10 @@
         "joints": [
           {
             "name": "knee",
-            "kind": "HINGE",
             "size": 0.46,
-            "bend": 1.25,
+            "reach": 0.5,
             "min": [-0.8, 0, 0],
-            "max": [1.2, 0, 0],
-            "jaw": 0.51724,
-            "lug_t": 0.24138,
-            "lug_d": 1.03448,
-            "shank": 0.2,
-            "flange_t": 0.3,
-            "pin_r": 0.2069,
-            "clr": 0.10345,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [1.2, 0, 0]
           }
         ],
         "slots": [
@@ -367,21 +270,10 @@
         "joints": [
           {
             "name": "ankle",
-            "kind": "HINGE",
             "size": 0.38,
-            "bend": -1,
+            "reach": 0.5,
             "min": [-1.2, 0, 0],
-            "max": [0.8, 0, 0],
-            "jaw": 0.51724,
-            "lug_t": 0.24138,
-            "lug_d": 1.03448,
-            "shank": 0.2,
-            "flange_t": 0.3,
-            "pin_r": 0.2069,
-            "clr": 0.10345,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [0.8, 0, 0]
           }
         ],
         "slots": [
@@ -405,21 +297,10 @@
         "joints": [
           {
             "name": "toe",
-            "kind": "HINGE",
             "size": 0.38,
-            "bend": 0.3,
+            "reach": 0.4,
             "min": [-0.6, 0, 0],
-            "max": [0.6, 0, 0],
-            "jaw": 0.51724,
-            "lug_t": 0.24138,
-            "lug_d": 1.03448,
-            "shank": 0.15,
-            "flange_t": 0.25,
-            "pin_r": 0.2069,
-            "clr": 0.10345,
-            "tang": true,
-            "disc_f": true,
-            "disc_m": true
+            "max": [0.6, 0, 0]
           }
         ],
         "shapes": [
@@ -450,53 +331,110 @@
       {"name": "hull", "part": "hull", "parent": "pelvis", "parent_slot": "hull"},
       {"name": "sensor", "part": "sensor", "parent": "hull", "parent_slot": "sensor"},
       {"name": "rack", "part": "rack", "parent": "hull", "parent_slot": "rack"},
-      {"name": "l_arm", "part": "arm", "parent": "hull", "parent_slot": "l_arm"},
+      {
+        "name": "l_arm",
+        "part": "arm",
+        "parent": "hull",
+        "parent_slot": "l_arm",
+        "joints": [
+          {"name": "shoulder", "bend": 1.5707964}
+        ]
+      },
       {"name": "l_cannon", "part": "cannon", "parent": "l_arm", "parent_slot": "cannon"},
-      {"name": "l_thigh", "part": "thigh", "parent": "pelvis", "parent_slot": "l_thigh"},
-      {"name": "l_shin", "part": "shin", "parent": "l_thigh", "parent_slot": "shin"},
-      {"name": "l_hock", "part": "hock", "parent": "l_shin", "parent_slot": "hock"},
-      {"name": "l_foot", "part": "foot", "parent": "l_hock", "parent_slot": "foot"},
+      {
+        "name": "l_thigh",
+        "part": "thigh",
+        "parent": "pelvis",
+        "parent_slot": "l_thigh",
+        "joints": [
+          {"name": "hip", "bend": 1.5707964},
+          {"name": "hip_top", "twist": 0.55}
+        ]
+      },
+      {
+        "name": "l_shin",
+        "part": "shin",
+        "parent": "l_thigh",
+        "parent_slot": "shin",
+        "joints": [
+          {"name": "knee", "bend": 1.25}
+        ]
+      },
+      {
+        "name": "l_hock",
+        "part": "hock",
+        "parent": "l_shin",
+        "parent_slot": "hock",
+        "joints": [
+          {"name": "ankle", "bend": -1}
+        ]
+      },
+      {
+        "name": "l_foot",
+        "part": "foot",
+        "parent": "l_hock",
+        "parent_slot": "foot",
+        "joints": [
+          {"name": "toe", "bend": 0.3}
+        ]
+      },
       {
         "name": "r_arm",
         "part": "arm",
         "parent": "hull",
         "parent_slot": "r_arm",
-        "mirror": true
+        "mirror": "l_arm",
+        "joints": [
+          {"name": "shoulder", "bend": 1.5707964}
+        ]
       },
       {
         "name": "r_cannon",
         "part": "cannon",
         "parent": "r_arm",
         "parent_slot": "cannon",
-        "mirror": true
+        "mirror": "l_cannon"
       },
       {
         "name": "r_thigh",
         "part": "thigh",
         "parent": "pelvis",
         "parent_slot": "r_thigh",
-        "mirror": true
+        "mirror": "l_thigh",
+        "joints": [
+          {"name": "hip", "bend": 1.5707964},
+          {"name": "hip_top", "twist": 0.55}
+        ]
       },
       {
         "name": "r_shin",
         "part": "shin",
         "parent": "r_thigh",
         "parent_slot": "shin",
-        "mirror": true
+        "mirror": "l_shin",
+        "joints": [
+          {"name": "knee", "bend": 1.25}
+        ]
       },
       {
         "name": "r_hock",
         "part": "hock",
         "parent": "r_shin",
         "parent_slot": "hock",
-        "mirror": true
+        "mirror": "l_hock",
+        "joints": [
+          {"name": "ankle", "bend": -1}
+        ]
       },
       {
         "name": "r_foot",
         "part": "foot",
         "parent": "r_hock",
         "parent_slot": "foot",
-        "mirror": true
+        "mirror": "l_foot",
+        "joints": [
+          {"name": "toe", "bend": 0.3}
+        ]
       }
     ]
   },
@@ -518,7 +456,7 @@
             "moves": [
               {
                 "by": {
-                  "sensor.neck.y": 0.35
+                  "sensor.neck": [0, 0.35, 0]
                 }
               }
             ]
@@ -533,18 +471,18 @@
             "moves": [
               {
                 "by": {
-                  "hull.waist.x": 0.12,
-                  "l_arm.disc": 0.1,
+                  "hull.waist": [0.12, 0, 0],
                   "l_arm.shoulder": 0.04,
+                  "l_arm.shoulder_top": 0.1,
                   "l_cannon.elbow": 0.8,
                   "l_leg": [0.12, 0, 0.3],
-                  "r_arm.disc": 0.1,
                   "r_arm.shoulder": 0.04,
+                  "r_arm.shoulder_top": 0.1,
                   "r_cannon.elbow": 0.8,
                   "r_leg": [-0.12, 0, -0.3],
                   "rack.mount": 0.2,
-                  "root_y": -0.33,
-                  "sensor.neck.x": -0.13
+                  "root": [0, -0.33, 0],
+                  "sensor.neck": [-0.13, 0, 0]
                 }
               }
             ]
@@ -559,13 +497,13 @@
             "moves": [
               {
                 "by": {
-                  "root_x": 0.05
+                  "root": [0.05, 0, 0]
                 }
               },
               {
                 "delay": 0.1,
                 "by": {
-                  "hull.waist.y": -0.04
+                  "hull.waist": [0, -0.04, 0]
                 }
               }
             ]
@@ -580,7 +518,7 @@
               {
                 "delay": 0.25,
                 "by": {
-                  "root_y": -0.03
+                  "root": [0, -0.03, 0]
                 }
               }
             ]
@@ -594,11 +532,11 @@
           {
             "moves": [
               {
+                "twin": "WITH",
                 "by": {
-                  "hull.waist.x": 0.05,
+                  "hull.waist": [0.05, 0, 0],
                   "l_cannon.elbow": 0.3,
-                  "r_cannon.elbow": 0.3,
-                  "root_y": -0.21
+                  "root": [0, -0.21, 0]
                 }
               }
             ]
@@ -611,14 +549,9 @@
             ],
             "moves": [
               {
+                "twin": "OPPOSITE",
                 "by": {
                   "l_leg": [0, 0, 1.3]
-                }
-              },
-              {
-                "delay": 0.5,
-                "by": {
-                  "r_leg": [0, 0, 1.3]
                 }
               }
             ]
@@ -631,14 +564,9 @@
             ],
             "moves": [
               {
+                "twin": "OPPOSITE",
                 "by": {
                   "l_leg": [0, 0.45, 0]
-                }
-              },
-              {
-                "delay": 0.5,
-                "by": {
-                  "r_leg": [0, 0.45, 0]
                 }
               }
             ]
@@ -652,7 +580,7 @@
             "moves": [
               {
                 "by": {
-                  "root_y": -0.14
+                  "root": [0, -0.14, 0]
                 }
               }
             ]
@@ -668,21 +596,23 @@
               {
                 "delay": 0.25,
                 "by": {
-                  "pelvis_turn": -0.1,
-                  "root_turn_z": -0.03
+                  "l_thigh.hip_bottom": 0.1,
+                  "pelvis.spin": -0.1,
+                  "r_thigh.hip_bottom": -0.1,
+                  "root.turn": [0, 0, -0.03]
                 }
               },
               {
                 "delay": 0.3,
                 "by": {
-                  "hull.waist.y": 0.14
+                  "hull.waist": [0, 0.14, 0]
                 }
               },
               {
                 "delay": 0.35,
+                "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.disc": 0.12,
-                  "r_arm.disc": -0.12
+                  "l_arm.shoulder_top": 0.12
                 }
               }
             ]
@@ -696,16 +626,14 @@
           {
             "moves": [
               {
+                "twin": "WITH",
                 "by": {
-                  "hull.waist.x": 0.22,
-                  "l_arm.disc": -0.3,
+                  "hull.waist": [0.22, 0, 0],
                   "l_arm.shoulder": -0.07,
+                  "l_arm.shoulder_top": -0.3,
                   "l_cannon.elbow": 1.2,
-                  "r_arm.disc": -0.3,
-                  "r_arm.shoulder": -0.07,
-                  "r_cannon.elbow": 1.2,
-                  "root_y": -0.51,
-                  "sensor.neck.x": -0.2
+                  "root": [0, -0.51, 0],
+                  "sensor.neck": [-0.2, 0, 0]
                 }
               }
             ]
@@ -718,14 +646,9 @@
             ],
             "moves": [
               {
+                "twin": "OPPOSITE",
                 "by": {
                   "l_leg": [0, 0, 2.08]
-                }
-              },
-              {
-                "delay": 0.5,
-                "by": {
-                  "r_leg": [0, 0, 2.08]
                 }
               }
             ]
@@ -738,14 +661,9 @@
             ],
             "moves": [
               {
+                "twin": "OPPOSITE",
                 "by": {
                   "l_leg": [0, 0.6, 0]
-                }
-              },
-              {
-                "delay": 0.5,
-                "by": {
-                  "r_leg": [0, 0.6, 0]
                 }
               }
             ]
@@ -759,7 +677,7 @@
             "moves": [
               {
                 "by": {
-                  "root_y": -0.16
+                  "root": [0, -0.16, 0]
                 }
               }
             ]
@@ -775,21 +693,23 @@
               {
                 "delay": 0.25,
                 "by": {
-                  "pelvis_turn": -0.1,
-                  "root_turn_z": -0.03
+                  "l_thigh.hip_bottom": 0.1,
+                  "pelvis.spin": -0.1,
+                  "r_thigh.hip_bottom": -0.1,
+                  "root.turn": [0, 0, -0.03]
                 }
               },
               {
                 "delay": 0.3,
                 "by": {
-                  "hull.waist.y": 0.14
+                  "hull.waist": [0, 0.14, 0]
                 }
               },
               {
                 "delay": 0.35,
+                "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.disc": 0.12,
-                  "r_arm.disc": -0.12
+                  "l_arm.shoulder_top": 0.12
                 }
               }
             ]
@@ -804,18 +724,18 @@
             "moves": [
               {
                 "by": {
-                  "hull.waist.x": 0.12,
-                  "l_arm.disc": 0.1,
+                  "hull.waist": [0.12, 0, 0],
                   "l_arm.shoulder": 0.04,
+                  "l_arm.shoulder_top": 0.1,
                   "l_cannon.elbow": 0.8,
                   "l_leg": [0.12, 0, 0.3],
-                  "r_arm.disc": 0.1,
                   "r_arm.shoulder": 0.04,
+                  "r_arm.shoulder_top": 0.1,
                   "r_cannon.elbow": 0.8,
                   "r_leg": [-0.12, 0, -0.3],
                   "rack.mount": 0.2,
-                  "root_y": -0.33,
-                  "sensor.neck.x": -0.13
+                  "root": [0, -0.33, 0],
+                  "sensor.neck": [-0.13, 0, 0]
                 }
               }
             ]
@@ -863,27 +783,28 @@
             "moves": [
               {
                 "by": {
-                  "root_y": -0.15
+                  "root": [0, -0.15, 0]
                 }
               },
               {
                 "delay": 0.0159,
                 "by": {
-                  "pelvis_turn": -0.25
+                  "l_thigh.hip_bottom": 0.25,
+                  "pelvis.spin": -0.25,
+                  "r_thigh.hip_bottom": -0.25
                 }
               },
               {
                 "delay": 0.0317,
                 "by": {
-                  "hull.waist.x": -0.12,
-                  "hull.waist.y": -0.3
+                  "hull.waist": [-0.12, -0.3, 0]
                 }
               },
               {
                 "delay": 0.0476,
                 "by": {
                   "l_cannon.elbow": 0.2,
-                  "r_arm.disc": -0.85,
+                  "r_arm.shoulder_top": -0.85,
                   "r_cannon.elbow": 0.6
                 }
               }
@@ -900,29 +821,30 @@
             "moves": [
               {
                 "by": {
-                  "root_z": 0.25
+                  "root": [0, 0, 0.25]
                 }
               },
               {
                 "delay": 0.02,
                 "by": {
-                  "pelvis_turn": 0.3
+                  "l_thigh.hip_bottom": -0.3,
+                  "pelvis.spin": 0.3,
+                  "r_thigh.hip_bottom": 0.3
                 }
               },
               {
                 "delay": 0.04,
                 "by": {
-                  "hull.waist.x": 0.13,
-                  "hull.waist.y": 0.35
+                  "hull.waist": [0.13, 0.35, 0]
                 }
               },
               {
                 "delay": 0.06,
                 "by": {
-                  "l_arm.disc": -0.5,
-                  "r_arm.disc": 1.05,
+                  "l_arm.shoulder_top": -0.5,
+                  "r_arm.shoulder_top": 1.05,
                   "r_cannon.elbow": -1.35,
-                  "r_cannon.twist": -0.4
+                  "r_cannon.elbow_bottom": -0.4
                 }
               }
             ]
@@ -937,18 +859,18 @@
             "moves": [
               {
                 "by": {
-                  "hull.waist.x": 0.12,
-                  "l_arm.disc": 0.1,
+                  "hull.waist": [0.12, 0, 0],
                   "l_arm.shoulder": 0.04,
+                  "l_arm.shoulder_top": 0.1,
                   "l_cannon.elbow": 0.8,
                   "l_leg": [0.12, 0, 0.3],
-                  "r_arm.disc": 0.1,
                   "r_arm.shoulder": 0.04,
+                  "r_arm.shoulder_top": 0.1,
                   "r_cannon.elbow": 0.8,
                   "r_leg": [-0.12, 0, -0.3],
                   "rack.mount": 0.2,
-                  "root_y": -0.33,
-                  "sensor.neck.x": -0.13
+                  "root": [0, -0.33, 0],
+                  "sensor.neck": [-0.13, 0, 0]
                 }
               }
             ]
@@ -964,23 +886,22 @@
             "moves": [
               {
                 "by": {
-                  "root_y": -0.2
+                  "root": [0, -0.2, 0]
                 }
               },
               {
                 "delay": 0.0267,
                 "by": {
-                  "hull.waist.x": -0.3,
-                  "sensor.neck.x": -0.07
+                  "hull.waist": [-0.3, 0, 0],
+                  "sensor.neck": [-0.07, 0, 0]
                 }
               },
               {
                 "delay": 0.0533,
+                "twin": "WITH",
                 "by": {
                   "l_arm.shoulder": -0.31,
-                  "l_cannon.elbow": -0.5,
-                  "r_arm.shoulder": -0.31,
-                  "r_cannon.elbow": -0.5
+                  "l_cannon.elbow": -0.5
                 }
               },
               {
@@ -1001,25 +922,25 @@
               {
                 "delay": 0.375,
                 "by": {
-                  "hull.waist.x": 0.06,
+                  "hull.waist": [0.06, 0, 0],
                   "rack.mount": -0.12,
-                  "root_z": -0.06
+                  "root": [0, 0, -0.06]
                 }
               },
               {
                 "delay": 0.5,
                 "by": {
-                  "hull.waist.x": 0.06,
+                  "hull.waist": [0.06, 0, 0],
                   "rack.mount": -0.12,
-                  "root_z": -0.06
+                  "root": [0, 0, -0.06]
                 }
               },
               {
                 "delay": 0.625,
                 "by": {
-                  "hull.waist.x": 0.06,
+                  "hull.waist": [0.06, 0, 0],
                   "rack.mount": -0.12,
-                  "root_z": -0.06
+                  "root": [0, 0, -0.06]
                 }
               }
             ]

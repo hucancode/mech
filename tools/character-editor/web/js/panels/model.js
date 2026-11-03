@@ -8,35 +8,10 @@
 import { btn, check, color, face, h, list, num, row, section, segmented, select, slider, text, vec3 } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { addSlot, clone, faceCentre, FACE_NAMES, fitJoint, JOINT_KINDS, jointAxes, jointHasHardware, jointSize, jointSizeFor, newPart, partUsers, PRIMITIVES, renameMaterial, renamePart, renamePartJoint, renameSlot, respan, setJointKind, setJointRange, slotSpanners, slotUsers, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
+import { addSlot, clone, dropPartJoint, faceCentre, FACE_NAMES, fitJoint, HINGE_AXES, isTurntable, JOINT_KINDS, jointAxes, jointKind, jointSize, jointSizeFor, newPart, partUsers, PRIMITIVES, renameMaterial, renamePart, renamePartJoint, renameSlot, respan, setJointAxis, setJointKind, setJointRange, slotSpanners, slotUsers, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
 
 /** @param {number[] | undefined} c */
 export const swatch = (c) => `rgb(${(c ?? [0, 0, 0]).map((x) => Math.round(x * 255)).join(",")})`;
-
-// a joint's proportions: each is times its size
-const HINGE_FIELDS = [
-  ["jaw", "gap between the female lugs"],
-  ["lug_t", "lug thickness; 0: no lugs"],
-  ["lug_d", "lug diameter"],
-  ["shank", "the lug's straight length; with flange_t, how far out the pivot is (both 0: on the slot)"],
-  ["flange_t", "base plate thickness; 0: no base plate"],
-  ["pin_r", "pin radius"],
-  ["clr", "clearance"],
-  ["pin_out", "how far the pin sticks out"],
-];
-const BALL_FIELDS = [
-  ["ball_r", "ball radius"],
-  ["socket_t", "socket wall"],
-  ["stud_len", "stud length"],
-  ["flange_w", "flange width"],
-  ["flange_t", "flange thickness"],
-];
-
-const SPIN_FIELDS = [
-  ["flange_w", "the discs' diameter"],
-  ["flange_t", "both discs' thickness; they meet on the pivot"],
-];
-const FIELDS = { HINGE: HINGE_FIELDS, BALL: BALL_FIELDS, SPIN: SPIN_FIELDS };
 
 /** the primitives sized by a diameter (x and z) and a height (y) */
 const ROUND = ["CYLINDER", "HALF_CYLINDER", "QUARTER_CYLINDER", "CONE"];
@@ -281,9 +256,10 @@ function slotsSection(part) {
 
 /**
  * jointsRows edits the joints a part moves by, listed from its parent's slot down to its origin,
- * each on the one before. Each is named (drivers move it by name), has a kind and its parameters,
- * and may twist about its socket's normal first. They live on the part, so every instance of it
- * shares them. None: the part bolts on rigid.
+ * each on the one before. Each is named (its channel, `<instance>.<joint>`, moves it), has a
+ * kind (a spin servo, a hinge, a ball, a linear actuator), its range and its hardware; a turntable
+ * is a spin before or after a hinge, whose plate on it is round. They live on the part, so every instance of it shares them; they are straight here,
+ * and each instance sets them at rest (twist, bend: the Assemble tab). None: the part bolts on rigid.
  * @param {any} part
  */
 function jointsRows(part) {
@@ -311,89 +287,69 @@ function jointsRows(part) {
         btn(icon("plus"), add, { kind: "icon", title: "Add a joint on the end of the stack" }),
         shown && btn(icon("reset"), () => editor.resetTries(), { kind: "icon", title: "Put the tried joints back at rest" }),
       ],
-      joints.length ? "from the parent's side to its origin; drivers move them by name (Rig tab)" : "none: bolted rigid",
+      joints.length ? "from the parent's side to its origin, each its own channel (a shoulder: a turntable next to a pin)" : "none: bolted rigid",
     ),
     joints.map((/** @type {any} */ j, /** @type {number} */ k) => {
       const size = jointSize(j);
-      const fields = FIELDS[/** @type {keyof typeof FIELDS} */ (j.kind)] ?? [];
+      const kind = jointKind(j);
+      const pin = kind === "HINGE" && !isTurntable(j);
+      // the engine says when a hinge is too close for lugs (a bare pin)
+      const hw = pin ? editor.viewer?.query({ q: "dofs", joint: j }) : null;
+      const bare = hw?.bare;
       return h(
         "div",
         { class: shown && editor.joint === k ? "joint-item on" : "joint-item" },
         row(`${k + 1}`, [
           text({ value: j.name, onchange: (v) => editor.edit("both", () => (renamePartJoint(m, editor.anim, part.name, j.name, v), (j.name = v))) }),
           select({
-            value: j.kind ?? "HINGE",
+            value: kind,
             options: JOINT_KINDS,
             onchange: (v) => {
               const to = size || fit(v);
               edit(() => setJointKind(j, v, to));
             },
           }),
+          kind === "HINGE" && select({ value: j.axis ?? "X", options: HINGE_AXES, onchange: (v) => edit(() => setJointAxis(j, v)) }),
           btn("↑", () => move(k, -1), { kind: "icon", title: "Earlier in the stack (nearer the parent)", disabled: k === 0 }),
-          btn(icon("x"), () => edit(() => (joints.splice(k, 1), joints.length || delete part.joints)), { kind: "icon", title: "Remove this joint" }),
+          btn(icon("x"), () => edit(() => (joints.splice(k, 1), joints.length || delete part.joints, dropPartJoint(m, part.name, j.name))), { kind: "icon", title: "Remove this joint" }),
         ]),
-        row(
-          "twist",
-          [
-            num({ value: j.twist ?? 0, deg: true, step: 15, onchange: (v) => edit(() => (v ? (j.twist = v) : delete j.twist), "twist") }),
-            quarters(j, "twist", edit),
-            h("span", { class: "tag", title: "the axes it turns about" }, jointAxes(j).join(" ")),
-          ],
-          "degrees about the socket's normal before the joint",
-        ),
-        row("bend", [num({ value: j.bend ?? 0, deg: true, step: 15, onchange: (v) => edit(() => (v ? (j.bend = v) : delete j.bend), "bend") }), quarters(j, "bend", edit)], "turns the first axis at rest, in degrees"),
         rangeRows(j, edit),
-        jointHasHardware(j.kind) &&
-          row(
+        row(
             "size",
             [
               num({ value: size, min: 0, step: 0.01, onchange: (v) => edit(() => (v ? (j.size = v) : delete j.size), "joint-size") }),
               btn("fit", () => {
-                const to = fit(j.kind);
+                const to = fit(kind);
                 if (to) edit(() => (j.size = to));
               }, { title: "Size it to the face it sits on, as a clevis is sized by its link" }),
             ],
-            `about ${{ BALL: "the ball's diameter", HINGE: "the width across the lugs", SPIN: "the discs' diameter" }[/** @type {string} */ (j.kind)] ?? "its width"}; the hardware scales with it (0: none)`,
+            `about ${pin ? "the lugs' diameter" : { BALL: "the ball's diameter", HINGE: "the discs' diameter", LINEAR: "the barrel's diameter" }[kind]}; the hardware scales with it (0: none, the joint pivoting on its slot)`,
           ),
-        fields.length > 0 &&
-          section("Proportions", [
-            fields.map(([key, hint]) => row(key, num({ value: j[key] ?? 0, min: 0, step: key === "clr" || key === "pin_out" ? 0.005 : 0.02, onchange: (v) => edit(() => (j[key] = v), key) }), `${hint}; times the size`)),
-            j.kind === "HINGE" && [
-              row("", check({ value: j.tang, label: "solid male lug (tang)", onchange: (v) => edit(() => (v ? (j.tang = true) : delete j.tang)) })),
-              row("", check({ value: j.disc_f, label: "round female base", onchange: (v) => edit(() => (v ? (j.disc_f = true) : delete j.disc_f)) })),
-              row("", check({ value: j.disc_m, label: "round male base", onchange: (v) => edit(() => (v ? (j.disc_m = true) : delete j.disc_m)) })),
-            ],
-          ], { open: false }),
+        pin &&
+          size > 0 && [
+            row(
+              "reach",
+              slider({ value: j.reach ?? 0, min: 0, max: 3, onchange: (v) => edit(() => (v ? (j.reach = v) : delete j.reach), "joint-reach") }),
+              bare ? "too close for lugs: a bare pin on the slot (knuckles); more reach builds lugs" : "how far out from the slot it pivots, times the size; the lugs and base plates fit in it",
+            ),
+          ],
       );
     }),
   );
 }
 
 /**
- * quarters: buttons setting a joint's angle `key` (twist, bend) to a quarter turn
- * @param {any} j @param {string} key @param {(change: () => void, key?: string) => void} edit
- */
-function quarters(j, key, edit) {
-  const quarter = [0, 90, 180, -90].map((d) => ({ value: Math.round(((d * Math.PI) / 180) * 1e7) / 1e7, label: `${d}`, title: `${key} ${d}°` }));
-  return segmented({
-    value: quarter.find((q) => Math.abs((j[key] ?? 0) - q.value) < 1e-4)?.value,
-    options: quarter,
-    onchange: (v) => edit(() => (v ? (j[key] = v) : delete j[key])),
-    fill: true,
-  });
-}
-
-/**
- * rangeRows edit a joint's stops, one row per axis it has: from its rest, degrees (model units
- * equal ends leave it free. Drives and IK stay inside them.
+ * rangeRows edit a joint's stops, one row per axis it moves about (along): from its rest, degrees
+ * (a linear actuator's, model units out); equal ends leave it free. Drives and IK stay inside them.
  * @param {any} j @param {(change: () => void, key?: string) => void} edit
  */
 function rangeRows(j, edit) {
+  const slides = jointKind(j) === "LINEAR";
   return jointAxes(j).map((a) => {
     const k = "XYZ".indexOf(a);
     const end = (/** @type {number} */ e) =>
-      num({ value: (e ? j.max : j.min)?.[k] ?? 0, deg: true, step: 5, onchange: (v) => edit(() => setJointRange(j, k, e, v), `range-${k}-${e}`) });
-    return row(`range ${a.toLowerCase()}`, [end(0), end(1)], `its stops about ${a}, from rest, in degrees; equal ends: free`);
+      num({ value: (e ? j.max : j.min)?.[k] ?? 0, deg: !slides, step: slides ? 0.05 : 5, onchange: (v) => edit(() => setJointRange(j, k, e, v), `range-${k}-${e}`) });
+    return row(slides ? "stroke" : `range ${a.toLowerCase()}`, [end(0), end(1)], slides ? "how far it slides out, from rest, in model units; equal ends: free" : `its stops about ${a}, from rest, in degrees; equal ends: free`);
   });
 }
 
