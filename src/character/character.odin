@@ -12,11 +12,13 @@ Action :: enum u8 {
   ATTACK,
   CAST,
   COMBAT_IDLE, // a fight-ready stance, held
+  ATTACK_B, // the second attack: a left uppercut on the mech
+  ATTACK_C, // the third: a two-handed overhead slam on the mech
 }
 
-// action_loops: IDLE, WALK, RUN and COMBAT_IDLE repeat. ATTACK and CAST play once, then return to IDLE.
+// action_loops: IDLE, WALK, RUN and COMBAT_IDLE repeat. The attacks and CAST play once, then return to IDLE.
 action_loops :: proc(a: Action) -> bool {
-  return a != .ATTACK && a != .CAST
+  return a in bit_set[Action]{.IDLE, .WALK, .RUN, .COMBAT_IDLE}
 }
 
 // Character is the one interface gameplay talks to. Characters face +Z with their feet at the root
@@ -28,7 +30,7 @@ Character :: struct {
   play:    proc(data: rawptr, a: Action, fade: f32),
   // update runs before mjolnir.update each tick.
   update:  proc(data: rawptr, dt: f32),
-  // idle reports whether no one-shot (ATTACK/CAST) is in progress, i.e. the character accepts a
+  // idle reports whether no one-shot (an attack, CAST) is in progress, i.e. the character accepts a
   // new order without cutting an action short.
   idle:    proc(data: rawptr) -> bool,
   destroy: proc(data: rawptr, w: ^world.World, r: ^render.Renderer),

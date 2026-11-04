@@ -559,18 +559,20 @@
           },
           {
             "shape": [
-              {"u": 0.15, "v": 1, "ease": "SETTLE"},
-              {"u": 0.35, "v": 1},
-              {"u": 0.65, "v": -1, "ease": "SETTLE"},
-              {"u": 0.85, "v": -1}
+              {"u": 0.2, "v": 1, "ease": "OUT"},
+              {"u": 0.3, "v": 1},
+              {"u": 0.5, "ease": "IN"},
+              {"u": 0.7, "v": -1, "ease": "OUT"},
+              {"u": 0.8, "v": -1},
+              {"u": 1, "ease": "IN"}
             ],
             "moves": [
               {
                 "spread": 0.05,
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.shoulder_top": -0.42,
-                  "l_forearm.elbow": -0.07
+                  "l_arm.shoulder_top": -0.4,
+                  "l_forearm.elbow": -0.2
                 }
               },
               {
@@ -595,7 +597,7 @@
                 "by": {
                   "fist": 0.7692,
                   "head.neck": [-0.1047, 0, 0],
-                  "l_arm.shoulder_top": -0.0698,
+                  "l_arm.shoulder_top": -0.4,
                   "l_forearm.elbow": 1.2042,
                   "root": [0, -0.15, 0],
                   "torso.waist": [0.2094, 0, 0]
@@ -636,18 +638,20 @@
           },
           {
             "shape": [
-              {"u": 0.15, "v": 1, "ease": "SETTLE"},
-              {"u": 0.35, "v": 1},
-              {"u": 0.65, "v": -1, "ease": "SETTLE"},
-              {"u": 0.85, "v": -1}
+              {"u": 0.2, "v": 1, "ease": "OUT"},
+              {"u": 0.3, "v": 1},
+              {"u": 0.5, "ease": "IN"},
+              {"u": 0.7, "v": -1, "ease": "OUT"},
+              {"u": 0.8, "v": -1},
+              {"u": 1, "ease": "IN"}
             ],
             "moves": [
               {
                 "spread": 0.05,
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.shoulder_top": -0.87,
-                  "l_forearm.elbow": -0.07
+                  "l_arm.shoulder_top": -0.55,
+                  "l_forearm.elbow": -0.2
                 }
               },
               {
@@ -789,6 +793,217 @@
         ]
       },
       {
+        "name": "attack_b",
+        "duration": 0.9,
+        "motions": [
+          {
+            "shape": [
+              {"u": 0.05},
+              {"u": 0.2, "v": 1, "ease": "SETTLE"},
+              {"u": 0.7, "v": 1},
+              {"u": 0.9}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "head_aim": [0.5, -0.4, 1.2],
+                  "head_aim.weight": 1,
+                  "r_arm.shoulder": 0.2,
+                  "r_arm.shoulder_top": 0.4,
+                  "r_forearm.elbow": 1.3,
+                  "root": [0, -0.1, 0]
+                }
+              },
+              {
+                "delay": 0.05,
+                "twin": "WITH",
+                "by": {
+                  "fist": 1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.05},
+              {"u": 0.25, "v": 1, "ease": "OUT"},
+              {"u": 0.33, "v": 1},
+              {"u": 0.44, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root": [0, -0.1, 0]
+                }
+              },
+              {
+                "delay": 0.0125,
+                "by": {
+                  "l_thigh.hip_bottom": -0.2,
+                  "pelvis.spin": 0.2,
+                  "r_thigh.hip_bottom": 0.2
+                }
+              },
+              {
+                "delay": 0.025,
+                "by": {
+                  "torso.waist": [0.2, 0.25, -0.1]
+                }
+              },
+              {
+                "delay": 0.0375,
+                "spread": 0.025,
+                "by": {
+                  "l_arm.shoulder_top": -0.5,
+                  "l_forearm.elbow": 1.1,
+                  "l_palm.wrist": 0.3
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.33},
+              {"u": 0.44, "v": 1, "ease": "SETTLE"},
+              {"u": 0.68, "v": 1},
+              {"u": 0.94}
+            ],
+            "moves": [
+              {
+                "delay": 0.01,
+                "by": {
+                  "l_thigh.hip_bottom": 0.3,
+                  "pelvis.spin": -0.3,
+                  "r_thigh.hip_bottom": -0.3
+                }
+              },
+              {
+                "delay": 0.02,
+                "by": {
+                  "torso.waist": [-0.15, -0.35, 0.08]
+                }
+              },
+              {
+                "delay": 0.03,
+                "spread": 0.02,
+                "by": {
+                  "l_arm.shoulder_top": 1.15,
+                  "l_forearm.elbow": 1.1,
+                  "l_palm.wrist": -0.2
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "attack_c",
+        "duration": 1.1,
+        "motions": [
+          {
+            "shape": [
+              {"u": 0.05},
+              {"u": 0.2, "v": 1, "ease": "SETTLE"},
+              {"u": 0.75, "v": 1},
+              {"u": 0.95}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "head_aim": [0, -2.5, 2],
+                  "head_aim.weight": 1,
+                  "l_foot.ankle": -0.1,
+                  "l_leg": [0, 0, 0.45],
+                  "r_foot.ankle": 0.15
+                }
+              },
+              {
+                "delay": 0.05,
+                "twin": "WITH",
+                "by": {
+                  "fist": 1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.05},
+              {"u": 0.12, "v": 1, "ease": "OUT"},
+              {"u": 0.2, "ease": "IN"},
+              {"u": 0.75},
+              {"u": 0.85, "v": 1, "ease": "OUT"},
+              {"u": 0.95, "ease": "IN"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "l_leg": [0, 0.28, 0]
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.08},
+              {"u": 0.32, "v": 1, "ease": "OUT"},
+              {"u": 0.4, "v": 1},
+              {"u": 0.5, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "torso.waist": [-0.25, 0, 0]
+                }
+              },
+              {
+                "delay": 0.015,
+                "spread": 0.03,
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": 0.3,
+                  "l_arm.shoulder_top": 2.3,
+                  "l_forearm.elbow": 0.5,
+                  "l_palm.wrist": -0.4
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.4},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.75, "v": 1},
+              {"u": 0.98}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "root": [0, -0.35, 0]
+                }
+              },
+              {
+                "delay": 0.01,
+                "by": {
+                  "torso.waist": [0.35, 0, 0]
+                }
+              },
+              {
+                "delay": 0.02,
+                "spread": 0.02,
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": 0.3,
+                  "l_arm.shoulder_top": 0.9,
+                  "l_forearm.elbow": -0.2,
+                  "l_palm.wrist": 0.4
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
         "name": "cast",
         "duration": 1.6,
         "motions": [
@@ -797,8 +1012,8 @@
               {},
               {"u": 0.0281},
               {"u": 0.225, "v": 1, "ease": "OUT"},
-              {"u": 0.3094, "v": 1},
-              {"u": 0.5625}
+              {"u": 0.3, "v": 1},
+              {"u": 0.4, "ease": "OUT"}
             ],
             "moves": [
               {
@@ -816,9 +1031,9 @@
             "shape": [
               {},
               {"u": 0.3},
-              {"u": 0.42, "v": 1, "ease": "SETTLE"},
+              {"u": 0.4, "v": 1, "ease": "OUT"},
               {"u": 0.67, "v": 1},
-              {"u": 0.92}
+              {"u": 0.92, "ease": "IN"}
             ],
             "moves": [
               {
@@ -842,15 +1057,15 @@
           },
           {
             "shape": [
-              {"u": 0.62},
-              {"u": 0.66, "v": 1, "ease": "OUT"},
-              {"u": 0.8, "ease": "SETTLE"}
+              {"u": 0.37},
+              {"u": 0.42, "v": 1, "ease": "OUT"},
+              {"u": 0.6, "ease": "SETTLE"}
             ],
             "moves": [
               {
                 "by": {
-                  "head.neck": [0.3, 0, 0],
-                  "torso.waist": [0.24, 0, 0]
+                  "head.neck": [0.2, 0, 0],
+                  "torso.waist": [0.16, 0, 0]
                 }
               }
             ]

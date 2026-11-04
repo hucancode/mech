@@ -1,5 +1,5 @@
 // Mech: a test scene for mechs loaded from assets/, with a debug panel to drive their animation.
-//   1-6    idle / walk / run / attack / cast / combat idle
+//   1-8    idle / walk / run / attack / cast / combat idle / attack B / attack C
 //   space  pause / resume
 //   drag   orbit the camera, scroll to zoom
 // The panel plays actions, loops one-shots, changes speed and cross-fade, scrubs or steps the
@@ -27,6 +27,8 @@ ACTION_KEYS := [character.Action]input.Key {
   .ATTACK      = .NUM_4,
   .CAST        = .NUM_5,
   .COMBAT_IDLE = .NUM_6,
+  .ATTACK_B    = .NUM_7,
+  .ATTACK_C    = .NUM_8,
 }
 
 ACTION_NAMES := [character.Action]string {
@@ -36,6 +38,8 @@ ACTION_NAMES := [character.Action]string {
   .ATTACK      = "attack",
   .CAST        = "cast",
   .COMBAT_IDLE = "combat",
+  .ATTACK_B    = "atk B",
+  .ATTACK_C    = "atk C",
 }
 
 STEP :: 1.0 / 60
@@ -60,7 +64,7 @@ App :: struct {
   shown:    int, // the asset the character is built from
   mech:     character.Character,
   action:   character.Action, // the last action asked for
-  repeat:   bool, // replay ATTACK/CAST when they finish
+  repeat:   bool, // replay the attacks and CAST when they finish
   paused:   bool,
   speed:    f32,
   fade:     f32,

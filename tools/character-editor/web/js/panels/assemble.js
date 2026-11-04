@@ -151,15 +151,13 @@ export function assembleInspector() {
       ),
       row(
         "parent",
-        select({ value: inst.parent, none: "(root)", options: m.assembly.slice(0, i).map((/** @type {any} */ p) => p.name), onchange: (v) => edit(() => (v ? (inst.parent = v) : delete inst.parent, delete inst.parent_slot)) }),
-        "instances hang from earlier ones; drag in the tree to move one anywhere",
+        [
+          select({ value: inst.parent, none: "(root)", options: m.assembly.slice(0, i).map((/** @type {any} */ p) => p.name), onchange: (v) => edit(() => (v ? (inst.parent = v) : delete inst.parent, delete inst.parent_slot)) }),
+          parent >= 0 &&
+            select({ value: inst.parent_slot, none: "(origin)", options: keep(slots, inst.parent_slot), onchange: (v) => edit(() => (v ? (inst.parent_slot = v) : delete inst.parent_slot)) }),
+        ],
+        `instances hang from earlier ones (drag in the tree to move one anywhere), matched with a slot of the parent's part${on ? ` (${on.name}; slots are made in the Model tab)` : ""}, else its origin`,
       ),
-      parent >= 0 &&
-        row(
-          "matched with",
-          select({ value: inst.parent_slot, none: "(the parent's origin)", options: keep(slots, inst.parent_slot), onchange: (v) => edit(() => (v ? (inst.parent_slot = v) : delete inst.parent_slot)) }),
-          on ? `a slot of ${on.name}; slots are made in the Model tab` : "the parent places no part: its origin",
-        ),
       placed.length > 1 &&
         row(
           "sides",

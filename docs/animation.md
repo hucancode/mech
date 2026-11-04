@@ -16,7 +16,7 @@ mech.rig_pose(&scene, rig, values)
 ```
 
 The `Mech` character (`src/character/mech.odin`) maps each `Action` to a clip by name
-(`ACTION_CLIPS`: `idle`, `walk`, `run`, `attack`, `cast`, `combat_idle`) and plays it, looping
+(`ACTION_CLIPS`: `idle`, `walk`, `run`, `attack`, `attack_b`, `attack_c`, `cast`, `combat_idle`) and plays it, looping
 or once following `action_loops`, cross-fading between clips. An action with no clip shows the
 rest pose. Tools can also play any clip or hold explicit values (`mech_play_clip`,
 `mech_show_values`).
@@ -292,14 +292,24 @@ every frame of every clip against the reference in `bin/golden`.
 
 - `assets/characters/mech.json`: `idle` (the head scanning in settling steps), `combat_idle`
   (the guard held, the weight shifting foot to foot between stops), `walk` and `run` (feet
-  on their IK targets' closed foot arcs (`step`, `stride`), crouched, the fists a `fist` pose, coming down hard on each step, the arms swinging between
-  stops against the legs, the waist and head twisting), `attack` (the head locks on the impact
+  on their IK targets' closed foot arcs (`step`, `stride`), crouched, the fists a `fist` pose, coming down hard on each step, the arms swinging
+  against the legs, each arm back as its foot lands: driven through the middle (IN) and slowing
+  into a short hold at each end (OUT), the forearm a little later and bending on the forward
+  swing; the run's swing biased back so the fist rises only to the chest; the waist and head
+  twisting), `attack` (the head locks on the impact
   point as the left foot steps into a lunge; the coil turns pelvis and waist and swings the right
   arm back, elbow cocked, the fist closing; the drive fires the chain the other way, pelvis,
   waist, then shoulder, elbow and wrist slamming into their stops with the arm locked straight
-  ahead at shoulder height, held, then back to rest; the arms are FK, there is no hand IK) and
-  `cast` (gather, then waist, head, arms and hands thrown up and open as one spread move, a kick
-  back as it fires).
+  ahead at shoulder height, held, then back to rest; the arms are FK, there is no hand IK),
+  `attack_b` (a left uppercut: the right fist up as a guard, a crouch and a coil turning the left
+  side back with the arm dropped and the elbow cocked, then the drive turns pelvis and waist the
+  other way and fires the arm up into a SETTLE stop in front of the face; the coil lets go on the
+  drive's own SETTLE, so the two hand over without a bump), `attack_c` (a two-handed overhead
+  slam: the left foot steps in as both arms rise overhead, the waist leaning back; then the root
+  drops, the waist folds forward and both fists slam down in front, the raise letting go on the
+  slam's SETTLE) and `cast` (gather, then waist, head, arms and hands thrown up and open as one
+  spread move, the gather letting go as they fire so nothing drifts after the arms lock, a kick
+  through waist and head as it fires).
 - `assets/characters/strider.json`: the same, for a reverse-jointed body: the sensor scans,
   `walk` and `run` counter-swing pelvis, hull and cannons, `attack` is a cannon ram with a step
   and a root lunge, `cast` braces and tips the rack, then three launches kick the rack and root

@@ -258,7 +258,7 @@ at a moment is a shape stepping into it there.
   - **Merge** appends the moves of the other picked motions to the last one picked (tagged
     "into"), in clip order, and removes them: they take its shape.
   - The trash removes the picked ones.
-- **The inspector** shows the clip's duration, then the motion shown: its **rate** (whole cycles
+- **The inspector** shows the clip's name and duration, then the motion shown: its **rate** (whole cycles
   of its shape over the clip, so a loop never jumps) and its **moves**, each with its **delay**
   (cycles late) and **twin** (none; WITH: the other side of the body too, at the same time;
   OPPOSITE: half a cycle later, the other foot or arm). Click a move's head to pick it (the view's handles pose it), shift- or

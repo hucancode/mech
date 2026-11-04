@@ -44,7 +44,6 @@ export function animSidebar() {
           (i) => i === editor.clip,
           (i) => editor.pickClip(i),
         ),
-        clip && h("div", { style: { marginTop: "8px" } }, row("name", text({ value: clip.name, onchange: (v) => editor.edit("anim", () => (clip.name = v)) }))),
       ],
       {
         actions: [
@@ -353,7 +352,10 @@ function motionsInspector(clip) {
   /** @param {() => void} change @param {string} [key] */
   const set = (change, key) => editor.edit("anim", change, key && `motion-${key}`);
   return [
-    section("Clip", [row("duration", num({ value: clip.duration ?? 1, step: 0.05, min: 0.05, onchange: (v) => set(() => (clip.duration = v), "duration") }), "seconds; a motion's rate counts its cycles over it")]),
+    section("Clip", [
+      row("name", text({ value: clip.name, onchange: (v) => v && v !== clip.name && set(() => (clip.name = v)) })),
+      row("duration", num({ value: clip.duration ?? 1, step: 0.05, min: 0.05, onchange: (v) => set(() => (clip.duration = v), "duration") }), "seconds; a motion's rate counts its cycles over it"),
+    ]),
     mo && motionPanel(clip, mo, k, set),
   ];
 }

@@ -19,6 +19,8 @@ ACTION_CLIPS := [Action]string {
   .ATTACK      = "attack",
   .CAST        = "cast",
   .COMBAT_IDLE = "combat_idle",
+  .ATTACK_B    = "attack_b",
+  .ATTACK_C    = "attack_c",
 }
 
 // MechAsset is a character: a model and its animation (one character file), loaded once and
