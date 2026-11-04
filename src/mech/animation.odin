@@ -29,9 +29,9 @@ Ease :: enum u8 {
 
 // Value is a channel's amount, shaped as the channel (ChannelKind): a number for a 1-value one
 // (`"l_arm.shoulder_top": 0.4`, `"l_leg.weight": 1`), [x, y, z] for a 3-value one (`"l_leg"`, an IK
-// target; `"root"`, `"root.turn"`; `"l_arm.shoulder"`, a BALL joint). In a clip's motion, a
-// position can also follow an Arc, named (`"r_hand": "strike"`), and a Pose of the animation is
-// a number, how much of its amounts (`"fist": 1`).
+// target; `"root"`, `"root.turn"`; `"l_arm.shoulder"`, a BALL joint). A string is a file of the
+// first format's: there a move's `by` also named the arc a position follows (animation_parse moves
+// it to Move.arcs); anywhere else it is no amount (by_resolve).
 Value :: union {
   f32,
   [3]f32,
@@ -44,24 +44,29 @@ Value :: union {
 // tip is at rest), and a smooth curve through them (arc_at). An open arc runs from its first point
 // to its last; a `closed` one on from its last back to its first (a foot's loop), each point
 // written once.
-// In a motion, a move naming it puts its channels on it where the motion's shape says: 0 its first
-// point, 1 its end (its last point; closed, its first again), k / segments its point k, so the
-// shape times the path and holds on its points; a shape going 0, 1, 0 runs out along it and back.
+// In a motion, a move naming it (Move.arcs) puts a position on it where the motion's shape says:
+// 0 its first point, 1 its end (its last point; closed, its first again), each point at its `at`,
+// so the shape times the path and holds on its points; a shape going 0, 1, 0 runs out along it and
+// back. With no `at`, its points are spread evenly, point k at k / segments (n - 1 open, n closed);
+// with one per point, each where it says, rising (0 to 1, a closed arc's last below its first plus
+// 1), so adding or taking out a point leaves the others where they were along it, and every move
+// on it as timed (arc_knots).
 // It runs smooth through its points (arc_at), but for its `corners`, sharp points: a segment
 // between two corners is a straight line run at a steady speed (a foot on the ground, a piston's
 // stroke, a punch driven straight), and a corner turns the path hard.
 Arc :: struct {
   name:    string,
   points:  [dynamic][3]f32,
+  at:      [dynamic]f32,
   corners: [dynamic]int,
   closed:  bool,
 }
 
 // Pose is a named set of channel amounts, the animation's (Animation.poses), for any clip's moves
-// to add by name, times a number: `"by": {"fist": 1}` adds every amount of pose `fist`, `"fist":
-// 0.5` half of each. The move's twin and delay apply to them as to its own (a fist written on the
-// right hand closes both with a WITH twin). A pose holds amounts only: no arcs, no other poses. A
-// channel's name wins over a pose's.
+// to add by name, times a number (Move.poses): `"poses": {"fist": 1}` adds every amount of pose
+// `fist`, `"fist": 0.5` half of each. The move's twin and delay apply to them as to its own (a fist
+// written on the right hand closes both with a WITH twin). A pose holds amounts only: no arcs, no
+// other poses.
 Pose :: struct {
   name: string,
   by:   map[string]Value,
@@ -97,11 +102,17 @@ Twin :: enum u8 {
 // spine or an arm firing shoulder, elbow, wrist (a 3-value channel is one link; an arc runs at the
 // move's delay). With a `twin`, its channels' twins move too, at the same links' delays. The rest
 // pose (Model.pose) moves as a WITH move does.
+// What it moves, each by name: `by` its amounts, by channel; `poses` the animation's poses it adds,
+// each times a number; `arcs` the positions it puts on the animation's arcs (an IK target, the
+// root: `"l_leg": "step"`), along them as its shape says. Three maps, so a pose may share a
+// channel's name and nothing is read two ways.
 Move :: struct {
   delay:  f32,
   spread: f32,
   twin:   Twin,
   by:     map[string]Value,
+  poses:  map[string]f32,
+  arcs:   map[string]string,
 }
 
 // Motion is a shape over time added onto channels. Its shape is points over one cycle
@@ -109,7 +120,9 @@ Move :: struct {
 // pose). At clip progress x (0 at its start, 1 at its end), each move adds its amounts times
 //   shape(rate * x - delay)
 // A walk, a slither, a swing or a strike is a few motions: data, not code (docs/animation.md).
+// Its `name` is for people (the editor lists it); the engine reads nothing from it.
 Motion :: struct {
+  name:  string,
   shape: [dynamic]Point,
   rate:  int,
   moves: [dynamic]Move,
@@ -132,7 +145,35 @@ animation_parse :: proc(data: []u8, what := "animation") -> (a: ^Animation, ok: 
     animation_destroy(a)
     return nil, false
   }
+  animation_upgrade(a)
   return a, true
+}
+
+// animation_upgrade reads a file of the first format: there a move's `by` held its amounts, the
+// poses it added (a number by a pose's name) and the arcs its positions followed (an arc's name
+// by a channel's), which go to Move.poses and Move.arcs. A pose's name was a pose's only where no
+// channel had it; such a clash was an error then too, so the name goes to the pose.
+@(private = "file")
+animation_upgrade :: proc(a: ^Animation) {
+  allocator := animation_allocator(a)
+  for &clip in a.clips do for &mo in clip.motions do for &mv in mo.moves {
+    moved := make([dynamic]string, context.temp_allocator)
+    for name, value in mv.by {
+      switch v in value {
+      case string:
+        if mv.arcs == nil do mv.arcs = make(map[string]string, allocator = allocator)
+        mv.arcs[name] = v
+        append(&moved, name)
+      case f32:
+        if pose_find(a.poses[:], name) < 0 do continue
+        if mv.poses == nil do mv.poses = make(map[string]f32, allocator = allocator)
+        mv.poses[name] = v
+        append(&moved, name)
+      case [3]f32:
+      }
+    }
+    for name in moved do delete_key(&mv.by, name)
+  }
 }
 
 animation_destroy :: proc(a: ^Animation) {
@@ -174,6 +215,18 @@ arc_sharp :: proc(a: Arc, out: ^[dynamic]bool) {
   for k in a.corners do if k >= 0 && k < len(a.points) do out[first + k] = true
 }
 
+// arc_knots is where along arc `a` each of its points is (Arc.at; evenly spread when it says
+// none, or not one per point), appended to `out`: 0 the first, 1 the end.
+arc_knots :: proc(a: Arc, out: ^[dynamic]f32) {
+  n := len(a.points)
+  if len(a.at) == n {
+    append(out, ..a.at[:])
+    return
+  }
+  segments := n if a.closed && n > 2 else n - 1
+  for k in 0 ..< n do append(out, f32(k) / f32(max(segments, 1)))
+}
+
 ease :: proc(e: Ease, t: f32) -> f32 {
   x := clamp(t, 0, 1)
   switch e {
@@ -209,8 +262,8 @@ ClipData :: struct {
 }
 
 // MotionData is a Motion with its names resolved: its moves' targets, flat, each move a run of
-// them; its shape copied in order of u; its arcs' points, and which are corners (`sharp`, one per
-// point).
+// them; its shape copied in order of u; its arcs' points, which are corners (`sharp`) and where
+// along the arc each is (`knots`), one per point.
 MotionData :: struct {
   shape:   [dynamic]Point,
   rate:    f32,
@@ -218,6 +271,7 @@ MotionData :: struct {
   arcs:    [dynamic]ArcData,
   points:  [dynamic][3]f32,
   sharp:   [dynamic]bool,
+  knots:   [dynamic]f32,
   moves:   [dynamic]MoveData,
 }
 
@@ -229,7 +283,8 @@ MoveData :: struct {
 }
 
 // ArcData is an arc resolved: the channels it moves, each times `flip` (a twin's, mirrored), along
-// points[first:][:count] of its motion (and sharp[first:][:count]), a copy of Animation.arcs[arc].
+// points[first:][:count] of its motion (and sharp, knots[first:][:count]), a copy of
+// Animation.arcs[arc].
 ArcData :: struct {
   channels:     [3]int,
   flip:         [3]f32,
@@ -246,120 +301,95 @@ Target :: struct {
   delay: f32,
 }
 
-// ByKind is what a name and value of a move's `by` (or a pose's, or the rest pose's) mean: an
-// AMOUNT on a channel, a POSE of the animation added times a number, an ARC a position follows; BAD
-// for anything else (by_resolve says why).
-ByKind :: enum u8 {
-  BAD,
-  AMOUNT,
-  POSE,
-  ARC,
-}
-
-// ByWhere is where a `by` is written, which limits what it may hold: the model's rest pose
-// (amounts only, the animation's poses and arcs unknown to it), a pose of the animation (amounts
-// only), or a clip's move (anything).
-ByWhere :: enum u8 {
-  REST,
-  POSE,
-  CLIP,
-}
-
-// by_resolve says what `name: value` of a `by` written `at` means in model `m` (and animation
-// `anim`, nil for the rest pose): its kind, its channel (AMOUNT, ARC), the pose or arc's index
-// (POSE, ARC); for BAD, `problem` says why. A value is shaped as its channel (ChannelKind): a
-// number for a 1-value one, [x, y, z] for a 3-value one; an arc's name for a POSITION (a turn is no
-// path in space); a number for a pose, how much of it. This is the one place these rules live:
-// targets_resolve skips what it calls BAD, and character_check reports it.
-by_resolve :: proc(m: ^Model, anim: ^Animation, at: ByWhere, name: string, value: Value, allocator := context.temp_allocator) -> (kind: ByKind, c: Channel, index: int, problem: string) {
+// by_resolve says what `name: value` of a `by` (a move's, a pose's, the rest pose's) means for
+// channels `cs`: its channel (`ok`), or why it is none (`problem`). A value is shaped as its
+// channel (ChannelKind): a number for a 1-value one, [x, y, z] for a 3-value one. This is the one
+// place these rules live: targets_resolve skips what it can't use, and character_check reports it.
+by_resolve :: proc(cs: ^Channels, name: string, value: Value, allocator := context.temp_allocator) -> (c: Channel, ok: bool, problem: string) {
   sizes := CHANNEL_SIZE
   known: bool
-  c, known = model_channel(m, name)
-  index = pose_find(anim.poses[:], name) if anim != nil && at != .REST else -1
-  if !known {
-    switch {
-    case index < 0:
-      problem = fmt.aprintf("no channel %s", name, allocator = allocator)
-    case at == .POSE:
-      problem = fmt.aprintf("adds pose %s, but a pose holds amounts only", name, allocator = allocator)
-    case:
-      if _, ok := value.(f32); ok do return .POSE, c, index, ""
-      problem = fmt.aprintf("pose %s takes a number, how much of it", name, allocator = allocator)
-    }
-    return
-  }
-  if index >= 0 do return .BAD, c, -1, fmt.aprintf("%s is both a channel and a pose", name, allocator = allocator)
+  c, known = channels_find(cs, name)
+  if !known do return c, false, fmt.aprintf("no channel %s", name, allocator = allocator)
   switch v in value {
   case string:
-    index = arc_find(anim.arcs[:], v) if anim != nil else -1
-    switch {
-    case at != .CLIP:
-      problem = fmt.aprintf("%s follows arc %s, which only a clip's move can", name, v, allocator = allocator)
-    case c.kind != .POSITION:
-      problem = fmt.aprintf("%s follows arc %s, but only a position (an IK target, the root) can", name, v, allocator = allocator)
-    case index < 0:
-      problem = fmt.aprintf("%s follows arc %s, which the animation lacks", name, v, allocator = allocator)
-    case:
-      return .ARC, c, index, ""
-    }
+    problem = fmt.aprintf("%s: %q is no amount (a move follows an arc in its `arcs`)", name, v, allocator = allocator)
   case f32:
-    if sizes[c.kind] == 1 do return .AMOUNT, c, -1, ""
+    if sizes[c.kind] == 1 do return c, true, ""
     problem = fmt.aprintf("%s is a %v, three values [x, y, z], not one", name, c.kind, allocator = allocator)
   case [3]f32:
-    if sizes[c.kind] == 3 do return .AMOUNT, c, -1, ""
+    if sizes[c.kind] == 3 do return c, true, ""
     problem = fmt.aprintf("%s is a %v, one value, not three", name, c.kind, allocator = allocator)
   }
-  return .BAD, c, -1, problem
+  return c, false, problem
 }
 
-// targets_resolve appends `values`' channels in model `m` to `out`, one target per value, times
-// `scale`, as by_resolve reads them written `at`: amounts as they are, the animation `anim`'s
-// poses as their amounts times the number, and (in a clip, given motion `mo`) the arcs values name
-// appended to its arcs (their points to its points). What by_resolve calls BAD is skipped;
-// character_check reports it.
-targets_resolve :: proc(m: ^Model, at: ByWhere, values: map[string]Value, out: ^[dynamic]Target, anim: ^Animation = nil, mo: ^MotionData = nil, scale: f32 = 1) {
+// arc_resolve says which arc of `anim` position channel `name` follows (Move.arcs: `arc`), and its
+// channel; or why not (`problem`): only a position (an IK target, the root) has a path in space.
+arc_resolve :: proc(cs: ^Channels, anim: ^Animation, name, arc: string, allocator := context.temp_allocator) -> (c: Channel, index: int, problem: string) {
+  known: bool
+  c, known = channels_find(cs, name)
+  index = arc_find(anim.arcs[:], arc)
+  switch {
+  case !known:
+    problem = fmt.aprintf("no channel %s", name, allocator = allocator)
+  case c.kind != .POSITION:
+    problem = fmt.aprintf("%s follows arc %s, but only a position (an IK target, the root) can", name, arc, allocator = allocator)
+  case index < 0:
+    problem = fmt.aprintf("%s follows arc %s, which the animation lacks", name, arc, allocator = allocator)
+  case:
+    return
+  }
+  return c, -1, problem
+}
+
+// targets_resolve appends amounts `values`' channels (of `cs`) to `out`, one target per value,
+// times `scale`. What by_resolve can't use is skipped; character_check reports it.
+targets_resolve :: proc(cs: ^Channels, values: map[string]Value, out: ^[dynamic]Target, scale: f32 = 1) {
   for name, value in values {
-    kind, c, index, _ := by_resolve(m, anim, at, name, value)
-    switch kind {
-    case .BAD:
-    case .POSE:
-      targets_resolve(m, .POSE, anim.poses[index].by, out, anim, nil, scale * value.(f32))
-    case .ARC:
-      if mo == nil do continue
-      arc := anim.arcs[index]
-      append(&mo.arcs, ArcData{{c.first, c.first + 1, c.first + 2}, 1, len(mo.points), len(arc.points), index, arc.closed})
-      append(&mo.points, ..arc.points[:])
-      arc_sharp(arc, &mo.sharp)
-    case .AMOUNT:
-      switch v in value {
-      case f32:
-        append(out, Target{c.first, v * scale, 0})
-      case [3]f32:
-        for x, n in v do append(out, Target{c.first + n, x * scale, 0})
-      case string:
-      }
+    c, ok, _ := by_resolve(cs, name, value)
+    if !ok do continue
+    switch v in value {
+    case f32:
+      append(out, Target{c.first, v * scale, 0})
+    case [3]f32:
+      for x, n in v do append(out, Target{c.first + n, x * scale, 0})
+    case string:
     }
   }
 }
 
-// move_resolve appends move `mv`'s channels in model `m` to `targets` and a MoveData for them to
+// move_resolve appends move `mv`'s channels (of `cs`) to `targets` and a MoveData for them to
 // `moves` (the poses it adds, from `anim`, and the arcs it names, to motion `mo`'s; see
 // targets_resolve); with a twin (Move.twin), then its channels' twins (channel_twin) by the same
 // amounts, at the same delay or half a cycle later. Channels without a twin (the root's) move once.
 // An arc's twin follows the same points, each channel times its twin's flip (the other side's x
 // mirrored), when all three channels have twins.
-move_resolve :: proc(m: ^Model, at: ByWhere, mv: Move, targets: ^[dynamic]Target, moves: ^[dynamic]MoveData, anim: ^Animation = nil, mo: ^MotionData = nil) {
+move_resolve :: proc(cs: ^Channels, mv: Move, targets: ^[dynamic]Target, moves: ^[dynamic]MoveData, anim: ^Animation = nil, mo: ^MotionData = nil) {
   arcs_count :: proc(mo: ^MotionData) -> int {return len(mo.arcs) if mo != nil else 0}
   first, arcs_first := len(targets), arcs_count(mo)
-  targets_resolve(m, at, mv.by, targets, anim, mo)
+  targets_resolve(cs, mv.by, targets)
+  if anim != nil {
+    // the poses it adds: their amounts, times how much of each
+    for name, much in mv.poses do if k := pose_find(anim.poses[:], name); k >= 0 do targets_resolve(cs, anim.poses[k].by, targets, much)
+    // the positions it puts on arcs: their points, copied to the motion's
+    if mo != nil do for name, arc in mv.arcs {
+      c, k, problem := arc_resolve(cs, anim, name, arc)
+      if problem != "" do continue
+      a := anim.arcs[k]
+      append(&mo.arcs, ArcData{{c.first, c.first + 1, c.first + 2}, 1, len(mo.points), len(a.points), k, a.closed})
+      append(&mo.points, ..a.points[:])
+      arc_sharp(a, &mo.sharp)
+      arc_knots(a, &mo.knots)
+    }
+  }
   count := len(targets) - first
-  if mv.spread != 0 do targets_spread(m, targets[first:][:count], mv.spread)
+  if mv.spread != 0 do targets_spread(cs, targets[first:][:count], mv.spread)
   append(moves, MoveData{mv.delay, first, count, arcs_first, arcs_count(mo) - arcs_first})
   if mv.twin == .NONE do return
   start := len(targets)
   for k in first ..< first + count {
     t := targets[k]
-    if twin, flip := channel_twin(m, t.index); twin >= 0 do append(targets, Target{twin, t.value * flip, t.delay})
+    if twin := cs.twin[t.index]; twin >= 0 do append(targets, Target{twin, t.value * cs.flip[t.index], t.delay})
   }
   arcs_start := arcs_count(mo)
   for k in arcs_first ..< arcs_start {
@@ -367,8 +397,8 @@ move_resolve :: proc(m: ^Model, at: ByWhere, mv: Move, targets: ^[dynamic]Target
     twin := ArcData{first = a.first, count = a.count, arc = a.arc, closed = a.closed}
     whole := true
     for ch, n in a.channels {
-      t, flip := channel_twin(m, ch)
-      twin.channels[n], twin.flip[n] = t, a.flip[n] * flip
+      t := cs.twin[ch]
+      twin.channels[n], twin.flip[n] = t, a.flip[n] * cs.flip[ch]
       whole &&= t >= 0
     }
     if whole do append(&mo.arcs, twin)
@@ -378,16 +408,16 @@ move_resolve :: proc(m: ^Model, at: ByWhere, mv: Move, targets: ^[dynamic]Target
 
 // targets_spread delays `targets` (one move's) link by link (Move.spread): their channels in the
 // model's order, the k-th of n `spread * k / (n - 1)` cycles late.
-targets_spread :: proc(m: ^Model, targets: []Target, spread: f32) {
+targets_spread :: proc(cs: ^Channels, targets: []Target, spread: f32) {
   heads := make([dynamic]int, context.temp_allocator)
   for t in targets {
-    c, _, _ := value_channel(m, t.index)
+    c, _, _ := channels_value(cs, t.index)
     if _, found := slice.linear_search(heads[:], c.first); !found do append(&heads, c.first)
   }
   if len(heads) < 2 do return
   slice.sort(heads[:])
   for &t in targets {
-    c, _, _ := value_channel(m, t.index)
+    c, _, _ := channels_value(cs, t.index)
     k, _ := slice.binary_search(heads[:], c.first)
     t.delay = spread * f32(k) / f32(len(heads) - 1)
   }
@@ -396,10 +426,11 @@ targets_spread :: proc(m: ^Model, targets: []Target, spread: f32) {
 // model_pose is `m`'s rest pose, one value per channel: Model.pose, both sides of the body (a WITH
 // move), every other channel 0.
 model_pose :: proc(m: ^Model, allocator := context.allocator) -> []f32 {
+  cs := channels_make(m)
   out := make([]f32, model_channels(m), allocator)
   targets := make([dynamic]Target, context.temp_allocator)
   moves := make([dynamic]MoveData, context.temp_allocator)
-  move_resolve(m, .REST, Move{twin = .WITH, by = m.pose}, &targets, &moves)
+  move_resolve(&cs, Move{twin = .WITH, by = m.pose}, &targets, &moves)
   for t in targets do out[t.index] += t.value
   return out
 }
@@ -407,6 +438,7 @@ model_pose :: proc(m: ^Model, allocator := context.allocator) -> []f32 {
 clips_build :: proc(a: ^Animation, m: ^Model) -> (c: Clips) {
   c.values = model_channels(m)
   pose := model_pose(m, context.temp_allocator)
+  cs := channels_make(m)
   append(&c.pose, ..pose)
   for clip in a.clips {
     data := ClipData{name = clip.name, duration = clip.duration}
@@ -414,7 +446,7 @@ clips_build :: proc(a: ^Animation, m: ^Model) -> (c: Clips) {
       out := MotionData{rate = f32(max(mo.rate, 1))}
       append(&out.shape, ..mo.shape[:])
       slice.stable_sort_by(out.shape[:], proc(a, b: Point) -> bool {return a.u < b.u})
-      for mv in mo.moves do move_resolve(m, .CLIP, mv, &out.targets, &out.moves, a, &out)
+      for mv in mo.moves do move_resolve(&cs, mv, &out.targets, &out.moves, a, &out)
       append(&data.motions, out)
     }
     append(&c.clips, data)
@@ -431,6 +463,7 @@ clips_destroy :: proc(c: ^Clips) {
       delete(mo.arcs)
       delete(mo.points)
       delete(mo.sharp)
+      delete(mo.knots)
       delete(mo.moves)
     }
     delete(clip.motions)
@@ -465,29 +498,40 @@ motion_apply :: proc(mo: ^MotionData, x: f32, out: []f32) {
     f := motion_move(mo, k, x)
     for target in mo.targets[mv.first:][:mv.count] do out[target.index] += target.value * (f if target.delay == 0 else motion_move(mo, k, x, target.delay))
     for a in mo.arcs[mv.arcs_first:][:mv.arcs_count] {
-      p := arc_at(mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], f, a.closed)
+      p := arc_at(mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], f, a.closed, mo.knots[a.first:][:a.count])
       for ch, n in a.channels do out[ch] += p[n] * a.flip[n]
     }
   }
 }
 
-// arc_at is the arc through `points` at `s`: point k at s = k / segments (n - 1 open, n `closed`,
-// the last segment back to the first point), a cubic between each two (Hermite). Each point's
-// tangent is Catmull-Rom's, half the way from the point before it to the one after, but where there
-// is no point on one side (an open arc's ends) or it is a corner (`sharp`, one per point; nil for
-// none), each segment's own chord: so a segment between two corners is straight, run at a steady
-// speed. Past either end, an open arc runs on along its end's tangent (a shape settling past 1
-// overshoots along the path, not off it); a closed one goes round again.
-arc_at :: proc(points: [][3]f32, sharp: []bool, s: f32, closed := false) -> [3]f32 {
+// arc_at is the arc through `points` at `s`: point k at s = knots[k] (arc_knots; none, or not one
+// per point: evenly, k / segments; a `closed` arc's last segment runs back to the first point, at
+// its knot plus 1), a cubic between each two
+// (Hermite). Each point's tangent is Catmull-Rom's, half the way from the point before it to the
+// one after, but where there is no point on one side (an open arc's ends) or it is a corner
+// (`sharp`, one per point; nil for none), each segment's own chord: so a segment between two
+// corners is straight, run at a steady speed. Past either end, an open arc runs on along its end's
+// tangent (a shape settling past 1 overshoots along the path, not off it); a closed one goes round
+// again.
+arc_at :: proc(points: [][3]f32, sharp: []bool, s: f32, closed := false, knots: []f32 = nil) -> [3]f32 {
   n := len(points)
   if n == 0 do return 0
   if n == 1 do return points[0]
   closed := closed && n > 2
   segments := n if closed else n - 1
-  u := s * f32(segments)
-  if closed do u -= math.floor(u / f32(segments)) * f32(segments)
-  k := clamp(int(math.floor(u)), 0, segments - 1)
-  t := u - f32(k)
+  // the knot of point i (a closed arc's first again, a pass on, at i = n)
+  knot :: proc(knots: []f32, n, segments, i: int) -> f32 {
+    if len(knots) != n do return f32(i) / f32(segments)
+    return knots[i] if i < n else knots[0] + 1
+  }
+  first := knot(knots, n, segments, 0)
+  u := s
+  if closed do u = first + (s - first) - math.floor(s - first)
+  // the segment u is in: the last whose start is at or before it (the first before the arc)
+  k := 0
+  for i in 1 ..< segments do if knot(knots, n, segments, i) <= u do k = i
+  u0, u1 := knot(knots, n, segments, k), knot(knots, n, segments, k + 1)
+  t := (u - u0) / (u1 - u0) if u1 - u0 > 1e-6 else (0 if u < u1 else 1)
   at :: proc(points: [][3]f32, i: int) -> [3]f32 {return points[(i + len(points)) % len(points)]}
   // the tangent at point i: Catmull-Rom's, or the chord at an end or a corner
   tangent :: proc(points: [][3]f32, sharp: []bool, i: int, closed: bool, chord: [3]f32) -> [3]f32 {

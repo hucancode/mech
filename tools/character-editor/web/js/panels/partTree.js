@@ -12,12 +12,13 @@ import { openKit } from "../kit.js";
 const folded = new Set();
 /** the part last revealed: selecting a part unfolds its ancestors once, so they can fold again */
 let revealed = -1;
+/** the instance being dragged onto another, -1 for none */
+let dragging = -1;
 
 /** @param {string} title */
 export function partTree(title) {
   const m = editor.model;
   const parts = m.assembly ?? [];
-  let dragging = -1;
 
   /** @param {number} i */
   const pick = (i) =>
@@ -60,25 +61,28 @@ export function partTree(title) {
     if (from < 0 || from === target) return;
     editor.edit("model", () => (editor.part = reparent(m, from, target)));
   };
-  /** @param {HTMLElement} el @param {number} target */
-  const droppable = (el, target) => {
-    el.addEventListener("dragover", (e) => {
+  /** the props that make a row a drop target for instance `target` (-1: make a root) @param {number} target */
+  const droppable = (target) => ({
+    ondragover: (/** @type {DragEvent} */ e) => {
       e.preventDefault();
-      el.classList.add("over");
-    });
-    el.addEventListener("dragleave", () => el.classList.remove("over"));
-    el.addEventListener("drop", () => drop(target));
-    return el;
-  };
+      /** @type {HTMLElement} */ (e.currentTarget).classList.add("over");
+    },
+    ondragleave: (/** @type {DragEvent} */ e) => /** @type {HTMLElement} */ (e.currentTarget).classList.remove("over"),
+    ondrop: (/** @type {DragEvent} */ e) => {
+      /** @type {HTMLElement} */ (e.currentTarget).classList.remove("over");
+      drop(target);
+    },
+  });
 
-  const rootRow = droppable(h("div", { class: "item tag", style: { display: "none", fontStyle: "italic" } }, "drop here to make a root"), -1);
+  // shown while an instance is dragged (drawn on the next frame, not during the drag's start)
+  const rootRow = dragging >= 0 && h("div", { class: "item tag", key: "(root)", style: { fontStyle: "italic" }, ...droppable(-1) }, "drop here to make a root");
   if (editor.part !== revealed) {
     revealed = editor.part;
     for (let p = instanceIndex(m, parts[editor.part]?.parent), n = 0; p >= 0 && n < 64; p = instanceIndex(m, parts[p].parent), n++) folded.delete(parts[p].name);
   }
   const order = treeOrder(m);
   // the instances hung from a mirrored slot (or from one that is): placed on both sides
-  const places = editor.ask({ q: "places" }) ?? [];
+  const places = editor.places();
   /** both sides' names, when instance i is placed on each side of the body @param {number} i */
   const sides = (i) => {
     const names = placedNames(places, m, i);
@@ -114,7 +118,15 @@ export function partTree(title) {
         : h("span", { class: "caret" });
     const el = h(
       "div",
-      { class: `item tree ${i === editor.part ? "on" : ""}`, draggable: "true", onclick: () => pick(i) },
+      {
+        class: `item tree ${i === editor.part ? "on" : ""}`,
+        key: p.name,
+        draggable: "true",
+        onclick: () => pick(i),
+        ondragstart: () => ((dragging = i), editor.emit("select")),
+        ondragend: () => ((dragging = -1), editor.emit("select")),
+        ...droppable(i),
+      },
       Array.from({ length: depth }, () => h("span", { class: "guide" })),
       caret,
       h("span", { class: "name" }, p.name),
@@ -122,12 +134,7 @@ export function partTree(title) {
       shut && h("span", { class: "tag" }, `+${n}`),
     );
     if (shut) k += n;
-    el.addEventListener("dragstart", () => {
-      dragging = i;
-      rootRow.style.display = "";
-    });
-    el.addEventListener("dragend", () => (rootRow.style.display = "none"));
-    rows.push(droppable(el, i));
+    rows.push(el);
   }
   return section(title, h("div", { class: "list" }, rootRow, rows), {
     actions: [

@@ -9,6 +9,7 @@
   --accent: #6cb6ff;
   --accent-dim: #213448;
   --warn: #e5a35b;
+  --error: #f0707a;
   --glass: rgba(26, 29, 35, 0.75);
   --on-accent: #0d1117;
   --shadow: rgba(0, 0, 0, 0.45);
@@ -28,6 +29,7 @@
     --accent: #0b6fd6;
     --accent-dim: #d6e7fb;
     --warn: #b36a00;
+    --error: #c8283a;
     --glass: rgba(248, 249, 251, 0.8);
     --on-accent: #ffffff;
     --shadow: rgba(30, 40, 60, 0.2);
@@ -97,7 +99,18 @@ body[data-dock="right"] #inspector, body[data-dock="both"] #inspector { border-b
 .tabs button.on { background: var(--accent-dim); color: var(--text); }
 .grow { flex: 1; }
 .dirty { color: var(--warn); }
-.messages { color: var(--warn); cursor: help; }
+.error { color: var(--error); }
+.warn { color: var(--warn); }
+/* the issues button and its list (main.js issuesButton): what character_check finds, each going to where it is */
+.issues-anchor { position: relative; display: inline-flex; }
+.issues-button { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.issues-button .error, .issues-button .warn { font-weight: 600; }
+.issues { position: absolute; top: calc(100% + 6px); right: 0; z-index: 20; width: min(460px, 80vw); max-height: 60vh; overflow: auto; padding: 4px 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px var(--shadow); }
+.issues-group { display: flex; align-items: center; padding: 8px 10px 4px; color: var(--muted); font: 600 11px system-ui; letter-spacing: 0.06em; text-transform: uppercase; }
+.issues .item { white-space: normal; align-items: flex-start; }
+.issues .item .name { white-space: normal; overflow: visible; }
+.issues .item.error { border-left-color: var(--error); }
+.issues .item.warn { border-left-color: var(--warn); }
 
 /* controls */
 button.btn { background: var(--field); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 9px; font: inherit; cursor: pointer; white-space: nowrap; }

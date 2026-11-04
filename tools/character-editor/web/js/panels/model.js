@@ -10,7 +10,19 @@ import { btn, check, color, face, h, list, num, row, section, segmented, select,
 import { icon } from "../icons.js";
 import { dockSpanButtons } from "../layout.js";
 import { editor } from "../editor.js";
-import { addSlot, clone, dropPartJoint, faceCentre, FACE_NAMES, fitJoint, JOINT_KINDS, MIRROR_PLANES, setMirror, jointAxes, jointKind, jointSize, jointSizeFor, newPart, partUsers, PRIMITIVES, renameMaterial, renamePart, renamePartJoint, renameSlot, restretch, setJointKind, setJointRange, shapeFrame, slotUsers, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
+import { addSlot, clone, faceCentre, enumNames, FACE_NAMES, fitJoint, instanceIndex, path, setMirror, jointAxes, jointKind, jointSize, jointSizeFor, newPart, restretch, setJointKind, setJointRange, shapeFrame, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
+
+/** the instances placing library part `name` (what names it) @param {string} name */
+const partUsers = (name) => editor.users(path("PART", { name }));
+
+/**
+ * the instances hanging from slot `slot` of library part `part` (what names it), by name; the
+ * origin (`""`, unnamed) by who hangs there, as nothing names it @param {any} m @param {string} part @param {string} slot @returns {string[]}
+ */
+function slotUsers(m, part, slot) {
+  if (slot) return editor.users(path("SLOT", { name: part, item: slot })).map((r) => r.at.name);
+  return (m.assembly ?? []).filter((/** @type {any} */ x) => x.parent && !x.parent_slot && m.assembly[instanceIndex(m, x.parent)]?.part === part).map((/** @type {any} */ x) => x.name);
+}
 
 /** @param {number[] | undefined} c */
 export const swatch = (c) => `rgb(${(c ?? [0, 0, 0]).map((x) => Math.round(x * 255)).join(",")})`;
@@ -20,6 +32,8 @@ const ROUND = ["CYLINDER", "HALF_CYLINDER", "QUARTER_CYLINDER", "CONE"];
 
 /** the inset of the last snap, 0 (on the face) to 1 (at the shape's centre) */
 let snapInset = 0;
+/** the shape picked to snap the slot `key` (`<part>/<slot>`) onto, kept across draws */
+let snapShape = { key: "", k: 0 };
 
 export function modelSidebar() {
   const m = editor.model;
@@ -43,14 +57,14 @@ export function modelSidebar() {
     editor.edit("model", () => parts.splice(editor.def, 1));
     editor.pickPart(Math.max(0, Math.min(editor.def, parts.length - 1)));
   };
-  const used = def ? partUsers(m, def.name).length : 0;
+  const used = def ? partUsers(def.name).length : 0;
   return [
     section(
       "Parts",
       list(
         parts,
         (p) => {
-          const n = partUsers(m, p.name).length;
+          const n = partUsers(p.name).length;
           return [h("span", { class: "name", style: { flex: "1" } }, p.name), h("span", { class: "tag" }, n === 0 ? "unused" : n > 1 ? `×${n}` : "")];
         },
         (i) => editor.inspect === "part" && editor.def === i,
@@ -86,7 +100,7 @@ export function modelInspector() {
   if (editor.inspect === "material" && m.materials?.[editor.material]) {
     const mat = m.materials[editor.material];
     return section("Material", [
-      row("name", text({ value: mat.name, onchange: (v) => edit(() => (renameMaterial(m, mat.name, v), (mat.name = v))) })),
+      row("name", text({ value: mat.name, onchange: (v) => editor.rename(path("MATERIAL", { name: mat.name }), v) })),
       row("colour", color({ value: mat.color, onchange: (v) => edit(() => (mat.color = v), "color") })),
       row("metallic", slider({ value: mat.metallic, min: 0, max: 1, onchange: (v) => edit(() => (mat.metallic = v), "metallic") })),
       row("roughness", slider({ value: mat.roughness, min: 0, max: 1, onchange: (v) => edit(() => (mat.roughness = v), "roughness") })),
@@ -108,12 +122,13 @@ export function modelInspector() {
 export function modelDock() {
   const m = editor.model;
   const part = m.parts?.[editor.def];
-  const bar = h("div", { class: "dock-bar" });
   /** @param {() => void} change @param {string} [key] */
   const edit = (change, key) => editor.edit("model", change, key);
-  const items = () => [
+  const bar = h(
+    "div",
+    { class: "dock-bar" },
     h("span", { class: "dock-title" }, "Part"),
-    part && h("div", { style: { width: "180px", display: "flex" } }, text({ value: part.name, onchange: (v) => edit(() => (renamePart(m, part.name, v), (part.name = v))) })),
+    part && h("div", { style: { width: "180px", display: "flex" } }, text({ value: part.name, onchange: (v) => editor.rename(path("PART", { name: part.name }), v) })),
     part &&
       h(
         "div",
@@ -122,9 +137,8 @@ export function modelDock() {
       ),
     h("span", { class: "grow" }),
     part && btn("tidy", () => edit(() => tidyPart(part)), { title: "Show quarter turns as sizes where the shapes look the same, and round the part's numbers to 0.001" }),
-    dockSpanButtons(() => bar.replaceChildren(...items().flat().filter(Boolean))),
-  ];
-  bar.replaceChildren(...items().flat().filter(Boolean));
+    dockSpanButtons(() => editor.emit("select")),
+  );
   if (!part) return [bar, h("div", { class: "muted", style: { padding: "8px 12px" } }, "No parts yet: add one in the list.")];
   return [bar, h("div", { class: "part-columns" }, shapesList(part), slotsList(part), jointsList(part))];
 }
@@ -195,13 +209,13 @@ function shapeSection(part) {
   const spanned = !!shape?.stretch;
   return section(picked.length > 1 ? `Shapes (${picked.length})` : "Shape", [
     picked.length > 1 && h("div", { class: "muted", style: { padding: "0 0 4px" } }, `${picked.length} shapes: primitive, material, turns and moving apply to all; the rest to this one`),
-    row("primitive", select({ value: shape.primitive ?? "BOX", options: PRIMITIVES, onchange: (v) => setAll((s) => (s.primitive = v)) })),
+    row("primitive", select({ value: shape.primitive ?? "BOX", options: enumNames("Primitive"), onchange: (v) => setAll((s) => (s.primitive = v)) })),
     (shape.primitive === "WEDGE" || shape.primitive === "CONE") &&
       row(shape.primitive === "WEDGE" ? "taper" : "top radius", slider({ value: shape.param, min: 0, max: 1, onchange: (v) => setShape((s) => (s.param = v), "param") })),
     row("material", select({ value: shape.material, options: names, onchange: (v) => setAll((s) => (s.material = v)) })),
     row(
       "mirror",
-      select({ value: shape.mirror ?? "NONE", options: MIRROR_PLANES, onchange: (v) => setAll((s) => setMirror(s, v)) }),
+      select({ value: shape.mirror ?? "NONE", options: enumNames("Plane"), onchange: (v) => setAll((s) => setMirror(s, v)) }),
       "drawn twice: as written, and reflected across that plane of the part (x = 0, …): model one half of a symmetric part",
     ),
     row(
@@ -262,22 +276,28 @@ function slotsList(part) {
       editor.slot = part.slots.length - 1;
       editor.inspect = "part";
     });
-  const users = slot ? slotUsers(m, part.name, slot.name).map((/** @type {any} */ x) => x.name) : [];
+  const users = slot ? slotUsers(m, part.name, slot.name) : [];
   const remove = () =>
     edit(() => {
       slots.splice(editor.slot, 1);
       editor.slot = Math.min(editor.slot, slots.length - 1);
     });
-  const on = (/** @type {string} */ name) => h("span", { class: "tag" }, slotUsers(m, part.name, name).map((/** @type {any} */ x) => x.name).join(", "));
+  const on = (/** @type {string} */ name) => h("span", { class: "tag" }, slotUsers(m, part.name, name).join(", "));
   // the origin, unnamed: it has nothing to edit, so it is listed, not picked
   const origin = h("div", { class: "item", title: "The origin: the default slot, facing -y, where the next link of a chain is matched (set the part's length so it is the link's far end)" }, h("span", { class: "name muted", style: { flex: "1" } }, "origin"), on(""));
-  const named = list(
-    slots,
-    (s) => [h("span", { class: "name", style: { flex: "1" } }, s.name), on(s.name)],
-    (k) => k === editor.slot,
-    (k) => editor.select(() => ((editor.slot = k === editor.slot ? -1 : k), (editor.inspect = "part"))),
+  const named = h(
+    "div",
+    { class: "list" },
+    origin,
+    slots.map((/** @type {any} */ s, /** @type {number} */ k) =>
+      h(
+        "button",
+        { class: `item ${k === editor.slot ? "on" : ""}`, onclick: () => editor.select(() => ((editor.slot = k === editor.slot ? -1 : k), (editor.inspect = "part"))) },
+        h("span", { class: "name", style: { flex: "1" } }, s.name),
+        on(s.name),
+      ),
+    ),
   );
-  named.prepend(origin);
   return section(
     "Slots",
     named,
@@ -306,10 +326,10 @@ function slotSection(part) {
   /** @param {() => void} change @param {string} [key] */
   const edit = (change, key) => editor.edit("model", change, key);
   return section("Slot", [
-    row("name", text({ value: slot.name, onchange: (v) => edit(() => (renameSlot(m, part.name, slot.name, v), (slot.name = v))) }), "renames carry to the instances matched on it"),
+    row("name", text({ value: slot.name, onchange: (v) => editor.rename(path("SLOT", { name: part.name, item: slot.name }), v) }), "renames carry to the instances matched on it"),
     row(
       "mirror",
-      select({ value: slot.mirror ?? "NONE", options: MIRROR_PLANES, onchange: (v) => edit(() => setMirror(slot, v)) }),
+      select({ value: slot.mirror ?? "NONE", options: enumNames("Plane"), onchange: (v) => edit(() => setMirror(slot, v)) }),
       "two slots: as written, and reflected across that plane of the part (the body's middle). What hangs from it is placed on both sides, l_ as written and r_ reflected, its channels twins",
     ),
     ...(snapRow(part, slot) ?? []),
@@ -351,8 +371,8 @@ function jointsList(part) {
     ],
     (i) => i === k,
     (i) => editor.select(() => ((editor.joint = i === k ? -1 : i), (editor.inspect = "part"))),
-      );
-  stack.title = "From the parent's side to where the part hangs, each on the one before and its own channel (a shoulder: a turntable next to a pin)";
+  );
+  stack.props.title = "From the parent's side to where the part hangs, each on the one before and its own channel (a shoulder: a turntable next to a pin)";
   return section(
     "Joints",
     [
@@ -376,14 +396,14 @@ const fitFor = (part, kind) => fitJoint(part, kind, editor.faces(part.name)) || 
 
 /** removeJoint takes joint k off the part, and its channel out of the clips @param {any} part @param {number} k */
 function removeJoint(part, k) {
-  const m = editor.model;
   const joints = part.joints ?? [];
   const j = joints[k];
   if (!j) return;
-  editor.edit("model", () => {
+  editor.edit("both", () => {
+    // what names it first, while the data still has it: the instances' mounts, its channels
+    editor.drop(path("JOINT", { name: part.name, item: j.name }));
     joints.splice(k, 1);
     if (!joints.length) delete part.joints;
-    dropPartJoint(m, part.name, j.name);
     editor.joint = Math.min(k, joints.length - 1);
   });
 }
@@ -404,8 +424,8 @@ function jointSection(part) {
   return section(
     "Joint",
     [
-      row("name", text({ value: j.name, onchange: (v) => editor.edit("both", () => (renamePartJoint(m, editor.anim, part.name, j.name, v), (j.name = v))) }), "renames carry to its channels in the rest pose and the open animation"),
-      row("kind", select({ value: kind, options: JOINT_KINDS, onchange: (v) => edit(() => setJointKind(j, v, size || fitFor(part, v))) }), "PIN a forked hinge about x, SPIN a turntable about y, LINEAR a piston along y, BALL a ball and socket"),
+      row("name", text({ value: j.name, onchange: (v) => editor.rename(path("JOINT", { name: part.name, item: j.name }), v) }), "renames carry to its channels in the rest pose and the open animation"),
+      row("kind", select({ value: kind, options: enumNames("JointKind"), onchange: (v) => edit(() => setJointKind(j, v, size || fitFor(part, v))) }), "PIN a forked hinge about x, SPIN a turntable about y, LINEAR a piston along y, BALL a ball and socket"),
       ...rangeRows(j, edit),
       row(
         "size",
@@ -453,34 +473,34 @@ function rangeRows(j, edit) {
 function snapRow(part, slot) {
   const all = editor.faces(part.name);
   if (!all.length) return null;
-  let at = all.findIndex((faces) => socketFace(slot, faces) >= 0);
-  const shape = { k: Math.max(0, at) };
+  const at = all.findIndex((faces) => socketFace(slot, faces) >= 0);
+  // the shape picked to snap onto, else the one the slot sits on
+  const key = `${part.name}/${slot.name}`;
+  const k = snapShape.key === key && snapShape.k < all.length ? snapShape.k : Math.max(0, at);
   const pick = (/** @type {number} */ f) =>
     editor.edit("model", () => {
-      Object.assign(slot, snapSocket(slot, all[shape.k][f], faceCentre(all[shape.k]), snapInset));
+      Object.assign(slot, snapSocket(slot, all[k][f], faceCentre(all[k]), snapInset));
     });
-  const faces = h("div", { style: { display: "flex", flex: 1 } });
-  const fill = () =>
-    faces.replaceChildren(
-      segmented({
-        value: at === shape.k ? socketFace(slot, all[shape.k]) : -1,
-        options: FACE_NAMES.map((name, f) => ({ value: f, label: name, title: `Put the slot on the ${name} face of shape ${shape.k + 1}` })),
-        onchange: pick,
-        fill: true,
-      }),
-    );
-  fill();
   return [
     row(
       "snap to",
       [
         all.length > 1 &&
           select({
-            value: String(shape.k + 1),
-            options: all.map((_, k) => String(k + 1)),
-            onchange: (v) => ((shape.k = +v - 1), fill()),
+            value: String(k + 1),
+            options: all.map((_, n) => String(n + 1)),
+            onchange: (v) => ((snapShape = { key, k: +v - 1 }), editor.emit("select")),
           }),
-        faces,
+        h(
+          "div",
+          { style: { display: "flex", flex: 1 } },
+          segmented({
+            value: at === k ? socketFace(slot, all[k]) : -1,
+            options: FACE_NAMES.map((name, f) => ({ value: f, label: name, title: `Put the slot on the ${name} face of shape ${k + 1}` })),
+            onchange: pick,
+            fill: true,
+          }),
+        ),
       ],
       `a face of the part's shape${all.length > 1 ? " (pick which)" : ""}`,
     ),

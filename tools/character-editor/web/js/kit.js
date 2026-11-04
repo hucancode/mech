@@ -4,7 +4,8 @@
 // The copy is matched with the selected instance's slot of the same name, else its first free
 // slot, else its origin.
 import { readFile } from "./api.js";
-import { btn, h, num, row } from "./dom.js";
+import { btn, el, h, num, row } from "./dom.js";
+import { render } from "./ui/vdom.js";
 import { editor } from "./editor.js";
 import { addIk, clone, freeSlot, instanceIndex, partOf, scalePart, subtreeEnd, treeOrder, uniqueName } from "./model.js";
 import { loadLocal } from "./store.js";
@@ -112,9 +113,8 @@ export async function openKit() {
   let scale = 1;
   let filter = "";
   const host = editor.part >= 0 ? editor.model.assembly?.[editor.part] : undefined;
-  const dialog = /** @type {HTMLDialogElement} */ (h("dialog", { class: "kit" }));
-  const body = h("div", { class: "kit-list" });
-  const insert = btn(host ? `Add under ${host.name}` : "Add as a root", () => {
+  const dialog = /** @type {HTMLDialogElement} */ (el("dialog", { class: "kit" }));
+  const insert = () => {
     if (!picked) return;
     const { src, i } = picked;
     const parent = editor.part;
@@ -123,51 +123,50 @@ export async function openKit() {
       editor.inspect = "part";
     });
     dialog.close();
-  }, { kind: "primary", disabled: true });
-  const fill = () =>
-    body.replaceChildren(
-      ...list.map(({ name, model }) => {
-        const rows = treeOrder(model)
-          .map(({ i, depth }) => ({ p: model.assembly[i], i, depth }))
-          .filter(({ p }) => !filter || p.name.includes(filter))
-          .map(({ p, i, depth }) => {
-            const n = subtreeEnd(model, i) - i;
-            const on = picked?.src === model && picked.i === i;
-            return h(
-              "button",
-              {
-                class: `item ${on ? "on" : ""}`,
-                style: { paddingLeft: `${10 + (filter ? 0 : depth * 14)}px` },
-                onclick: () => {
-                  picked = { src: model, i };
-                  /** @type {HTMLButtonElement} */ (insert).disabled = false;
-                  fill();
-                },
-                ondblclick: () => insert.click(),
-              },
-              h("span", { class: "name" }, p.name),
-              h("span", { class: "tag" }, n > 1 ? `${n} instances` : p.part ?? ""),
-            );
-          });
-        return rows.length ? h("div", null, h("div", { class: "kit-group" }, name === editor.current ? `${name} (open)` : name), rows) : null;
-      }),
+  };
+  // the dialog drawn from its state: what is picked, the filter, the scale
+  const draw = () =>
+    render(
+      [
+        h("header", null, h("strong", null, "Add from a kit"), h("span", { class: "muted" }, "an instance and everything under it, with their parts, joints, materials and IK targets")),
+        h("input", { type: "search", placeholder: "filter instances", autofocus: true, value: filter, oninput: (/** @type {Event} */ e) => ((filter = /** @type {HTMLInputElement} */ (e.currentTarget).value.trim()), draw()) }),
+        h(
+          "div",
+          { class: "kit-list" },
+          list.map(({ name, model }) => {
+            const rows = treeOrder(model)
+              .map(({ i, depth }) => ({ p: model.assembly[i], i, depth }))
+              .filter(({ p }) => !filter || p.name.includes(filter))
+              .map(({ p, i, depth }) => {
+                const n = subtreeEnd(model, i) - i;
+                const on = picked?.src === model && picked.i === i;
+                return h(
+                  "button",
+                  {
+                    class: `item ${on ? "on" : ""}`,
+                    style: { paddingLeft: `${10 + (filter ? 0 : depth * 14)}px` },
+                    onclick: () => ((picked = { src: model, i }), draw()),
+                    ondblclick: () => ((picked = { src: model, i }), insert()),
+                  },
+                  h("span", { class: "name" }, p.name),
+                  h("span", { class: "tag" }, n > 1 ? `${n} instances` : p.part ?? ""),
+                );
+              });
+            return rows.length ? h("div", null, h("div", { class: "kit-group" }, name === editor.current ? `${name} (open)` : name), rows) : null;
+          }),
+        ),
+        h(
+          "footer",
+          null,
+          row("scale", num({ value: scale, step: 0.05, min: 0.05, onchange: (v) => (scale = v) }), "sizes, places and joints, all by one factor"),
+          h("span", { class: "grow" }),
+          btn("Cancel", () => dialog.close()),
+          btn(host ? `Add under ${host.name}` : "Add as a root", insert, { kind: "primary", disabled: !picked }),
+        ),
+      ],
+      dialog,
     );
-  const search = /** @type {HTMLInputElement} */ (h("input", { type: "search", placeholder: "filter instances", autofocus: true }));
-  search.addEventListener("input", () => ((filter = search.value.trim()), fill()));
-  fill();
-  dialog.append(
-    h("header", null, h("strong", null, "Add from a kit"), h("span", { class: "muted" }, "an instance and everything under it, with their parts, joints, materials and IK targets")),
-    search,
-    body,
-    h(
-      "footer",
-      null,
-      row("scale", num({ value: 1, step: 0.05, min: 0.05, onchange: (v) => (scale = v) }), "sizes, places and joints, all by one factor"),
-      h("span", { class: "grow" }),
-      btn("Cancel", () => dialog.close()),
-      insert,
-    ),
-  );
+  draw();
   dialog.addEventListener("close", () => {
     dialog.remove();
     if (open === dialog) open = null;

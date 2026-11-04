@@ -10,7 +10,7 @@ import { moveValues, oneSide, zipValue } from "../model.js";
 import { channelValues } from "./channelValues.js";
 
 /** the twins of every channel (the engine's "twins" query) @returns {import("../model.js").Twins} */
-const twins = () => editor.ask({ q: "twins" }) ?? {};
+const twins = () => editor.twins();
 
 /** the pose test's values: the rest pose (both sides: it is symmetric), with what was tried on top @returns {Record<string, import("../model.js").Value>} */
 const tried = () => ({ ...moveValues({ twin: "WITH", by: editor.model.pose }, twins()), ...editor.test });
@@ -32,17 +32,16 @@ function setRestPose() {
 }
 
 export function poseTest() {
-  const bar = h("div", { class: "dock-bar" });
-  const items = () => [
-    h("span", { class: "dock-title" }, "Pose test"),
-    h("span", { class: "grow" }),
-    dockSpanButtons(() => bar.replaceChildren(...items().flat())),
-    btn("Set rest pose", setRestPose, { title: "Save what the pose test shows as the rest pose: the stance every clip starts from and adds onto (arms hanging, legs reaching)", disabled: !Object.keys(editor.test).length }),
-    btn(icon("reset"), () => editor.select(() => (editor.test = {})), { kind: "icon", title: "Back to the rest pose" }),
-  ];
-  bar.replaceChildren(...items().flat());
   return [
-    bar,
+    h(
+      "div",
+      { class: "dock-bar" },
+      h("span", { class: "dock-title" }, "Pose test"),
+      h("span", { class: "grow" }),
+      dockSpanButtons(() => editor.emit("select")),
+      btn("Set rest pose", setRestPose, { title: "Save what the pose test shows as the rest pose: the stance every clip starts from and adds onto (arms hanging, legs reaching)", disabled: !Object.keys(editor.test).length }),
+      btn(icon("reset"), () => editor.select(() => (editor.test = {})), { kind: "icon", title: "Back to the rest pose" }),
+    ),
     h(
       "div",
       { class: "dock-scroll" },
@@ -52,8 +51,11 @@ export function poseTest() {
         channelValues(tried(), {
           full: true,
           onset: (vs) => {
+            const first = !Object.keys(editor.test).length;
             Object.assign(editor.test, vs);
             editor.show();
+            // the first try enables Set rest pose
+            if (first) editor.emit("select");
           },
         }),
       ),

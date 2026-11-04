@@ -1,6 +1,7 @@
 package mech
 
 import "base:runtime"
+import "core:encoding/json"
 import "core:mem"
 import "core:reflect"
 import "core:slice"
@@ -10,6 +11,44 @@ import "core:strings"
 // Model and animation files are written for people to read and diff: struct fields in declaration
 // order, zero fields left out (loading leaves them zero), arrays of numbers on one line, numbers
 // in their shortest form. Map entries are all written, sorted, since a 0 there is a value.
+
+// Schema is the names the formats use, from the engine's own types (schema_format): each enum's
+// names, the prefixes of a placed side's names, the names of the root's channels and an IK
+// target's after its own, how many values each ChannelKind holds, and the budgets
+// character_check holds clips to. Editors read it rather than keep a copy.
+Schema :: struct {
+  enums:    map[string][]string,
+  sides:    map[string]string,
+  channels: map[string]string,
+  sizes:    map[string]int,
+  budgets:  map[string]int,
+}
+
+// schema_format is the Schema as JSON text, allocated with `allocator`.
+schema_format :: proc(allocator := context.allocator) -> string {
+  context.allocator = context.temp_allocator
+  s: Schema
+  s.enums["Primitive"] = reflect.enum_field_names(Primitive)
+  s.enums["JointKind"] = reflect.enum_field_names(JointKind)
+  s.enums["Plane"] = reflect.enum_field_names(Plane)
+  s.enums["Ease"] = reflect.enum_field_names(Ease)
+  s.enums["Twin"] = reflect.enum_field_names(Twin)
+  s.enums["ChannelKind"] = reflect.enum_field_names(ChannelKind)
+  s.enums["Axis"] = reflect.enum_field_names(Axis)
+  prefix := SIDE_PREFIX
+  for side in Side do s.sides[reflect.enum_string(side)] = prefix[side]
+  s.channels["swivel"] = IK_SWIVEL_NAME
+  s.channels["weight"] = IK_WEIGHT_NAME
+  s.channels["root"] = ROOT_NAME
+  s.channels["root_turn"] = ROOT_TURN_NAME
+  sizes := CHANNEL_SIZE
+  for kind in ChannelKind do s.sizes[reflect.enum_string(kind)] = sizes[kind]
+  s.budgets["shape"] = SHAPE_BUDGET
+  s.budgets["motions"] = MOTION_BUDGET
+  // not a file: the standard writer, which writes any map (format_json writes the files' own shapes)
+  data, _ := json.marshal(s, allocator = allocator)
+  return string(data)
+}
 
 // format_json writes `v` as file text, allocated with `allocator`.
 @(private)
@@ -119,22 +158,33 @@ write_items :: proc(b: ^strings.Builder, data: rawptr, count, size: int, elem: t
   strings.write_byte(b, ']')
 }
 
+// write_map writes a map by name, its entries sorted by name, each value by `write`.
+@(private = "file")
+write_map :: proc(b: ^strings.Builder, values: map[string]$T, indent: int, write: proc(b: ^strings.Builder, x: T)) {
+  if len(values) == 0 {
+    strings.write_string(b, "{}")
+    return
+  }
+  keys, _ := slice.map_keys(values, context.temp_allocator)
+  slice.sort(keys)
+  strings.write_byte(b, '{')
+  for k, i in keys {
+    if i > 0 do strings.write_byte(b, ',')
+    newline(b, indent + 1)
+    strings.write_quoted_string(b, k)
+    strings.write_string(b, ": ")
+    write(b, values[k])
+  }
+  newline(b, indent)
+  strings.write_byte(b, '}')
+}
+
 @(private)
 write_value :: proc(b: ^strings.Builder, v: any, indent: int) {
+  // the maps the files hold: amounts by channel, how much of each pose, the arc each position follows
   if values, ok := v.(map[string]Value); ok {
-    if len(values) == 0 {
-      strings.write_string(b, "{}")
-      return
-    }
-    keys, _ := slice.map_keys(values, context.temp_allocator)
-    slice.sort(keys)
-    strings.write_byte(b, '{')
-    for k, i in keys {
-      if i > 0 do strings.write_byte(b, ',')
-      newline(b, indent + 1)
-      strings.write_quoted_string(b, k)
-      strings.write_string(b, ": ")
-      switch x in values[k] {
+    write_map(b, values, indent, proc(b: ^strings.Builder, x: Value) {
+      switch x in x {
       case f32:
         write_number(b, f64(x))
       case [3]f32:
@@ -149,9 +199,15 @@ write_value :: proc(b: ^strings.Builder, v: any, indent: int) {
       case:
         strings.write_string(b, "null")
       }
-    }
-    newline(b, indent)
-    strings.write_byte(b, '}')
+    })
+    return
+  }
+  if values, ok := v.(map[string]f32); ok {
+    write_map(b, values, indent, proc(b: ^strings.Builder, x: f32) {write_number(b, f64(x))})
+    return
+  }
+  if values, ok := v.(map[string]string); ok {
+    write_map(b, values, indent, proc(b: ^strings.Builder, x: string) {strings.write_quoted_string(b, x)})
     return
   }
   ti := runtime.type_info_base(type_info_of(v.id))

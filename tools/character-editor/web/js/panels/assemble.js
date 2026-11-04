@@ -11,7 +11,7 @@
 import { btn, check, h, list, num, row, section, segmented, select, text } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { addIk, instanceIndex, instanceJoints, instanceTwist, jointAxes, jointChannel, jointKind, newPart, placedNames, partOf, renameIk, renameInstance, setInstanceTwist } from "../model.js";
+import { addIk, instanceIndex, instanceJoints, instanceTwist, jointAxes, jointChannel, jointKind, newPart, path, placedNames, partOf, setInstanceTwist } from "../model.js";
 import { partTree } from "./partTree.js";
 
 const NEW_PART = "(a new part)";
@@ -84,7 +84,7 @@ export function assembleInspector() {
     return section(
       "IK target",
       [
-        row("name", text({ value: ik.name, onchange: (v) => editor.edit("both", () => renameIk(m, editor.anim, ik, v)) }), "its channels are renamed with it, through the rest pose and the open animation"),
+        row("name", text({ value: ik.name, onchange: (v) => editor.rename(path("IK", { name: ik.name }), v) }), "its channels are renamed with it, through the rest pose and the open animation"),
         row("root", h("span", { class: "tag" }, ikRoot(ik.name)), "the top of the chain, found from the assembly: below the nearest branch above the tip (a pelvis, a torso). Every joint from it down to the tip turns"),
         row("tip", select({ value: ik.tip, options: names, onchange: (v) => edit(() => (ik.tip = v)) }), "the instance whose frame reaches the target"),
         row("", check({ value: ik.aim, label: "aim: look at the target", onchange: (v) => edit(() => (v ? (ik.aim = true) : delete ik.aim)) }), "the chain, the tip's own joints too (a neck), turns the tip to face the target instead of reaching it: a head looking, a gun aiming. Its target is then an offset from a point ahead of the tip at rest"),
@@ -119,7 +119,7 @@ export function assembleInspector() {
   const joints = instanceJoints(m, i);
   const kinds = Object.fromEntries(editor.channels().map((c) => [c.name, c.kind]));
   // its names as placed: once, or on each side of the body
-  const placed = placedNames(editor.ask({ q: "places" }) ?? [], m, i);
+  const placed = placedNames(editor.places(), m, i);
   return [
     section("Instance", [
       row(
@@ -128,7 +128,7 @@ export function assembleInspector() {
           value: inst.name,
           placeholder: inst.part,
           empty: true, // empty: the part's name
-          onchange: (v) => editor.edit("both", () => ((v ||= inst.part), renameInstance(m, editor.anim, inst.name, v), (inst.name = v))),
+          onchange: (v) => editor.rename(path("INSTANCE", { name: inst.name }), v || inst.part),
         }),
       ),
       row(

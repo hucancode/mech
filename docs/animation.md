@@ -48,24 +48,33 @@ held is a motion with no shape, and a pose at a moment is a shape stepping into 
  "clips": [{"name": "walk", "duration": 1, "motions": [
   {"moves": [{"by": {"root": [0, -0.06, 0]}}]},
   {"shape": [{}, {"u": 0.55, "v": 0.3333}, {"u": 1, "v": 1}],
-   "moves": [{"delay": 0.25, "twin": "OPPOSITE", "by": {"l_leg": "step"}}]},
+   "moves": [{"delay": 0.25, "twin": "OPPOSITE", "arcs": {"l_leg": "step"}}]},
   {"shape": [{"v": 1, "ease": "IN"}, {"u": 0.5, "ease": "OUT"}], "rate": 2,
    "moves": [{"delay": 0.5, "by": {"root": [0, -0.14, 0]}}]}
 ]}]}
 ```
 
-A motion is `{shape, rate, moves}`:
+A motion is `{name, shape, rate, moves}`:
 
+- **name**: for people (the editor lists motions by it); the engine reads nothing from it. Left
+  out, the editor says the motion's shape and what it moves.
 - **shape**: points `{u, v, ease}` over one cycle: the value `v` at `u` (0 to 1), reached from
   the point before by `ease`. No points means 1 throughout: a pose held.
 - **rate**: how many whole cycles of the shape run over the clip (default 1).
-- **moves**: a list of `{delay, spread, twin, by}`. `by` holds the channel amounts that move
-  together, and `delay` says how many cycles late they run. `spread` runs them one after another
-  instead ([Spread](#spread)). Each amount is shaped as its channel
-  ([modeling.md](modeling.md#rigging-channels-ik-targets)): a number for a turn, a slide or a
-  weight, `[x, y, z]` for a rotation or a position; or, for a position, an arc's name
-  ([Arcs](#arcs)); or, for a pose, how much of it ([Poses](#poses)). `twin` moves the other side
-  of the body too ([Twins](#twins)).
+- **moves**: a list of `{delay, spread, twin, by, poses, arcs}`. What a move moves is three maps,
+  each by name, so nothing is read two ways:
+  - `by`: the channel amounts that move together, each shaped as its channel
+    ([modeling.md](modeling.md#rigging-channels-ik-targets)): a number for a turn, a slide or a
+    weight, `[x, y, z]` for a rotation or a position.
+  - `poses`: the animation's poses it adds, each how much of it ([Poses](#poses)).
+  - `arcs`: the positions it puts on the animation's arcs, each the arc's name ([Arcs](#arcs)).
+
+  `delay` says how many cycles late they run. `spread` runs them one after another instead
+  ([Spread](#spread)). `twin` moves the other side of the body too ([Twins](#twins)).
+
+  The first format wrote all three in `by` (an arc's name as a position's value, a pose's name as
+  a key). Such a file still reads (`animation_parse` moves them to `poses` and `arcs`) and is
+  written back in this one.
 
 At clip progress `x` (`t / duration`: 0 at the clip's start, 1 at its end), each move adds
 
@@ -103,20 +112,28 @@ turning the next joint back by as much, so each segment heads as the shape says.
 
 A path in space is drawn, not keyed. An **arc** is the animation's, by name, shared by every
 clip: `"arcs": [{"name": "step", "points": [[x, y, z], ..]}]`, a smooth curve through its
-points (`mech.arc_at`, Catmull-Rom). A move puts a **position** on it by naming it,
-`"l_leg": "step"` (an IK target or the root: a turn or a rotation is one value per axis, no
-path, so no arc moves it). The points are written as the position's own values are: offsets from
+points (`mech.arc_at`, Catmull-Rom). A move puts a **position** on it by naming it in its `arcs`,
+`"arcs": {"l_leg": "step"}` (an IK target or the root: a turn or a rotation is one value per axis,
+no path, so no arc moves it). The points are written as the position's own values are: offsets from
 where it is at rest (an IK target's tip, the model's origin), in the model's space. The move puts
 the position on the arc where its motion's shape says, instead of adding amounts:
 
 ```
-out[position] += arc(shape(rate * x - delay))      0 the first point, 1 the end, k / segments point k
+out[position] += arc(shape(rate * x - delay))      0 the first point, 1 the end, point k at its `at`
 ```
 
 An arc is **open** (the default): it runs from its first point to its last, `n - 1` segments. A
 one-shot whose shape goes 0, 1, 0 runs out along it and back the same way. A **`closed`** arc runs
-on from its last point back to its first, `n` segments, each point written once: a loop. So the
-shape times the path: it holds on a point at `k / (n - 1)`, eases between points as it eases
+on from its last point back to its first, `n` segments, each point written once: a loop.
+
+Where along the arc each point is, the shape value that reaches it, is its **`at`**:
+`"at": [0, 0.3, 1]`, one per point, rising (0 to 1; a closed arc's last below its first plus 1,
+room for the way back). Left out, the points are spread evenly, point k at `k / segments`. So
+adding a point between two (the editor gives it `at` halfway between theirs) or taking one out
+leaves every other point where it was along the arc, and every move on it as timed: a strike still
+lands on its impact. Closing or opening an arc spreads its points evenly again.
+
+So the shape times the path: it holds on a point at its `at`, eases between points as it eases
 between values, and a SETTLE past a point overshoots along the path, not off it (past the ends,
 an open arc runs on along their tangents; a closed one goes round again). An arc's twin follows the same points, the other side's x
 mirrored. Only a clip's motions use arcs (not the rest pose). A name the animation lacks is
@@ -159,14 +176,14 @@ editor marks the shape values that put a position on each point ([editors.md](ed
 A **pose** is a named set of channel amounts. It belongs to the animation and every clip shares
 it: `"poses": [{"name": "fist", "by": {"r_finger_a_1.knuckle": -0.68, ..}}]`.
 
-- **Using one.** A move adds a pose by naming it with a number, how much of it:
-  `"by": {"fist": 1}` adds every amount, `"fist": 0.77` a little less of each.
+- **Using one.** A move adds a pose by naming it in its `poses`, with how much of it:
+  `"poses": {"fist": 1}` adds every amount, `"fist": 0.77` a little less of each.
 - **Twins and delays.** The move's twin and delay apply to the pose's amounts as they do to its
   own. A fist written on the right hand closes both hands with a WITH twin, or only the right
   one without a twin.
-- **Limits.** A pose holds amounts only: no arcs and no other poses. A pose can't share a channel's
-  name: the clash is an error, and neither is added. The rest pose is the model's, so it can't add the
-  animation's poses.
+- **Limits.** A pose holds amounts only: no arcs and no other poses. Poses are named apart from
+  channels (a move adds them in its own `poses`), so a pose may share a channel's name. The rest
+  pose is the model's, so it can't add the animation's poses.
 
 The mech's `fist` is nine knuckle values written once. Before poses, the same nine numbers were
 repeated in combat_idle, walk, run, attack and cast.
@@ -257,7 +274,9 @@ editors do so on every edit.
 
 `character_check(model, anim)` (`src/mech/check.odin`) lists everything wrong with a character,
 the one place that does: names that resolve to nothing or twice, values shaped unlike their
-channel, joints without stops, a mirrored slot on its own plane, a rest pose writing both sides.
+channel, two channels coming out with one name (an IK target named `root`, an instance `root`
+with a joint `turn`), joints without stops, a mirrored slot on its own plane, a rest pose writing
+both sides.
 Those are **ERROR**s. **BUDGET** issues are data the engine can use but which is fighting the
 machine (Style, below). `asset_compile` logs them all, so the game logs them and the character
 editor shows them; `test_assets_check` holds the shipped characters to no ERROR.

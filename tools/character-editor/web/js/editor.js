@@ -5,9 +5,10 @@
 
 import { listCharacters, readFile } from "./api.js";
 import { eulerFrom, fromQuat, mul, transpose } from "./math3.js";
-import { addValue, clone, setDofsSource, uniqueName, zipValue } from "./model.js";
+import { addValue, clone, deleteThing, dropRefs, renameRefs, samePath, schema, setDofsSource, uniqueName, zipValue } from "./model.js";
 import { blankCharacter, exportFile, loadLocal, localNames, pickFile, saveLocal } from "./store.js";
 import { Viewer } from "./viewer.js";
+import { computed, signal } from "./ui/signal.js";
 
 /** the scale of the model the model tab shows (editor.alone): model units, as the part is written */
 export const ALONE_SCALE = 1;
@@ -108,24 +109,157 @@ class Editor {
     this.standsOf = "";
     this.stand = [0, 0, 0]; // the root's turn that stands the part alone as in the character
     this.scheduled = false;
-    /** @type {((what: Change) => void)[]} */
-    this.listeners = [];
+    // what views follow: `rev` changes with the data, the selection and the status (the panels
+    // draw again), `clock` with the playhead (the player and the curves), `sent` whenever the
+    // viewer is given a model or an animation (what the engine answers about them is asked again)
+    this.rev = signal(0);
+    this.clock = signal(0);
+    this.sent = signal(0);
+    // `data` changes with the model or the animation: what the engine says of the data itself
+    // (its references, its issues) is asked again
+    this.data = signal(0);
+    // the engine's lists about what the viewer holds, asked once per what it was sent
+    this.lists = {
+      channels: computed(() => (this.sent.value, /** @type {any[]} */ (this.viewer?.query({ q: "channels" }) ?? []))),
+      places: computed(() => (this.sent.value, /** @type {any[]} */ (this.viewer?.query({ q: "places" }) ?? []))),
+      twins: computed(() => (this.sent.value, /** @type {import("./model.js").Twins} */ (this.viewer?.query({ q: "twins" }) ?? {}))),
+      // of the whole character's data, whichever tab shows what
+      refs: computed(() => (this.data.value, /** @type {import("./model.js").Ref[]} */ (this.askData("refs") ?? []))),
+      issues: computed(() => (this.data.value, /** @type {{severity: string, text: string, at: import("./model.js").Path}[]} */ (this.askData("check") ?? []))),
+    };
   }
 
-  /** @param {(what: Change) => void} fn */
-  on(fn) {
-    this.listeners.push(fn);
-  }
-
-  /** @param {Change} what */
+  /** emit tells the views what changed @param {Change} what */
   emit(what) {
-    for (const fn of this.listeners) fn(what);
+    if (what === "time") this.clock.value++;
+    else this.rev.value++;
+  }
+
+  /** askData asks the engine query `q` about the character's data as it is now (not what is shown): "refs", "check" @param {string} q */
+  askData(q) {
+    const a = this.viewer?.query({ q, character: JSON.stringify({ model: this.model, animation: this.anim }) });
+    return Array.isArray(a) ? a : null;
+  }
+
+  /** every place a name is written (mech.references), for the data as it is now @returns {import("./model.js").Ref[]} */
+  refs() {
+    return this.lists.refs.value;
+  }
+
+  /** what is wrong with the character (mech.character_check), each with where @returns {{severity: string, text: string, at: import("./model.js").Path}[]} */
+  issues() {
+    return this.lists.issues.value;
+  }
+
+  /** the places thing `path` is named, but its own name: what uses it @param {import("./model.js").Path} path */
+  users(path) {
+    return this.refs().filter((r) => !r.def && samePath(r.to, path));
+  }
+
+  /** the model and the animation, as a character file holds them (references point into this) */
+  get doc() {
+    return { model: this.model, animation: this.anim };
+  }
+
+  /**
+   * rename renames thing `path` to `name`, and every name of it (its channels on either side, the
+   * instances and moves naming it), as one edit @param {import("./model.js").Path} path @param {string} name
+   */
+  rename(path, name) {
+    const refs = this.refs();
+    this.edit("both", () => renameRefs(this.doc, refs, path, name));
+  }
+
+  /** remove takes thing `path` out (an arc, a pose) with what names it, as one edit; `then` goes with it @param {import("./model.js").Path} path @param {() => void} [then] */
+  remove(path, then) {
+    const refs = this.refs();
+    this.edit("both", () => (deleteThing(this.doc, refs, path), then?.()));
+  }
+
+  /** drop takes out what names thing `path` (going: a joint's channels and mounts), inside an edit @param {import("./model.js").Path} path */
+  drop(path) {
+    dropRefs(this.doc, this.refs(), path);
+  }
+
+  /**
+   * goto shows thing `path`: its tab, picked, the inspector on it (an issue's, a reference's)
+   * @param {import("./model.js").Path} p
+   */
+  goto(p) {
+    const m = this.model;
+    const a = this.anim;
+    const at = (/** @type {any[] | undefined} */ list, /** @type {string} */ name) => (list ?? []).findIndex((x) => x.name === name);
+    const part = at(m.parts, p.name);
+    switch (p.kind) {
+      case "MATERIAL":
+        this.setTab("model");
+        return this.select(() => ((this.material = at(m.materials, p.name)), (this.inspect = "material")));
+      case "PART":
+      case "SHAPE":
+      case "SLOT":
+      case "JOINT":
+        this.setTab("model");
+        if (part < 0) return;
+        this.pickPart(part);
+        return this.select(() => {
+          const def = m.parts[part];
+          if (p.kind === "SHAPE") (this.shape = p.index), (this.also = []);
+          if (p.kind === "SLOT") this.slot = at(def.slots, p.item);
+          if (p.kind === "JOINT") this.joint = at(def.joints, p.item);
+        });
+      case "INSTANCE":
+        this.setTab("assemble");
+        return this.select(() => ((this.part = at(m.assembly, p.name)), (this.inspect = "part")));
+      case "IK":
+        this.setTab("assemble");
+        return this.select(() => ((this.ik = at(m.iks, p.name)), (this.inspect = "ik")));
+      case "CHARACTER":
+      case "REST":
+        this.setTab("assemble");
+        return this.select(() => ((this.part = -1), (this.inspect = "character")));
+      case "ARC":
+        this.setTab("animation");
+        return this.select(() => ((this.arc = p.name), (this.handle = "")));
+      case "POSE":
+        this.setTab("animation");
+        return this.select(() => (this.pose = p.name));
+      case "CLIP":
+      case "MOTION":
+      case "MOVE": {
+        this.setTab("animation");
+        const c = at(a.clips, p.name);
+        if (c < 0) return;
+        this.pickClip(c);
+        if (p.kind === "CLIP") return;
+        this.pickMotion(p.index);
+        if (p.kind === "MOVE") this.select(() => ((this.moves = [p.move]), (this.openMoves = [p.move])));
+      }
+    }
+  }
+
+  /** fresh: the viewer holds the latest data (lists about it are then current) */
+  fresh() {
+    if (this.pendingModel || this.pendingAnim) this.sync();
+  }
+
+  /** what the model places (the "places" query): [{name, inst, side}] @returns {any[]} */
+  places() {
+    this.fresh();
+    return this.lists.places.value;
+  }
+
+  /** each channel's twin on the other side of the body (the "twins" query) @returns {import("./model.js").Twins} */
+  twins() {
+    this.fresh();
+    return this.lists.twins.value;
   }
 
   async start() {
     try {
       this.viewer = await Viewer.start((m) => this.setStatus(m));
       this.viewer.grid(this.grid);
+      // the names the formats use, from the engine (model.js keeps no copy)
+      Object.assign(schema, this.viewer.query({ q: "schema" }));
       this.assets = await listCharacters();
       this.refreshList();
       const first = this.characters.find((c) => c.name === "mech") ?? this.characters[0];
@@ -185,6 +319,7 @@ class Editor {
     this.playing = false;
     this.test = {};
     this.pendingModel = this.pendingAnim = true;
+    this.data.value++;
     this.sync();
     this.viewer?.frame();
     this.setStatus("");
@@ -209,6 +344,7 @@ class Editor {
     }
     this.lastEdit = { key: coalesce, at: now };
     change();
+    this.data.value++;
     if (what !== "anim") this.modelDirty = this.pendingModel = true;
     if (what !== "model") this.animDirty = this.pendingAnim = true;
     this.schedule();
@@ -228,6 +364,7 @@ class Editor {
       this.anim = JSON.parse(s.anim);
       this.animDirty = this.pendingAnim = true;
     }
+    this.data.value++;
     const now = this.snapshot();
     this.modelDirty = now.model !== this.saved.model;
     this.animDirty = now.anim !== this.saved.anim;
@@ -337,14 +474,19 @@ class Editor {
       if (alone) this.stand = this.standAlone();
     }
     if (this.pendingAnim) v.setAnimation(alone ? {} : this.isolate ? this.isolated() : this.anim);
+    const sent = this.pendingModel || this.pendingAnim;
     this.pendingModel = this.pendingAnim = false;
+    if (sent) this.sent.value++;
     if (alone !== this.sentAlone) {
       this.sentAlone = alone;
       v.frame();
     }
     this.show();
+    // what the engine logged since (the character's issues are asked of it: issues())
     const state = v.query({ q: "state" });
-    if (state.messages?.length) this.messages = [...this.messages, ...state.messages].slice(-50);
+    const known = new Set(this.issues().map((x) => x.text));
+    const logged = (state.messages ?? []).filter((/** @type {string} */ x) => ![...known].some((t) => x.endsWith(t)));
+    if (logged.length) this.messages = [...this.messages, ...logged].slice(-20);
   }
 
   // show tells the viewer what this tab shows: the part alone, exploded as asked, while modelling;
@@ -575,7 +717,7 @@ class Editor {
     const shown = this.shown();
     // a twin move: a channel the move moves only as its twin's twin goes into its twin's amount, by
     // how much of it the twins add now (half a cycle on when OPPOSITE), x mirrored
-    const twins = mv.twin && mv.twin !== "NONE" ? (this.ask({ q: "twins" }) ?? {}) : {};
+    const twins = mv.twin && mv.twin !== "NONE" ? this.twins() : {};
     const ft = lane?.twin ? lane.twin.values[at] : f;
     const r4 = (/** @type {number} */ x) => Math.round(x * 1e4) / 1e4;
     this.edit(
@@ -585,11 +727,11 @@ class Editor {
         for (const [n, v] of Object.entries(values)) {
           const change = zipValue(v, shown[n], (x, y) => x - y);
           const t = twins[n];
-          if (!(n in mv.by) && t && typeof mv.by[t.twin] !== "string" && t.twin in mv.by) {
+          if (n in (mv.arcs ?? {})) continue; // on an arc: drag its points
+          if (!(n in mv.by) && t && t.twin in mv.by) {
             if (Math.abs(ft) >= 0.05) mv.by[t.twin] = zipValue(addValue(mv.by[t.twin], zipValue(change, t.flip, (x, fl) => x / (ft * fl))), 0, r4);
             continue;
           }
-          if (typeof mv.by[n] === "string") continue; // on an arc: drag its points
           mv.by[n] = zipValue(addValue(mv.by[n], zipValue(change, 0, (x) => x / f)), 0, r4);
         }
       },
@@ -605,7 +747,8 @@ class Editor {
 
   /** every channel of the character, in the engine's order (the "channels" query): {name, kind, size, min, max, part?, ik?} @returns {any[]} */
   channels() {
-    return this.viewer?.query({ q: "channels" }) ?? [];
+    this.fresh();
+    return this.lists.channels.value;
   }
 
   // shown is the channels as the viewer shows them now.

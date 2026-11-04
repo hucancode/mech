@@ -490,7 +490,7 @@
             "moves": [
               {
                 "twin": "OPPOSITE",
-                "by": {
+                "arcs": {
                   "l_leg": "step"
                 }
               }
@@ -572,7 +572,7 @@
             "moves": [
               {
                 "twin": "OPPOSITE",
-                "by": {
+                "arcs": {
                   "l_leg": "stride"
                 }
               }

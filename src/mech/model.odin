@@ -345,6 +345,11 @@ Channel :: struct {
 //     kind (JOINT_CHANNEL). A reflected side turns the mirrored way, so twins take the same values.
 // Clips key them all by name alike, a value shaped as the channel is (Value).
 IK_VALUES :: 5
+// the names of an IK target's channels after its own (`l_leg.swivel`, `l_leg.weight`), and the root's
+IK_SWIVEL_NAME :: ".swivel"
+IK_WEIGHT_NAME :: ".weight"
+ROOT_NAME :: "root"
+ROOT_TURN_NAME :: "root.turn"
 IK_SWIVEL :: 3 // after its target's x, y, z
 IK_WEIGHT :: 4
 ROOT_VALUES :: 6
@@ -358,11 +363,11 @@ model_channel_table :: proc(m: ^Model, allocator := context.temp_allocator) -> [
     first := ik_channel(m, n)
     name := ik_name(m, k, allocator)
     append(&out, Channel{name, .POSITION, first})
-    append(&out, Channel{fmt.aprint(name, ".swivel", sep = "", allocator = allocator), .HINGE, first + IK_SWIVEL})
-    append(&out, Channel{fmt.aprint(name, ".weight", sep = "", allocator = allocator), .WEIGHT, first + IK_WEIGHT})
+    append(&out, Channel{fmt.aprint(name, IK_SWIVEL_NAME, sep = "", allocator = allocator), .HINGE, first + IK_SWIVEL})
+    append(&out, Channel{fmt.aprint(name, IK_WEIGHT_NAME, sep = "", allocator = allocator), .WEIGHT, first + IK_WEIGHT})
   }
   root := root_channel(m)
-  append(&out, Channel{"root", .POSITION, root}, Channel{"root.turn", .BALL, root + 3})
+  append(&out, Channel{ROOT_NAME, .POSITION, root}, Channel{ROOT_TURN_NAME, .BALL, root + 3})
   n := root + ROOT_VALUES
   kinds := JOINT_CHANNEL
   for p in places {
@@ -373,6 +378,49 @@ model_channel_table :: proc(m: ^Model, allocator := context.temp_allocator) -> [
     }
   }
   return out[:]
+}
+
+// Channels is a model's channels resolved once (channels_make): the table (model_channel_table),
+// each channel by name, and per value of a pose the channel holding it and its twin with its flip
+// (channel_twin). Compiling clips and checking a character look names and values up in it, rather
+// than listing the channels again for each.
+Channels :: struct {
+  table:   []Channel,
+  by_name: map[string]int,
+  of:      []int, // per value: its channel, in table
+  twin:    []int, // per value: its twin (channel_twin), -1 for none
+  flip:    []f32,
+}
+
+// channels_make resolves `m`'s channels (Channels), allocated with `allocator`.
+channels_make :: proc(m: ^Model, allocator := context.temp_allocator) -> (cs: Channels) {
+  cs.table = model_channel_table(m, allocator)
+  cs.by_name = make(map[string]int, len(cs.table), allocator)
+  n := model_channels(m)
+  cs.of = make([]int, n, allocator)
+  cs.twin = make([]int, n, allocator)
+  cs.flip = make([]f32, n, allocator)
+  sizes := CHANNEL_SIZE
+  for c, k in cs.table {
+    cs.by_name[c.name] = k
+    for i in c.first ..< c.first + sizes[c.kind] do cs.of[i] = k
+  }
+  for i in 0 ..< n do cs.twin[i], cs.flip[i] = channel_twin(m, i)
+  return
+}
+
+// channels_find is the channel named `name`; ok is false for none.
+channels_find :: proc(cs: ^Channels, name: string) -> (c: Channel, ok: bool) {
+  k, found := cs.by_name[name]
+  if !found do return {first = -1}, false
+  return cs.table[k], true
+}
+
+// channels_value is the channel holding value `i` of a pose, and which of its values it is.
+channels_value :: proc(cs: ^Channels, i: int) -> (c: Channel, axis: int, ok: bool) {
+  if i < 0 || i >= len(cs.of) do return {first = -1}, 0, false
+  c = cs.table[cs.of[i]]
+  return c, i - c.first, true
 }
 
 // model_channel is the channel named `name`; ok is false for none.

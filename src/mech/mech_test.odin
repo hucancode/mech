@@ -1,6 +1,7 @@
 #+build !js
 package mech
 
+import "core:encoding/json"
 import "core:fmt"
 import "core:log"
 import "core:math"
@@ -739,7 +740,8 @@ test_twins :: proc(t: ^testing.T) {
   defer delete(by)
   by["l_leg"] = [3]f32{0.1, 0.2, 0.3}
   by["root"] = [3]f32{0, -0.1, 0}
-  move_resolve(m, .CLIP, Move{delay = 0.25, twin = .OPPOSITE, by = by}, &targets, &moves)
+  cs := channels_make(m)
+  move_resolve(&cs, Move{delay = 0.25, twin = .OPPOSITE, by = by}, &targets, &moves)
   testing.expect(t, len(moves) == 2 && moves[0].count == 6 && moves[1].count == 3 && moves[1].delay == 0.75)
   testing.expect(t, targets[moves[1].first].index == value_of(m, "r_leg") && targets[moves[1].first].value == -0.1)
 }
@@ -1005,16 +1007,18 @@ test_poses :: proc(t: ^testing.T) {
   clip_sample(&clips, 1, 0.5, values)
   for i in ([]int{rk, lk}) do testing.expectf(t, near(moved(&clips, values, i), -0.2), "times its number, on both sides with WITH: %v", moved(&clips, values, i))
   for i in ([]int{ry, ly}) do testing.expectf(t, near(moved(&clips, values, i), 0.1), "an IK target too: %v", moved(&clips, values, i))
-  // in a pose, a pose and an arc are skipped; its amounts are times the move's number; a name
-  // that is both a channel and a pose (`root`) is neither, and character_check says so
+  // in a pose, a pose and an arc are skipped; its amounts are times the move's number. Written in
+  // the first format (all in `by`), a move's pose and arc are read into its `poses` and `arcs`;
+  // poses and channels are named apart, so a pose `root` and the channel `root` both stand: the
+  // move's amount on root (0.3) and pose odd's on it (0.1, twice) add, and pose root is not added
   clip_sample(&clips, 2, 0.5, values)
   testing.expectf(t, near(moved(&clips, values, rk), 0), "no pose in a pose: %v", moved(&clips, values, rk))
   testing.expectf(t, near(moved(&clips, values, ly), 0), "no arc in a pose")
-  testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0), "root, a channel and a pose, is skipped: %v", moved(&clips, values, value_of(m, "root", 1)))
-  clashes := 0
-  for x in character_check(m, anim) do if x.severity == .ERROR && strings.contains(x.text, "root") do clashes += 1
-  testing.expectf(t, clashes > 0, "the clash of root is reported")
-  testing.expectf(t, near(moved(&clips, values, value_of(m, "pelvis.spin")), 0), "the channel wins over the pose")
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0.5), "root's amount and pose odd's: %v", moved(&clips, values, value_of(m, "root", 1)))
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "pelvis.spin")), 0), "pose root is not added")
+  odd := anim.clips[2].motions[0].moves[0]
+  testing.expectf(t, odd.poses["odd"] == 2 && "odd" not_in odd.by && "root" in odd.by, "the first format's pose is read into poses: %v %v", odd.by, odd.poses)
+  for x in character_check(m, anim) do testing.expectf(t, !(x.severity == .ERROR && strings.contains(x.text, "both a channel")), "no clash: %s", x.text)
   // poses round-trip
   out := animation_format(anim)
   defer delete(out)
@@ -1024,6 +1028,156 @@ test_poses :: proc(t: ^testing.T) {
   again := animation_format(back)
   defer delete(again)
   testing.expectf(t, out == again, "poses round-trip: %s", out)
+}
+
+// Channels are named from several things (IK targets, the root, places and their joints), so two
+// can come out with one name: an instance `root` with a joint `turn` beside the root's turn, an IK
+// target named `root`. character_check reports the channel named twice; a model without that
+// clash has none.
+@(test)
+test_channel_names_unique :: proc(t: ^testing.T) {
+  CLASH :: `{"parts": [{"name": "p", "joints": [{"name": "turn", "min": [-1, 0, 0], "max": [1, 0, 0]}],
+      "shapes": [{"size": [1, 1, 1]}]}],
+    "assembly": [{"name": "base", "part": "p"}, {"name": "root", "part": "p", "parent": "base"}],
+    "iks": [{"name": "root", "tip": "root"}]}`
+  m, ok := model_parse(transmute([]u8)string(CLASH))
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  twice := map[string]bool{}
+  defer delete(twice)
+  for x in character_check(m, nil) do if x.severity == .ERROR && strings.has_prefix(x.text, "channel ") do twice[x.text] = true
+  testing.expectf(t, twice["channel root.turn is named twice"], "an instance root's joint turn clashes with the root's turn: %v", twice)
+  testing.expectf(t, twice["channel root is named twice"], "an IK target root clashes with the root: %v", twice)
+  // the shipped mech has no clash
+  text := read(t, "mech.json")
+  defer delete(text)
+  mech, a, mok := character_parse(text)
+  if !testing.expect(t, mok) do return
+  defer model_destroy(mech)
+  defer animation_destroy(a)
+  for x in character_check(mech, a) do testing.expectf(t, !strings.has_prefix(x.text, "channel "), "no channel clash in mech: %s", x.text)
+}
+
+// References: every place a name is written, what it names and where. A channel's name names its
+// instance and its joint (or its IK target), each over its own span, on either side of the body;
+// a move's key names a pose, its value an arc; a thing's own name is its definition. Renaming by
+// them is rewriting each span, so a rename on one side reaches the other.
+@(test)
+test_references :: proc(t: ^testing.T) {
+  text := read(t, "mech.json")
+  defer delete(text)
+  m, a, ok := character_parse(text)
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  defer animation_destroy(a)
+  refs := references(m, a, context.temp_allocator)
+  find :: proc(refs: []Ref, to: Path, ptr_has: string, def := false) -> (Ref, bool) {
+    for r in refs do if r.to == to && r.def == def && strings.contains(r.ptr, ptr_has) do return r, true
+    return {}, false
+  }
+  // the rest pose's l_forearm.elbow: the instance forearm at 2..9, the joint elbow at 10..15
+  inst, iok := find(refs, {kind = .INSTANCE, name = "forearm"}, "/model/pose/l_forearm.elbow")
+  testing.expectf(t, iok && inst.key && inst.span == {2, 9} && inst.at == Path{kind = .REST, item = "l_forearm.elbow"}, "the instance in a channel's name: %v", inst)
+  joint, jok := find(refs, {kind = .JOINT, name = "forearm", item = "elbow"}, "/model/pose/l_forearm.elbow")
+  testing.expectf(t, jok && joint.span == {10, 15}, "the joint in a channel's name: %v", joint)
+  // an IK target's channels: l_leg.weight names leg at 2..5
+  leg, lok := find(refs, {kind = .IK, name = "leg"}, "/model/pose/l_leg.weight")
+  testing.expectf(t, lok && leg.span == {2, 5}, "the IK target in its channel's name: %v", leg)
+  // walk's arc: the value of a move's l_leg names arc step, the key the IK target
+  arcs := 0
+  for r in refs do if r.to == (Path{kind = .ARC, name = "step"}) && !r.def {
+    arcs += 1
+    testing.expectf(t, !r.key && r.span == {0, 4} && r.at.kind == .MOVE && r.at.name == "walk" && r.at.item == "l_leg", "an arc named by a move's value: %v", r)
+  }
+  testing.expectf(t, arcs == 1, "step is followed once: %d", arcs)
+  // a pose added by name
+  fist := 0
+  for r in refs do if r.to == (Path{kind = .POSE, name = "fist"}) && !r.def do fist += 1
+  testing.expectf(t, fist > 0, "fist is added by some moves")
+  // definitions, and what names an instance: its children, its IK targets, its channels
+  _, dok := find(refs, {kind = .INSTANCE, name = "forearm"}, "/model/assembly/4/name", def = true)
+  testing.expect(t, dok, "an instance's own name")
+  _, pok := find(refs, {kind = .INSTANCE, name = "forearm"}, "/model/assembly/5/parent")
+  testing.expect(t, pok, "its child names it as its parent")
+  // a rename by the spans reaches both sides: every channel of forearm, either side, is named
+  for c in model_channel_table(m) do if strings.contains(c.name, "forearm.") {
+    side := c.name[:2]
+    testing.expectf(t, side == "l_" || side == "r_", "forearm is placed on both sides: %s", c.name)
+  }
+}
+
+// An arc's points can say where along it each is (Arc.at): a shape's value reaches point k at its
+// knot, however unevenly they are placed, so adding a point between two leaves every other where it
+// was along the arc (and the moves on it as timed); without them, the points are spread evenly.
+// Knots that don't rise, or don't fit the points, are errors.
+@(test)
+test_arc_knots :: proc(t: ^testing.T) {
+  near :: proc(a, b: [3]f32) -> bool {return linalg.length(a - b) < 1e-5}
+  pts := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}}
+  // evenly, with no knots: point 1 halfway
+  testing.expect(t, near(arc_at(pts, nil, 0.5), pts[1]), "evenly spread without knots")
+  // unevenly: point 1 at 0.2
+  knots := []f32{0, 0.2, 1}
+  for p, k in pts do testing.expectf(t, near(arc_at(pts, nil, knots[k], false, knots), p), "point %d at its knot %v: %v", k, knots[k], arc_at(pts, nil, knots[k], false, knots))
+  // a point added between 1 and 2, at 0.6: the others stay where they were along it
+  more := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1.2, 0.5, 0}, {1, 1, 0}}
+  more_knots := []f32{0, 0.2, 0.6, 1}
+  for k in ([]int{0, 1, 3}) do testing.expectf(t, near(arc_at(more, nil, more_knots[k], false, more_knots), more[k]), "point %d where it was", k)
+  testing.expect(t, near(arc_at(more, nil, 0.6, false, more_knots), more[2]), "the new point at its own knot")
+  // closed: the last segment back to the first, at its knot plus one
+  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
+  loop_knots := []f32{0, 0.1, 0.5, 0.6}
+  for p, k in loop do testing.expectf(t, near(arc_at(loop, nil, loop_knots[k], true, loop_knots), p), "closed: point %d at its knot", k)
+  testing.expect(t, near(arc_at(loop, nil, 1, true, loop_knots), loop[0]), "closed: back to the first a pass on")
+  // the rules
+  BAD :: `{"arcs": [{"name": "down", "points": [[0, 0, 0], [1, 0, 0], [2, 0, 0]], "at": [0, 0.7, 0.5]},
+    {"name": "short", "points": [[0, 0, 0], [1, 0, 0]], "at": [0]},
+    {"name": "round", "points": [[0, 0, 0], [1, 0, 0], [1, 1, 0]], "at": [0, 0.5, 1], "closed": true}]}`
+  m, mok := model_parse(transmute([]u8)string(`{}`))
+  if !testing.expect(t, mok) do return
+  defer model_destroy(m)
+  a, aok := animation_parse(transmute([]u8)string(BAD))
+  if !testing.expect(t, aok) do return
+  defer animation_destroy(a)
+  bad := map[string]bool{}
+  defer delete(bad)
+  for x in character_check(m, a) do if x.at.kind == .ARC do bad[x.at.name] = true
+  testing.expectf(t, bad["down"] && bad["short"] && bad["round"], "knots falling, too few, a closed arc with no way back: %v", bad)
+}
+
+// Issues say where they are: the thing to go to, to fix them.
+@(test)
+test_issue_paths :: proc(t: ^testing.T) {
+  BAD :: `{"parts": [{"name": "p", "slots": [{"name": "s"}], "joints": [{"name": "j", "min": [1, 0, 0], "max": [-1, 0, 0]}],
+      "shapes": [{"size": [1, 1, 1], "material": "nope"}]}],
+    "assembly": [{"name": "a", "part": "p"}, {"name": "b", "part": "p", "parent": "a", "parent_slot": "gone"}]}`
+  m, ok := model_parse(transmute([]u8)string(BAD))
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  at := map[PathKind]Path{}
+  defer delete(at)
+  for x in character_check(m, nil) do at[x.at.kind] = x.at
+  testing.expectf(t, at[.INSTANCE] == Path{kind = .INSTANCE, name = "b"}, "an unknown slot: at the instance hanging from it: %v", at)
+  testing.expectf(t, at[.JOINT] == Path{kind = .JOINT, name = "p", item = "j"}, "stops the wrong way round: at the joint: %v", at)
+  testing.expectf(t, at[.SHAPE] == Path{kind = .SHAPE, name = "p", index = 0}, "an unknown material: at the shape: %v", at)
+}
+
+// The schema an editor reads instead of keeping its own copy: valid JSON, every enum's names in
+// order, the side prefixes (NONE's empty one too), the channel names and the budgets.
+@(test)
+test_schema :: proc(t: ^testing.T) {
+  text := schema_format()
+  defer delete(text)
+  s: Schema
+  err := json.unmarshal(transmute([]u8)text, &s, allocator = context.temp_allocator)
+  if !testing.expectf(t, err == nil, "the schema parses: %v\n%s", err, text) do return
+  kinds := s.enums["JointKind"]
+  testing.expectf(t, len(kinds) == len(JointKind) && kinds[0] == "PIN" && kinds[3] == "BALL", "JointKind in order: %v", kinds)
+  testing.expectf(t, len(s.enums["Primitive"]) == len(Primitive) && s.enums["Ease"][4] == "STEP", "Primitive and Ease: %v", s.enums)
+  _, none := s.sides["NONE"]
+  testing.expectf(t, none && s.sides["NONE"] == "" && s.sides["L"] == "l_" && s.sides["R"] == "r_", "sides: %v", s.sides)
+  testing.expectf(t, s.channels["swivel"] == ".swivel" && s.channels["root_turn"] == "root.turn", "channels: %v", s.channels)
+  testing.expectf(t, s.sizes["BALL"] == 3 && s.budgets["shape"] == SHAPE_BUDGET, "sizes and budgets: %v %v", s.sizes, s.budgets)
 }
 
 // A move's spread runs its channels one after another in the model's order (down a chain): the

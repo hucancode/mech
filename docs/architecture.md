@@ -66,6 +66,9 @@ to know something the engine computes.
 | `{"q":"bounds","clip":..,"time":..}` | the box around the posed character |
 | `{"q":"camera"}` | the main camera's rotation and the view it is in (the view gizmo) |
 | `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips |
+| `{"q":"check","character":"<text>"}` | what `mech.character_check` finds wrong with a character's data (not what is shown): `[{severity, text, at}]`, `at` a `mech.Path`, where to go to fix it |
+| `{"q":"refs","character":"<text>"}` | every place a name is written (`mech.references`): `[{ptr, key, def, span, to, at}]`: a JSON pointer into the file's data, whether the name is a map key there, the thing's own name or not, where the name sits in what is written (a channel's name holds its instance's and its joint's), the `mech.Path` it names and the one it is written in. The editor renames, deletes and says what uses what by them, one way for every kind of thing |
+| `{"q":"schema"}` | the names the formats use, from the engine's types (`mech.schema_format`): each enum's names, the side prefixes, the root's and IK targets' channel names, values per channel kind, the budgets; the page reads it rather than keep a copy |
 
 From the browser console: `editor.viewer.query({q: "trajectory", clip: "walk", part: "l_foot", n: 8})`.
 
@@ -73,12 +76,21 @@ From the browser console: `editor.viewer.query({q: "trajectory", clip: "walk", p
 
 - New engine behaviour goes in `src/mech` or `src/character`. The game and the editor get it
   together.
+- Things are addressed one way everywhere: a `mech.Path` (`src/mech/paths.odin`; a kind, and the
+  names and indices that pick the thing out: a part's joint, a clip's motion's move). Issues say
+  where they are by one, references say what they name and where they are written, and the editor
+  goes to things by them (`editor.goto`).
 - What is wrong with a character is said in one place, `mech.character_check`
   (`src/mech/check.odin`): ERRORs (data the engine can't use) and BUDGET issues (a clip fighting
   the machine). The rest of the engine skips what it can't use quietly. `asset_compile` logs the
   issues, so the editor shows them under ⚠; `test_assets_check` keeps the shipped characters free
   of ERRORs.
 - The browser side holds data and UI only: `web/js/model.js` has tree and name helpers, nothing
-  the engine computes. The curve editor draws what the `motion` query samples.
+  the engine computes, and no copy of the engine's names (enums, side prefixes): it reads them
+  from the `schema` query. The curve editor draws what the `motion` query samples.
 - JS dependencies: none. The page is plain ES modules with JSDoc types, and the server uses Node's
   built-ins.
+- The page's UI core is its own (`web/js/ui/`):
+  - `vdom.js`: panels describe what they show with `h()`; `render()` makes a container show it, reusing the elements already there (by `key`, else by position). Panels just draw again from the data whenever anything changes: a field being typed in keeps its text and focus, a list its scroll. Widgets that hold state between draws (a number being scrubbed, a slider, a section's fold) are components with `useState`/`useRef`. What is made once and kept (the curve editor's canvas, a dialog) is a real element from `el()`.
+  - `signal.js`: `signal`, `computed`, `effect`, `batch`. The editor's `rev` (data, selection, status) redraws the panels once a frame; `clock` (the playhead) the player and the curves; `sent` (data given to the viewer) refreshes the engine's lists it caches (`channels`, `places`, `twins`), asked once per version rather than per row.
+- `make test` runs the editor's tests too (`node --test tools/character-editor/web/js/test`): the UI core, and a smoke test drawing every tab of the shipped mech over a small fake DOM (`test/fakedom.js`), no browser needed.

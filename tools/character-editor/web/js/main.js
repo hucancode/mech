@@ -6,7 +6,9 @@
 //   Esc back to the character's settings (assemble tab), out of an arc's edit mode (animate)    I show/hide the inspector
 //   W E R T move, rotate, scale a shape, place slots (model tab; see gizmo.js)    click the view to pick
 //   space play/pause   Delete remove the arc point picked in the view, else the shape's point (animate tab)   F frame
-import { btn, h, segmented, ui } from "./dom.js";
+import { btn, h, segmented } from "./dom.js";
+import { render as draw } from "./ui/vdom.js";
+import { effect, frame } from "./ui/signal.js";
 import { icon } from "./icons.js";
 import { inspectorButton, refit, toggleInspector } from "./layout.js";
 import { editor } from "./editor.js";
@@ -32,85 +34,122 @@ const TABS = /** @type {const} */ ([
   ["animation", "Animate"],
 ]);
 
-let pending = false;
-// render rebuilds the panels; while a field is in use it waits until the field is let go
+/** redraw draws the panels again (on the next frame): for what changes no data (a tool, a layout toggle) */
+const redraw = () => editor.emit("select");
+
+// render draws every panel from the data; the renderer keeps what is shown where it can (a field
+// being typed in, a list's scroll), so it can run whenever anything changed
 function render() {
-  if (ui.busy > 0) {
-    pending = true;
-    return;
-  }
-  pending = false;
-  renderHeader();
-  viewportTools();
+  status.textContent = editor.status;
+  draw(headerView(), header);
+  draw(viewportTools(), $("viewport-tools"));
   renderPlayer();
-  const keep = [sidebar.scrollTop, inspector.scrollTop];
-  const lists = listScrolls();
   if (editor.tab === "model") {
-    sidebar.replaceChildren(...[modelSidebar()].flat());
-    inspector.replaceChildren(...[modelInspector()].flat().filter(Boolean));
+    draw(modelSidebar(), sidebar);
+    draw(modelInspector(), inspector);
   } else if (editor.tab === "assemble") {
-    sidebar.replaceChildren(...[assembleSidebar()].flat());
-    inspector.replaceChildren(...[assembleInspector()].flat().filter(Boolean));
+    draw(assembleSidebar(), sidebar);
+    draw(assembleInspector(), inspector);
   } else {
-    sidebar.replaceChildren(...[animSidebar()].flat());
-    inspector.replaceChildren(...[animInspector()].flat().filter(Boolean));
+    draw(animSidebar(), sidebar);
+    draw(animInspector(), inspector);
   }
-  [sidebar.scrollTop, inspector.scrollTop] = keep;
   renderDock();
-  for (const [key, top] of lists) {
-    const el = document.querySelector(`#${key.panel} section[data-section="${CSS.escape(key.section)}"] .list`);
-    if (el) el.scrollTop = top;
-  }
-}
-ui.onIdle = () => pending && render();
-
-// listScrolls is where each list in the panels is scrolled to (the part tree, shapes, clips...),
-// by panel and section, to put back after a rebuild.
-function listScrolls() {
-  /** @type {[{panel: string, section: string}, number][]} */
-  const out = [];
-  for (const el of document.querySelectorAll("#sidebar section[data-section] .list, #inspector section[data-section] .list, #dock section[data-section] .list")) {
-    const section = /** @type {HTMLElement} */ (el.closest("section[data-section]")).dataset.section ?? "";
-    const panel = /** @type {HTMLElement} */ (el.closest("#sidebar, #inspector, #dock")).id;
-    if (el.scrollTop > 0) out.push([{ panel, section }, el.scrollTop]);
-  }
-  return out;
 }
 
-let dockTab = "";
 function renderDock() {
   if (document.body.dataset.tab !== editor.tab) {
     document.body.dataset.tab = editor.tab;
     refit();
   }
-  if (editor.tab === "model") {
-    // the part's shapes, slots and joints: rebuilt with the panels
-    dock.replaceChildren(...modelDock());
-    dockTab = "model";
-  } else if (editor.tab === "animation") {
-    // the clip's motions as curves
-    if (dockTab !== "animation") dock.replaceChildren(...curves.el);
-    dockTab = "animation";
+  if (editor.tab === "model") draw(modelDock(), dock); // the part's shapes, slots and joints
+  else if (editor.tab === "animation") {
+    // the clip's motions as curves: the curve editor's own canvas and bar
+    draw(curves.el, dock);
     curves.refresh();
-  } else {
-    // the pose test (assemble tab) keeps its sliders' state: rebuild it only when the model changes
-    const stamp = `pose:${JSON.stringify([editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
-    if (dockTab !== stamp) dock.replaceChildren(...poseTest());
-    dockTab = stamp;
-  }
+  } else draw(poseTest(), dock);
 }
 
-function renderHeader() {
+/** whether the issues list is open (the header's issues button) */
+let issuesOpen = false;
+
+/**
+ * issuesButton: how many things are wrong with the character (mech.character_check, ERROR and
+ * BUDGET), and what the engine logged; open, the list, each issue going to where it is.
+ */
+function issuesButton() {
+  const issues = editor.issues();
+  const errors = issues.filter((x) => x.severity === "ERROR");
+  const budget = issues.filter((x) => x.severity === "BUDGET");
+  const logged = editor.messages;
+  if (!issues.length && !logged.length) return null;
+  const count = (/** @type {string} */ cls, /** @type {number} */ n) => n > 0 && h("span", { class: cls }, n);
+  const group = (/** @type {string} */ title, /** @type {typeof issues} */ list, /** @type {string} */ cls) =>
+    list.length > 0 && [
+      h("div", { class: "issues-group" }, title),
+      list.map((x) =>
+        h(
+          "button",
+          { class: `item ${cls}`, title: "Go there", onclick: () => ((issuesOpen = false), editor.goto(x.at)) },
+          h("span", { class: "name" }, x.text),
+        ),
+      ),
+    ];
+  return h(
+    "span",
+    { class: "issues-anchor" },
+    h(
+      "button",
+      {
+        class: `btn issues-button ${issuesOpen ? "on" : ""}`,
+        title: `${errors.length} errors, ${budget.length} budget issues${logged.length ? `, ${logged.length} logged` : ""}: click to list them`,
+        onclick: () => ((issuesOpen = !issuesOpen), redraw()),
+      },
+      icon("warning"),
+      count("error", errors.length),
+      count("warn", budget.length),
+      logged.length > 0 && h("span", { class: "muted" }, logged.length),
+    ),
+    issuesOpen &&
+      h(
+        "div",
+        { class: "issues" },
+        group("Errors: the engine skips these", errors, "error"),
+        group("Budget: fighting the machine", budget, "warn"),
+        logged.length > 0 && [
+          h("div", { class: "issues-group" }, "Logged", h("span", { class: "grow" }), btn("clear", () => ((editor.messages = []), redraw()), { kind: "icon", title: "Clear the log" })),
+          logged.map((x) => h("div", { class: "item muted" }, h("span", { class: "name" }, x))),
+        ],
+      ),
+  );
+}
+
+function headerView() {
   const group = (/** @type {string} */ label, /** @type {boolean} */ local) => {
     const list = editor.characters.filter((c) => c.local === local);
     return list.length > 0 && h("optgroup", { label }, list.map((c) => h("option", { value: c.name }, c.name)));
   };
-  const picker = /** @type {HTMLSelectElement} */ (h("select", { style: { flex: "0 0 auto" }, title: "Open a character" }, group("Saved in this browser", true), group("assets/characters/", false)));
-  picker.value = editor.current;
-  picker.addEventListener("change", () => editor.open(picker.value).then(() => (picker.value = editor.current)));
   const dirty = [editor.modelDirty && "model", editor.animDirty && "animation"].filter(Boolean).join(" and ");
-  header.replaceChildren(
-    h("div", { class: "side" }, h("span", { class: "brand", title: "Character editor" }, icon("logo", 20)), picker),
+  return [
+    h(
+      "div",
+      { class: "side" },
+      h("span", { class: "brand", title: "Character editor" }, icon("logo", 20)),
+      h(
+        "select",
+        {
+          style: { flex: "0 0 auto" },
+          title: "Open a character",
+          value: editor.current,
+          onchange: (/** @type {Event} */ e) => {
+            const picker = /** @type {HTMLSelectElement} */ (e.currentTarget);
+            editor.open(picker.value).then(() => ((picker.value = editor.current), redraw()));
+          },
+        },
+        group("Saved in this browser", true),
+        group("assets/characters/", false),
+      ),
+    ),
     h(
       "div",
       { class: "tabs" },
@@ -120,7 +159,7 @@ function renderHeader() {
       "div",
       { class: "side end" },
       editor.toast && h("span", { class: "muted" }, editor.toast),
-      editor.messages.length > 0 && h("span", { class: "messages badge", title: editor.messages.join("\n") }, icon("warning"), editor.messages.length),
+      issuesButton(),
       btn(icon("new"), () => editor.newCharacter(), { kind: "icon", title: "New character" }),
       btn(icon("import"), () => editor.importFile(), { kind: "icon", title: "Import a character file (.json)" }),
       btn(icon("export"), () => editor.exportFile(), { kind: "icon", title: "Export as <name>.json, for assets/characters/" }),
@@ -130,20 +169,8 @@ function renderHeader() {
       dirty && h("span", { class: "dirty", title: `Unsaved ${dirty}` }, icon("dot", 12)),
       btn(icon("save"), () => editor.save(), { kind: "primary", title: dirty ? `Save the ${dirty} in this browser (Cmd-S)` : "Saved in this browser", disabled: !editor.dirty }),
     ),
-  );
+  ];
 }
-
-editor.on((what) => {
-  if (what === "time") {
-    tickPlayer();
-    return curves.tick();
-  }
-  if (what === "status") {
-    status.textContent = editor.status;
-    return renderHeader();
-  }
-  render();
-});
 
 /** @type {Record<string, import("./gizmo.js").Mode>} */
 const GIZMO_KEYS = { w: "move", e: "rotate", r: "scale", t: "slot", j: "joint" };
@@ -184,10 +211,10 @@ window.addEventListener("keydown", (e) => {
     });
   } else if (!cmd && key === "i") {
     toggleInspector();
-    viewportTools();
+    redraw();
   } else if (!cmd && editor.tab === "model" && GIZMO_KEYS[key]) {
     setMode(GIZMO_KEYS[key]);
-    viewportTools();
+    redraw();
   } else if (!cmd && key === "f") {
     editor.viewer?.frame();
   } else if (editor.tab === "model" && cmd && key === "a") {
@@ -212,21 +239,30 @@ window.addEventListener("beforeunload", (e) => {
   if (editor.dirty) e.preventDefault();
 });
 
-status.textContent = editor.status;
 // explodeSlider pushes the part's shapes apart (the model tab); it talks to the viewer directly so a drag
 // doesn't redraw the panels
 function explodeSlider() {
-  const range = /** @type {HTMLInputElement} */ (h("input", { type: "range", min: 0, max: 1, step: 0.01, value: editor.explode }));
-  range.addEventListener("input", () => {
-    editor.explode = parseFloat(range.value);
-    editor.viewer?.explode(editor.explode);
-  });
-  range.addEventListener("dblclick", () => {
-    editor.explode = 0;
-    range.value = "0";
-    editor.viewer?.explode(0);
-  });
-  return h("label", { class: "explode", title: "Explode the part's shapes apart (double-click to put them back)" }, icon("explode"), range);
+  return h(
+    "label",
+    { class: "explode", title: "Explode the part's shapes apart (double-click to put them back)" },
+    icon("explode"),
+    h("input", {
+      type: "range",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      value: editor.explode,
+      oninput: (/** @type {Event} */ e) => {
+        editor.explode = parseFloat(/** @type {HTMLInputElement} */ (e.currentTarget).value);
+        editor.viewer?.explode(editor.explode);
+      },
+      ondblclick: (/** @type {Event} */ e) => {
+        editor.explode = 0;
+        /** @type {HTMLInputElement} */ (e.currentTarget).value = "0";
+        editor.viewer?.explode(0);
+      },
+    }),
+  );
 }
 
 /** @type {["hidden" | "point" | "label", string, string][]} how IK targets and poles show in the view */
@@ -237,17 +273,15 @@ const IK_SHOW = [
 ];
 
 function viewportTools() {
-  // replaceChildren would print a bare `false` as text, so the tab-dependent tools are filtered
-  $("viewport-tools").replaceChildren(
-    ...[
-    h("div", { style: { display: "contents" } }, editor.tab === "model" && [
+  return [
+    editor.tab === "model" && [
       segmented({
         value: gizmo.mode,
         options: GIZMO_TOOLS.map(([mode, ic, title]) => ({ value: mode, label: icon(ic), title })),
-        onchange: (mode) => (setMode(mode), viewportTools()),
+        onchange: (mode) => (setMode(mode), redraw()),
       }),
       explodeSlider(),
-    ]),
+    ],
     (editor.tab === "assemble" || editor.tab === "animation") &&
       segmented({
         value: editor.ikShow,
@@ -257,20 +291,29 @@ function viewportTools() {
           localStorage.setItem("ikShow", show);
           // a hidden target can't stay selected
           if (show === "hidden" && editor.handle !== "root") editor.handle = "";
-          viewportTools();
+          redraw();
         },
       }),
-    btn(icon("grid"), () => (editor.setGrid(!editor.grid), viewportTools()), {
+    btn(icon("grid"), () => (editor.setGrid(!editor.grid), redraw()), {
       on: editor.grid,
       title: `${editor.grid ? "Hide" : "Show"} the grid: flat through ${editor.tab === "model" ? "the part's origin" : "the model's origin, on the floor"}, its x (red), y (green) and z (blue) axes through it`,
     }),
     btn(icon("frame"), () => editor.viewer?.frame(), { title: editor.tab === "model" ? "Frame the part (F)" : "Frame the character (F)" }),
-    inspectorButton(viewportTools),
-    ].filter(Boolean),
-  );
+    inspectorButton(redraw),
+  ];
 }
-viewportTools();
-render();
+// the panels follow the data, the selection and the status, once a frame however often they change
+// (after everything above is defined: an effect runs once at once)
+effect(() => {
+  editor.rev.value;
+  render();
+}, frame);
+// the player and the curves follow the playhead
+effect(() => {
+  editor.clock.value;
+  tickPlayer();
+  curves.tick();
+});
 installGizmo();
 installViewGizmo();
 editor.start();

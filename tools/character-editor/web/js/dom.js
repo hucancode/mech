@@ -1,56 +1,15 @@
 // @ts-check
-// A tiny DOM toolkit: h() builds elements, and the widgets below are the editor's fields. Panels
-// rebuild their DOM when data changes; while a field is being dragged or typed in, the editor is
-// "busy" and rebuilds wait until it is done, so the field under the pointer never goes away.
+// The editor's widgets, over the UI core (ui/vdom.js): h() describes elements, and panels are
+// drawn again from the data whenever it changes, the renderer reusing what is shown. A field being
+// typed in keeps its text and its focus; a widget that holds state between draws (a number being
+// scrubbed, a slider, a section's fold) is a component.
 
 import { icon } from "./icons.js";
+import { el, h, useRef, useState } from "./ui/vdom.js";
 
-/** @typedef {Node | string | number | null | undefined | false} Child */
+export { el, h };
 
-/**
- * h builds an element. Props starting with "on" are listeners, `class` and `style` as expected,
- * other props are set as properties when the element has them, else as attributes.
- * @param {string} tag
- * @param {Record<string, any> | null} [props]
- * @param {...(Child | Child[])} children
- * @returns {HTMLElement}
- */
-export function h(tag, props, ...children) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(props ?? {})) {
-    if (v === undefined || v === null || v === false) continue;
-    if (k.startsWith("on") && typeof v === "function") el.addEventListener(k.slice(2).toLowerCase(), v);
-    else if (k === "class") el.className = v;
-    else if (k === "style") Object.assign(el.style, v);
-    else if (k in el && k !== "list") /** @type {any} */ (el)[k] = v;
-    else el.setAttribute(k, v === true ? "" : String(v));
-  }
-  for (const c of children.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : String(c));
-  return el;
-}
-
-// ---- busy: hold rebuilds while a field is in use ---------------------------------------------
-
-export const ui = {
-  busy: 0,
-  /** @type {(() => void) | null} */
-  onIdle: null,
-};
-
-export function hold() {
-  ui.busy++;
-}
-
-export function release() {
-  ui.busy = Math.max(0, ui.busy - 1);
-  if (ui.busy === 0) ui.onIdle?.();
-}
-
-/** holdWhileFocused keeps the editor busy while `el` has focus. @param {HTMLElement} el */
-function holdWhileFocused(el) {
-  el.addEventListener("focus", hold);
-  el.addEventListener("blur", release);
-}
+/** @typedef {import("./ui/vdom.js").Child} Child */
 
 // ---- widgets ---------------------------------------------------------------------------------
 
@@ -90,59 +49,79 @@ const rad = (v) => Math.round((v / DEG) * 1e5) / 1e5;
  */
 export function num(o) {
   if (o.deg) return num({ ...o, deg: false, value: (o.value ?? 0) * DEG, step: o.step ?? 5, digits: o.digits ?? 2, onchange: (v) => o.onchange(rad(v)) });
+  return h(Num, o);
+}
+
+/** the latest of a prop and of what this widget set since it last changed: a field stepped by its keys moves on from what it showed, not what the data held a frame ago @template T @param {T} prop */
+function useLatest(prop) {
+  const box = useRef({ prop, v: prop });
+  if (!Object.is(box.current.prop, prop)) box.current = { prop, v: prop };
+  return box.current;
+}
+
+/** @param {{value?: number, step?: number, min?: number, max?: number, label?: string, color?: string, digits?: number, onchange: (v: number) => void}} o */
+function Num(o) {
   const step = o.step ?? 0.01;
   const digits = o.digits ?? 3;
-  let value = o.value ?? 0;
+  const now = useLatest(o.value ?? 0);
+  const input = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const drag = useRef(/** @type {{x: number, v: number} | null} */ (null));
   const fmt = (/** @type {number} */ v) => (Number.isInteger(v) ? String(v) : v.toFixed(digits).replace(/0+$/, "").replace(/\.$/, ""));
   const fix = (/** @type {number} */ v) => {
     const d = Math.pow(10, digits);
     return Math.round(Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, v)) * d) / d;
   };
-  const input = /** @type {HTMLInputElement} */ (h("input", { type: "text", inputMode: "decimal", value: fmt(value) }));
   const set = (/** @type {number} */ v) => {
-    value = fix(v);
-    input.value = fmt(value);
-    o.onchange(value);
+    now.v = fix(v);
+    if (input.current) input.current.value = fmt(now.v);
+    o.onchange(now.v);
   };
-  holdWhileFocused(input);
-  input.addEventListener("change", () => {
-    const v = evaluate(input.value, value);
-    Number.isNaN(v) ? (input.value = fmt(value)) : set(v);
-  });
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") input.blur();
-    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      e.preventDefault();
-      set(value + (e.key === "ArrowUp" ? step : -step) * (e.shiftKey ? 10 : 1));
-    }
-  });
-  const box = h("div", { class: "num" });
-  if (o.label) {
-    const scrub = h("span", { class: "scrub", style: o.color ? { color: o.color } : undefined, title: "drag to change; shift for fine, alt for coarse" }, o.label);
-    /** @type {{x: number, v: number} | null} */
-    let drag = null;
-    scrub.addEventListener("pointerdown", (e) => {
-      drag = { x: e.clientX, v: value };
-      scrub.setPointerCapture(e.pointerId);
-      hold();
-      e.preventDefault();
-    });
-    scrub.addEventListener("pointermove", (e) => {
-      if (!drag) return;
-      const scale = e.shiftKey ? 0.1 : e.altKey ? 10 : 1;
-      set(drag.v + Math.round((e.clientX - drag.x) / 2) * step * scale);
-    });
-    const end = () => {
-      if (!drag) return;
-      drag = null;
-      release();
-    };
-    scrub.addEventListener("pointerup", end);
-    scrub.addEventListener("pointercancel", end);
-    box.append(scrub);
-  }
-  box.append(input);
-  return box;
+  const end = () => (drag.current = null);
+  return h(
+    "div",
+    { class: "num" },
+    o.label &&
+      h(
+        "span",
+        {
+          class: "scrub",
+          style: o.color ? { color: o.color } : undefined,
+          title: "drag to change; shift for fine, alt for coarse",
+          onpointerdown: (/** @type {PointerEvent} */ e) => {
+            drag.current = { x: e.clientX, v: now.v };
+            /** @type {Element} */ (e.currentTarget).setPointerCapture(e.pointerId);
+            e.preventDefault();
+          },
+          onpointermove: (/** @type {PointerEvent} */ e) => {
+            const d = drag.current;
+            if (!d) return;
+            const scale = e.shiftKey ? 0.1 : e.altKey ? 10 : 1;
+            set(d.v + Math.round((e.clientX - d.x) / 2) * step * scale);
+          },
+          onpointerup: end,
+          onpointercancel: end,
+        },
+        o.label,
+      ),
+    h("input", {
+      type: "text",
+      inputMode: "decimal",
+      value: fmt(now.v),
+      ref: (/** @type {HTMLInputElement} */ e) => (input.current = e),
+      onchange: (/** @type {Event} */ e) => {
+        const field = /** @type {HTMLInputElement} */ (e.currentTarget);
+        const v = evaluate(field.value, now.v);
+        Number.isNaN(v) ? (field.value = fmt(now.v)) : set(v);
+      },
+      onkeydown: (/** @type {KeyboardEvent} */ e) => {
+        if (e.key === "Enter") /** @type {HTMLInputElement} */ (e.currentTarget).blur();
+        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+          e.preventDefault();
+          set(now.v + (e.key === "ArrowUp" ? step : -step) * (e.shiftKey ? 10 : 1));
+        }
+      },
+    }),
+  );
 }
 
 /**
@@ -226,77 +205,85 @@ export function row(label, fields, hint) {
 
 /**
  * A dropdown. `options` are names, or [group, names] pairs for option groups; `none` adds an
- * empty choice with that label.
- * @param {{value?: string, options: (string | [string, string[]])[], none?: string, onchange: (v: string) => void}} o
+ * empty choice with that label; `cls` classes it.
+ * @param {{value?: string, options: (string | [string, string[]])[], none?: string, cls?: string, onchange: (v: string) => void}} o
  */
 export function select(o) {
   const names = o.options.flatMap((x) => (typeof x === "string" ? [x] : x[1]));
-  const el = /** @type {HTMLSelectElement} */ (
-    h(
-      "select",
-      { onchange: () => o.onchange(el.value) },
-      o.none !== undefined && h("option", { value: "" }, o.none),
-      o.value && !names.includes(o.value) && h("option", { value: o.value }, `${o.value} (missing)`),
-      o.options.map((x) => (typeof x === "string" ? h("option", { value: x }, x) : h("optgroup", { label: x[0] }, x[1].map((n) => h("option", { value: n }, n))))),
-    )
+  return h(
+    "select",
+    { class: o.cls, value: o.value ?? "", onchange: (/** @type {Event} */ e) => o.onchange(/** @type {HTMLSelectElement} */ (e.currentTarget).value) },
+    o.none !== undefined && h("option", { value: "" }, o.none),
+    o.value && !names.includes(o.value) && h("option", { value: o.value }, `${o.value} (missing)`),
+    o.options.map((x) => (typeof x === "string" ? h("option", { value: x }, x) : h("optgroup", { label: x[0] }, x[1].map((n) => h("option", { value: n }, n))))),
   );
-  el.value = o.value ?? "";
-  return el;
 }
 
 /** A text field that commits on Enter or blur; emptied, it reverts unless `empty` (it commits ""). @param {{value?: string, placeholder?: string, empty?: boolean, onchange: (v: string) => void}} o */
 export function text(o) {
-  const el = /** @type {HTMLInputElement} */ (h("input", { type: "text", value: o.value ?? "", placeholder: o.placeholder }));
-  holdWhileFocused(el);
-  el.addEventListener("change", () => {
-    const v = el.value.trim();
-    if ((v || o.empty) && v !== o.value) o.onchange(v);
-    else el.value = o.value ?? "";
+  return h("input", {
+    type: "text",
+    value: o.value ?? "",
+    placeholder: o.placeholder,
+    onchange: (/** @type {Event} */ e) => {
+      const field = /** @type {HTMLInputElement} */ (e.currentTarget);
+      const v = field.value.trim();
+      if ((v || o.empty) && v !== o.value) o.onchange(v);
+      else field.value = o.value ?? "";
+    },
+    onkeydown: (/** @type {KeyboardEvent} */ e) => e.key === "Enter" && /** @type {HTMLInputElement} */ (e.currentTarget).blur(),
   });
-  el.addEventListener("keydown", (e) => e.key === "Enter" && el.blur());
-  return el;
 }
 
 /** A range with a number beside it; `deg` as for num (min and max stay radians). @param {{value?: number, min: number, max: number, deg?: boolean, onchange: (v: number) => void}} o */
 export function slider(o) {
   if (o.deg) return slider({ value: (o.value ?? 0) * DEG, min: o.min * DEG, max: o.max * DEG, onchange: (v) => o.onchange(rad(v)) });
+  return h(Slider, o);
+}
+
+/** @param {{value?: number, min: number, max: number, onchange: (v: number) => void}} o */
+function Slider(o) {
   const step = (o.max - o.min) / 400;
-  const range = /** @type {HTMLInputElement} */ (h("input", { type: "range", min: o.min, max: o.max, step, value: o.value ?? 0 }));
-  const box = h("div", { class: "slider" }, range);
-  const field = num({ value: o.value ?? 0, step, digits: 3, onchange: (v) => ((range.value = String(v)), o.onchange(v)) });
-  range.addEventListener("pointerdown", hold);
-  range.addEventListener("pointerup", release);
-  range.addEventListener("input", () => {
-    const v = parseFloat(range.value);
-    /** @type {HTMLInputElement} */ (field.querySelector("input")).value = String(Math.round(v * 1000) / 1000);
+  // the range and the number show what was dragged to before the data comes back (a pose test
+  // slider changes the view only, not the data)
+  const now = useLatest(o.value ?? 0);
+  const [, drawn] = useState(0);
+  const set = (/** @type {number} */ v) => {
+    now.v = v;
+    drawn((n) => n + 1);
     o.onchange(v);
-  });
-  box.append(field);
-  return box;
+  };
+  return h(
+    "div",
+    { class: "slider" },
+    h("input", { type: "range", min: o.min, max: o.max, step, value: now.v, oninput: (/** @type {Event} */ e) => set(parseFloat(/** @type {HTMLInputElement} */ (e.currentTarget).value)) }),
+    num({ value: Math.round(now.v * 1000) / 1000, step, digits: 3, onchange: set }),
+  );
 }
 
 /** @param {{value?: boolean, label: string, onchange: (v: boolean) => void}} o */
 export function check(o) {
-  const input = /** @type {HTMLInputElement} */ (h("input", { type: "checkbox", checked: !!o.value }));
-  input.addEventListener("change", () => o.onchange(input.checked));
-  return h("label", { class: "check" }, input, o.label);
+  return h("label", { class: "check" }, h("input", { type: "checkbox", checked: !!o.value, onchange: (/** @type {Event} */ e) => o.onchange(/** @type {HTMLInputElement} */ (e.currentTarget).checked) }), o.label);
 }
 
 /** A colour [r, g, b] in 0..1. @param {{value?: number[], onchange: (v: number[]) => void}} o */
 export function color(o) {
   const hex = (/** @type {number[]} */ c) => "#" + c.map((x) => Math.round(Math.min(1, Math.max(0, x)) * 255).toString(16).padStart(2, "0")).join("");
-  const input = /** @type {HTMLInputElement} */ (h("input", { type: "color", value: hex(o.value ?? [0, 0, 0]) }));
-  const label = h("span", { class: "hex" }, input.value);
-  input.addEventListener("pointerdown", hold);
-  input.addEventListener("change", release);
-  input.addEventListener("input", () => {
-    label.textContent = input.value;
-    o.onchange([1, 3, 5].map((i) => Math.round((parseInt(input.value.slice(i, i + 2), 16) / 255) * 1000) / 1000));
-  });
-  return [input, label];
+  const value = hex(o.value ?? [0, 0, 0]);
+  return [
+    h("input", {
+      type: "color",
+      value,
+      oninput: (/** @type {Event} */ e) => {
+        const v = /** @type {HTMLInputElement} */ (e.currentTarget).value;
+        o.onchange([1, 3, 5].map((i) => Math.round((parseInt(v.slice(i, i + 2), 16) / 255) * 1000) / 1000));
+      },
+    }),
+    h("span", { class: "hex" }, value),
+  ];
 }
 
-/** @type {Map<string, boolean>} */
+/** whether each section is open, by its key (its title unless it says): kept across draws, not saved @type {Map<string, boolean>} */
 const opened = new Map();
 
 /** The fold caret's glyph: ▶ (U+25B6) with U+FE0E, which asks for the text glyph, not an emoji.
@@ -304,22 +291,30 @@ const opened = new Map();
 export const CARET = "\u25B6\uFE0E";
 
 /**
- * A collapsible section; it remembers whether it is open by title.
+ * A collapsible section; it remembers whether it is open by `key`, else by title (sections of the
+ * same title in different places should say a key of their own). Folded, its body is not drawn.
  * @param {string} title
  * @param {Child | Child[]} body
- * @param {{open?: boolean, actions?: Child[]}} [o]
+ * @param {{open?: boolean, actions?: Child[], key?: string}} [o]
  */
 export function section(title, body, o = {}) {
-  const open = opened.get(title) ?? o.open ?? true;
-  const bodyEl = h("div", { class: "body", style: open ? undefined : { display: "none" } }, body);
-  const caret = h("span", { class: `caret ${open ? "open" : ""}` }, CARET);
+  return h(Section, { title, body, open: o.open, actions: o.actions, id: o.key ?? title, key: o.key });
+}
+
+/** @param {{title: string, body: Child | Child[], open?: boolean, actions?: Child[], id: string}} o */
+function Section(o) {
+  const [, drawn] = useState(0);
+  const open = opened.get(o.id) ?? o.open ?? true;
   const toggle = () => {
-    const now = bodyEl.style.display === "none";
-    opened.set(title, now);
-    bodyEl.style.display = now ? "" : "none";
-    caret.classList.toggle("open", now);
+    opened.set(o.id, !open);
+    drawn((n) => n + 1);
   };
-  return h("section", { class: "section", "data-section": title }, h("header", null, h("button", { onclick: toggle }, caret, title), h("div", { class: "actions" }, o.actions ?? [])), bodyEl);
+  return h(
+    "section",
+    { class: "section", "data-section": o.title },
+    h("header", null, h("button", { onclick: toggle }, h("span", { class: `caret ${open ? "open" : ""}` }, CARET), o.title), h("div", { class: "actions" }, o.actions ?? [])),
+    open && h("div", { class: "body" }, o.body),
+  );
 }
 
 const FACE_AXES = /** @type {[string, number[]][]} */ ([
@@ -341,16 +336,16 @@ export function face(o) {
   const axisOf = (/** @type {number[] | undefined} */ v) => FACE_AXES.find(([, d]) => v && d.every((c, i) => Math.abs(c - v[i]) < 1e-6))?.[0] ?? "custom";
   /** @param {"normal" | "forward"} key */
   const dir = (key) => {
-    const sel = /** @type {HTMLSelectElement} */ (
-      h(
-        "select",
-        { style: { flex: "0 0 74px" } },
-        FACE_AXES.map(([n]) => h("option", { value: n }, n)),
-        h("option", { value: "custom", disabled: true }, "custom"),
-      )
+    const sel = h(
+      "select",
+      {
+        style: { flex: "0 0 74px" },
+        value: axisOf(f[key]),
+        onchange: (/** @type {Event} */ e) => o.onchange({ ...f, [key]: [...(FACE_AXES.find(([n]) => n === /** @type {HTMLSelectElement} */ (e.currentTarget).value)?.[1] ?? [0, 1, 0])] }),
+      },
+      FACE_AXES.map(([n]) => h("option", { value: n }, n)),
+      h("option", { value: "custom", disabled: true }, "custom"),
     );
-    sel.value = axisOf(f[key]);
-    sel.addEventListener("change", () => o.onchange({ ...f, [key]: [...(FACE_AXES.find(([n]) => n === sel.value)?.[1] ?? [0, 1, 0])] }));
     const custom = axisOf(f[key]) === "custom" ? vec3({ value: f[key], step: 0.05, onchange: (v) => o.onchange({ ...f, [key]: v }) }) : null;
     return row(key, [sel, custom], key === "normal" ? "out of the surface" : "along the surface");
   };

@@ -13,7 +13,7 @@ import { channelRange, zeroValue } from "../model.js";
 const ANGLES = ["HINGE", "BALL"];
 
 /**
- * @param {Record<string, any> | undefined} values by channel (a move's amounts: amountsOf)
+ * @param {Record<string, any> | undefined} values by channel (a move's, a pose's amounts: its `by`)
  * @param {{full?: boolean, onset: (values: Record<string, import("../model.js").Value>) => void, onremove?: (names: string[]) => void}} o
  */
 export function channelValues(values, o) {
@@ -47,17 +47,18 @@ export function channelValues(values, o) {
   if (!o.full) {
     const addable = all.filter((c) => !held(c));
     if (addable.length) {
-      const add = select({
-        value: "",
-        none: "+ channel",
-        options: addable.map((c) => c.name),
-        onchange: (name) => {
-          const c = channels.get(name);
-          if (c) o.onset({ [name]: zeroValue(c) });
-        },
-      });
-      add.classList.add("add-channel");
-      out.push(add);
+      out.push(
+        select({
+          value: "",
+          none: "+ channel",
+          cls: "add-channel",
+          options: addable.map((c) => c.name),
+          onchange: (name) => {
+            const c = channels.get(name);
+            if (c) o.onset({ [name]: zeroValue(c) });
+          },
+        }),
+      );
     }
   }
   return out;

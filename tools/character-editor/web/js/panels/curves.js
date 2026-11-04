@@ -12,11 +12,12 @@
 //   ruler: click or drag to scrub; the bar under it is the first move's first cycle: drag it to
 //          make every move run later or sooner, its right end to fit more or fewer whole cycles
 //          in the clip (its rate)
-import { btn, h, select } from "../dom.js";
+import { btn, el, h, select } from "../dom.js";
+import { render } from "../ui/vdom.js";
 import { dockSpanButtons } from "../layout.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { arcSpan, EASES } from "../model.js";
+import { arcKnots, enumNames } from "../model.js";
 import { shapeName, SHAPES } from "../shapes.js";
 
 const TOP = 26; // the titles and the ruler
@@ -30,9 +31,9 @@ const round = (/** @type {number} */ v) => Math.round(v * 1000) / 1000;
 
 export class Curves {
   constructor() {
-    this.canvas = /** @type {HTMLCanvasElement} */ (h("canvas", { class: "timeline", tabIndex: 0 }));
-    this.scroll = h("div", { class: "dock-scroll", style: { overflow: "hidden" } }, this.canvas);
-    this.bar = h("div", { class: "dock-bar" });
+    this.canvas = /** @type {HTMLCanvasElement} */ (el("canvas", { class: "timeline", tabIndex: 0 }));
+    this.scroll = el("div", { class: "dock-scroll", style: { overflow: "hidden" } }, this.canvas);
+    this.bar = el("div", { class: "dock-bar" });
     this.el = [this.bar, this.scroll];
     this.width = 800;
     this.height = 200;
@@ -85,7 +86,7 @@ export class Curves {
   refresh() {
     this.version++;
     if (this.point >= (this.mo?.shape?.length ?? 0)) this.point = -1;
-    this.bar.replaceChildren(...this.toolbar().flat().filter((c) => c !== false && c !== null && c !== undefined && c !== ""));
+    render(this.toolbar(), this.bar);
     this.draw();
   }
 
@@ -107,7 +108,7 @@ export class Curves {
       ...(mo ? SHAPES.map((s) => btn(s.name, () => this.set(() => ((mo.shape = s.points()), mo.shape.length || delete mo.shape, (this.point = -1))), { on: shapeName(mo) === s.name, title: `${s.title}: start the shape over from this` })) : []),
       p && h("span", { class: "sep" }),
       p && h("span", { class: "muted", title: "How the shape reaches this point from the one before" }, "ease in"),
-      p && select({ value: p.ease ?? "LINEAR", options: EASES, onchange: (v) => this.set(() => (v === "LINEAR" ? delete p.ease : (p.ease = v))) }),
+      p && select({ value: p.ease ?? "LINEAR", options: enumNames("Ease"), onchange: (v) => this.set(() => (v === "LINEAR" ? delete p.ease : (p.ease = v))) }),
       p && btn(icon("x"), () => this.deletePoint(), { kind: "icon", title: "Remove this point (Delete; or double-click it)" }),
       h("span", { class: "grow" }),
       dockSpanButtons(() => this.refresh()),
@@ -140,13 +141,14 @@ export class Curves {
     const at = new Map();
     const seen = new Set();
     for (const mv of this.mo?.moves ?? [])
-      for (const v of Object.values(mv.by ?? {})) {
+      for (const v of Object.values(mv.arcs ?? {})) {
         // a position on an arc: the arc, by name, once
-        const arc = typeof v === "string" && !seen.has(v) && editor.anim.arcs?.find((/** @type {any} */ x) => x.name === v);
+        const arc = !seen.has(v) && editor.anim.arcs?.find((/** @type {any} */ x) => x.name === v);
         if (!arc || arc.points.length < 2) continue;
         seen.add(v);
+        const knots = arcKnots(arc);
         arc.points.forEach((/** @type {any} */ _, /** @type {number} */ k) => {
-          const u = round(k / arcSpan(arc));
+          const u = round(knots[k]);
           at.set(u, [...(at.get(u) ?? []), `${v} ${k + 1}`]);
         });
       }

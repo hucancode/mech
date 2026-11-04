@@ -92,6 +92,21 @@ import "../mjolnir/render"
 //     joint's stops, a half turn each way for other turns, the posed model's reach for
 //     positions, 0 to 1 for a weight; equal ends: free), and for joints' and IK targets' `part`
 //     or `ik`, the instance or target}
+//   {"q": "check", "character": "<a character file's text>"}
+//     everything mech.character_check finds wrong with it: [{severity (ERROR, BUDGET), text, at
+//     (a mech.Path: where, to go there)}]; checks the text given, not what is shown
+//   {"q": "refs", "character": "<a character file's text>"}
+//     every place a name is written in it (mech.references): [{ptr (a JSON pointer into the
+//     file's data), key (the name is a map's key there), def (the thing's own name), span (where
+//     the name is in what is written: a channel's holds its instance's and its joint's), to (the
+//     mech.Path it names), at (the mech.Path it is written in)}], for renaming, deleting, and
+//     saying what uses what
+//   {"q": "schema"}
+//     the names the formats use, from the engine's own types, so the page keeps no copy of them:
+//     {enums: {Primitive, JointKind, Plane, Ease, Twin, ChannelKind, Axis: [names]}, sides (the
+//     prefixes of a placed side's names, NONE L R), channels: {swivel, weight (an IK target's
+//     channels after its name), root, root_turn}, sizes (values per ChannelKind), budgets: {shape,
+//     motions} (mech.SHAPE_BUDGET, MOTION_BUDGET)}; needs no model
 // Units: channel values as they are (radians for turns, model units for positions), world
 // positions in metres, rotations as quaternions [x, y, z, w]. Values go by channel, shaped as the
 // channel is: a number, or [x, y, z]. Unknown names answer {"error": ".."}.
@@ -111,6 +126,8 @@ Query :: struct {
   motion:   int,
   arc, on:  string,
   joint:    mech.Joint,
+  // a whole character file's text, for the queries that check one rather than what is shown
+  character: string,
 }
 
 query :: proc(text: []u8, allocator := context.allocator) -> string {
@@ -141,6 +158,21 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     if cam := render.main_camera(&app.renderer); cam != nil do r = cam.rotation
     fmt.sbprintf(&b, `{{"view":%d,"rotation":[%v,%v,%v,%v]}}`, i32(app.view), r.x, r.y, r.z, r.w)
     return strings.to_string(b)
+  }
+  if q.q == "schema" {
+    return mech.schema_format(allocator)
+  }
+  if q.q == "check" || q.q == "refs" {
+    m, a, ok := mech.character_parse(transmute([]u8)q.character, "the character checked")
+    if !ok do return fail(&b, "not a character")
+    defer mech.model_destroy(m)
+    defer mech.animation_destroy(a)
+    // paths, refs and issues as they are, enums by name
+    opt := json.Marshal_Options{use_enum_names = true}
+    data: []u8
+    if q.q == "check" do data, _ = json.marshal(mech.character_check(m, a), opt, allocator)
+    else do data, _ = json.marshal(mech.references(m, a, context.temp_allocator), opt, allocator)
+    return string(data)
   }
   if q.q == "info" {
     info(&b)
@@ -274,7 +306,7 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
         c, _, _ := mech.value_channel(m, a.channels[0])
         if !first do strings.write_byte(b, ',')
         first = false
-        write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], a.closed, a.flip)
+        write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], mo.knots[a.first:][:a.count], a.closed, a.flip)
       }
       strings.write_byte(b, ']')
       // a spread move's later links (Move.spread), each its own delay later
@@ -378,7 +410,9 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     if !ok || c.kind != .POSITION do return fail(&b, "no position %s", q.on)
     sharp := make([dynamic]bool, context.temp_allocator)
     mech.arc_sharp(app.asset.anim.arcs[k], &sharp)
-    write_arc(&b, rig, app.asset.clips.pose[:], c, q.arc, app.asset.anim.arcs[k].points[:], sharp[:], app.asset.anim.arcs[k].closed, 1)
+    knots := make([dynamic]f32, context.temp_allocator)
+    mech.arc_knots(app.asset.anim.arcs[k], &knots)
+    write_arc(&b, rig, app.asset.clips.pose[:], c, q.arc, app.asset.anim.arcs[k].points[:], sharp[:], knots[:], app.asset.anim.arcs[k].closed, 1)
   case "places":
     strings.write_byte(&b, '[')
     for p, i in mech.model_places(m) {
@@ -474,12 +508,12 @@ solve_at :: proc(clip: int, time: Maybe(f32), values: []f32) {
   mech.rig_solve(rig, values)
 }
 
-// write_arc writes arc `name`'s points `pts` (`sharp`: its corners; `closed`: back to the first) as they put position channel `c` (times `flip`: a
+// write_arc writes arc `name`'s points `pts` (`sharp`: its corners; `knots`: where along it each is; `closed`: back to the first) as they put position channel `c` (times `flip`: a
 // twin's, mirrored), for drawing and dragging: {name (the channel), arc, points, curve (the arc
 // through them, 64 points)}, in metres. They are offsets from where the channel is at rest (an
 // IK target's tip, or the origin, lifted), with the rest pose's amounts: where the rest pose has it.
 @(private = "file")
-write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Channel, name: string, pts: [][3]f32, sharp: []bool, closed: bool, flip: [3]f32) {
+write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Channel, name: string, pts: [][3]f32, sharp: []bool, knots: []f32, closed: bool, flip: [3]f32) {
   m := rig.model
   rest := [3]f32{0, rig.lift, 0}
   for ik in rig.iks do if ik.channel == c.first do rest = ik.rest
@@ -495,7 +529,7 @@ write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Chan
   N :: 64
   for i in 0 ..< N {
     if i > 0 do strings.write_byte(b, ',')
-    point(b, (rest + mech.arc_at(pts, sharp, f32(i) / (N - 1), closed) * flip) * s)
+    point(b, (rest + mech.arc_at(pts, sharp, f32(i) / (N - 1), closed, knots) * flip) * s)
   }
   strings.write_string(b, "]}")
 }
@@ -659,3 +693,4 @@ dofs :: proc(b: ^strings.Builder, j: mech.Joint) {
   }
   strings.write_string(b, "]}")
 }
+

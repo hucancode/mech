@@ -2,7 +2,7 @@
 // Layout choices, remembered across sessions: whether the dock (the curve editor, the pose test)
 // also spans under the left panel, the right panel or both, whether the inspector (the right
 // panel) is shown, and the panels' sizes, set by dragging their inner edges.
-import { btn, h } from "./dom.js";
+import { btn, el as element } from "./dom.js";
 import { icon } from "./icons.js";
 
 const KEY = "character-editor.layout";
@@ -45,7 +45,7 @@ function clampSize(panel, v) {
  * @param {Panel} panel
  */
 function grip(panel) {
-  const el = h("div", { class: "grip", "data-panel": panel, title: "Drag to resize; double-click to reset" });
+  const el = element("div", { class: "grip", "data-panel": panel, title: "Drag to resize; double-click to reset" });
   const vertical = panel === "dock";
   // dragging toward the stage grows the sidebar and shrinks the inspector and the dock
   const sign = panel === "sidebar" ? 1 : -1;

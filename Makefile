@@ -32,8 +32,10 @@ web: shader
 character-editor: web
 	node $(EDITOR)/server.mjs
 
+# The engine's tests, then the character editor's (Node, no packages).
 test:
 	odin test src/mech -out:bin/mech_test
+	node --test $(EDITOR)/web/js/test
 
 # Type-check everything without building.
 check:

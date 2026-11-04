@@ -66,9 +66,10 @@ export function shapeName(mo) {
   return SHAPES.find((s) => same(mo.shape ?? [], s.points()))?.name ?? (mo.shape?.length ? "Shape" : "Hold");
 }
 
-/** a motion's name in lists: its shape and what it moves @param {any} mo */
+/** a motion's name in lists: its own (Motion.name), else its shape and what it moves @param {any} mo */
 export function motionLabel(mo) {
-  const names = [...new Set((mo.moves ?? []).flatMap((/** @type {any} */ mv) => Object.keys(mv.by ?? {})))];
+  if (mo.name) return mo.name;
+  const names = [...new Set((mo.moves ?? []).flatMap((/** @type {any} */ mv) => [mv.by, mv.poses, mv.arcs].flatMap((x) => Object.keys(x ?? {}))))];
   const what = names.length ? names.slice(0, 2).join(", ") + (names.length > 2 ? ` +${names.length - 2}` : "") : "nothing yet";
   return `${shapeName(mo)}: ${what}`;
 }

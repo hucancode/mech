@@ -279,7 +279,8 @@ set_values :: proc(text: []u8) -> bool {
   resize(&app.values, mech.model_channels(m))
   copy(app.values[:], app.asset.clips.pose[:])
   targets := make([dynamic]mech.Target, context.temp_allocator)
-  mech.targets_resolve(m, .REST, values, &targets)
+  cs := mech.channels_make(m)
+  mech.targets_resolve(&cs, values, &targets)
   for t in targets do app.values[t.index] = t.value
   app.show = .VALUES
   apply_show()

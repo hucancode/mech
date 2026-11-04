@@ -20,7 +20,6 @@
 // Everything here is the page's: the engine only says where the part is ({"q": "parts"}) and
 // its joints ({"q": "joints"}), where
 // points show on the canvas ({"q": "project"}) and what is under the cursor ({"q": "pick"}).
-import { hold, release } from "./dom.js";
 import { ALONE_SCALE, editor } from "./editor.js";
 import { add, apply, cross, euler, eulerFrom, fromQuat, mul, rotation, scale, transpose } from "./math3.js";
 import { addSlot, faceCentre, FACE_NAMES, insertArcPoint, perpendicular, removeArcPoint, shapeFrame, shapeOnFace, snapSocket, socketFace, stackOn } from "./model.js";
@@ -81,12 +80,10 @@ function follow(e, move, done) {
   e.stopPropagation();
   const x0 = e.clientX;
   const y0 = e.clientY;
-  hold();
   const step = (/** @type {PointerEvent} */ m) => move([m.clientX - x0, m.clientY - y0], m);
   const up = () => {
     window.removeEventListener("pointermove", step);
     window.removeEventListener("pointerup", up);
-    release();
     done?.();
   };
   window.addEventListener("pointermove", step);
@@ -637,7 +634,7 @@ function editArc(a, s) {
     const rest = a.points[0].map((/** @type {number} */ x, /** @type {number} */ c) => x - points[0][c] * s);
     const at = a.curve[n].map((/** @type {number} */ x, /** @type {number} */ c) => r5(round((x - rest[c]) / s)));
     editor.edit("anim", () => {
-      if (insertArcPoint(editor.anim, arc, after, at)) editor.flash("Motions whose shape other moves follow too keep their shape: check their timing on the arc");
+      insertArcPoint(arc, after, at);
       editor.handle = arcHandle(a.arc, after + 1);
     });
   });
@@ -709,7 +706,7 @@ export function removePickedArcPoint() {
     return true;
   }
   editor.edit("anim", () => {
-    if (removeArcPoint(editor.anim, arc, p.i)) editor.handle = arcHandle(p.name, Math.max(p.i - 1, 0));
+    if (removeArcPoint(arc, p.i)) editor.handle = arcHandle(p.name, Math.max(p.i - 1, 0));
   });
   return true;
 }

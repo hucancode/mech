@@ -59,7 +59,16 @@ To put a character in the game, export it and copy the file into `assets/charact
 - What the engine finds wrong (`mech.character_check`: a motion naming a channel the model lacks,
   an instance matched with a slot its parent's part lacks, a value shaped otherwise than its
   channel, an arc the animation lacks, a joint without stops, and so on), and its BUDGET issues (a
-  clip fighting the machine), collect under ⚠ in the header.
+  clip fighting the machine), are counted on the ⚠ button in the header (errors red, budget
+  amber): click it for the list, and an issue to go where it is (the part's joint, the instance, the
+  clip's motion's move). It checks the whole character, whichever tab you are in, and is asked
+  again with every edit, so a fixed issue goes. What the engine logged besides (a file it could not
+  read) is listed under it, with a button to clear it.
+- Renaming anything carries through everything that names it, on both sides of the body: an
+  instance's or a joint's channels (`l_arm.elbow`, `r_arm.elbow`) in the rest pose, the poses and
+  every clip, an IK target's (`l_leg.weight`), a slot its instances hang from, a material its shapes
+  are painted in. Deleting a joint, an arc or a pose takes out what names it too (its channels, the
+  moves following it). The engine says where each name is written (query `refs`).
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
 The Model tab makes parts, their slots and their joints; the Assemble tab hangs parts on
@@ -217,10 +226,10 @@ point. Drag a dot to move its point across the view (its depth kept; shift: 0.01
 picks it too (click a picked one to let it go), and the picked one's arrows move it along the
 model's axes. Double-click its curve to add a point there; Delete removes the picked point (an
 arc keeps two). Each is one undo step, and every move naming the arc follows. A point added or
-removed keeps each move's timing along the arc: the shapes of the motions following it are
-carried to the new points (point k is at k / (n − 1)), so the strike still lands on its impact.
-A motion whose shape other moves follow too (amounts, poses, another arc) keeps its shape, and the
-editor says so. The position follows the curve as the motion's shape says, so draw the path where
+removed leaves every other point where it was along the arc (each point keeps its `at`, the new one
+halfway between its neighbours'), so every move on it keeps its timing and the strike still lands
+on its impact ([animation.md](animation.md#arcs)). Closing or opening an arc spreads its points
+evenly again, and the editor says so when moves follow it. The position follows the curve as the motion's shape says, so draw the path where
 the arm can reach. Esc stops editing.
 
 ## Animate
@@ -239,7 +248,7 @@ at a moment is a shape stepping into it there.
   drawn on when no move of the motion shown uses it), its **points** (the one picked in the view,
   else the last: typed in, **+** adds one after it, **−** removes it), **corner** (the picked
   point is sharp: the path turns hard there and runs straight to a corner next to it), **closed**
-  (on from its last point back to its first, a loop; the moves on it keep each point where it was),
+  (on from its last point back to its first, a loop; its points are spread evenly again),
   **used by** (each move
   naming it: click to go there) and **+ assign to the picked move** (puts a position of the
   picked move on it).
@@ -248,8 +257,9 @@ at a moment is a shape stepping into it there.
   moves add it. Click one to edit its **name** (renamed through the moves adding it) and its
   amounts (as a move's); the bin deletes it and the moves' values adding it. A pose is made from a
   move: **make pose** on an unfolded move.
-- **Motions** (the sidebar, under Clips): the clip's motions. Click picks one (the dock and the
-  inspector show it); shift- or cmd-click picks several, the last picked the one shown.
+- **Motions** (the sidebar, under Clips): the clip's motions, each by its name, else its shape and
+  what it moves. Click picks one (the dock and the inspector show it); shift- or cmd-click picks
+  several, the last picked the one shown.
   - **+** adds a motion holding a pose (no shape, one empty move): pose it with the view's
     handles, then give it a shape in the dock.
   - **Isolate** (the eye) plays only the picked motions (the viewer gets a copy of the animation
@@ -258,12 +268,13 @@ at a moment is a shape stepping into it there.
   - **Merge** appends the moves of the other picked motions to the last one picked (tagged
     "into"), in clip order, and removes them: they take its shape.
   - The trash removes the picked ones.
-- **The inspector** shows the clip's name and duration, then the motion shown: its **rate** (whole cycles
+- **The inspector** shows the clip's name and duration, then the motion shown: its **name** (yours, for the lists:
+  "walk legs", "arm swing"; the engine ignores it), its **rate** (whole cycles
   of its shape over the clip, so a loop never jumps) and its **moves**, each with its **delay**
   (cycles late) and **twin** (none; WITH: the other side of the body too, at the same time;
   OPPOSITE: half a cycle later, the other foot or arm). Click a move's head to pick it (the view's handles pose it), shift- or
   cmd-click to pick several. **Split** moves the picked moves into a new motion right after it,
-  with the same shape; ✕ removes them; + adds a move (unfolded). Moves are folded, showing their
+  with the same shape (not the name); ✕ removes them; + adds a move (unfolded). Moves are folded, showing their
   channels' names; the caret unfolds one to edit its amounts (+ channel adds one at rest), the
   **poses** it adds (each how much of it; **+ pose** adds one; **make pose** makes the move's
   amounts a new pose the move adds instead), and the positions it puts on **arcs**: each lists the arc it follows (switch it), ✎ edits it, ✕ takes
