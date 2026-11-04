@@ -46,11 +46,12 @@ App :: struct {
   isolate:    bool, // show only the selected part (its shapes and joint hardware), without the floor
   explode:    f32, // while isolating: 0 assembled, 1 the shapes pushed out by the part's size
   exploded:   bool, // pieces were moved out last frame
-  frame_next: bool, // frame the camera once the mech is built
+  frame_next: bool, // frame the camera once the mech is built and posed
   view:       View, // the side the camera looks from; turning returns it to FREE
   fov:        f32, // the main camera's perspective field of view, kept while a view is orthographic
   ortho:      f32, // an axis view's height over what the perspective view shows at the orbit's distance
   floor:      world.NodeHandle,
+  grid:       bool, // draw the grid through the origin (draw_grid)
   messages:   [dynamic]string, // warnings and errors since the last "state" query
   heap:       mem.Allocator, // what messages are cloned with
 }
@@ -99,7 +100,7 @@ viewer_init :: proc(title: string) -> bool {
   app = new(App)
   app.heap = context.allocator
   app.messages = make([dynamic]string, app.heap)
-  app.speed, app.loops, app.part, app.shape = 1, true, -1, -1
+  app.speed, app.loops, app.part, app.shape, app.grid = 1, true, -1, -1, true
   if !platform.init(&app.platform, 1280, 720, title) do return false
   if !render.init(&app.renderer, app.platform.window) do return false
   if !world.init(&app.scene) do return false
@@ -126,7 +127,7 @@ draw :: proc(app: ^App) -> bool {
 setup :: proc(app: ^App) -> mjolnir.Setup {
   r := &app.renderer
   if !render.ready(r) do return .WAIT
-  sun := render.light_create(r, render.make_directional_light())
+  sun := render.light_create(r, render.make_directional_light(cast_shadow = false))
   mjolnir.spawn(&app.scene, r, sun, rotation = linalg.quaternion_from_forward_and_up([3]f32{-0.4, -1, -0.3}, [3]f32{0, 1, 0}))
   app.floor = mjolnir.spawn(&app.scene, r, render.primitive(r, .QUAD_XZ, .GRAY, no_shadow = true), scale = 16)
   app.orbit = render.make_orbit({1.5, 1.6, 4}, {0, 0.9, 0})
@@ -152,10 +153,6 @@ update :: proc(app: ^App, dt: f32) {
   platform.read_input(&app.platform, &app.input)
   place_camera()
   if app.has_mech {
-    if app.frame_next {
-      frame_camera()
-      app.frame_next = false
-    }
     switch app.show {
     case .CLIP:
       if app.playing {
@@ -168,7 +165,13 @@ update :: proc(app: ^App, dt: f32) {
       character.character_update(&app.mech, 0)
     }
     isolate()
+    // framed once posed, so it frames what shows
+    if app.frame_next {
+      frame_camera()
+      app.frame_next = false
+    }
     outline()
+    draw_grid()
   }
   mjolnir.update(&app.scene, &app.renderer, dt)
 }
@@ -441,6 +444,31 @@ outline :: proc() {
     f := mech.rig_frame(rig, app.part)
     render.debug_axes(&app.renderer, f.position * s, f.rotation, 0.15, bypass_depth = true)
   }
+}
+
+// draw_grid draws a flat grid through the origin and its axes from it, x red, y green (up), z
+// blue: the isolated part's origin (in model units, as it shows), else the model's on the floor
+// (in metres). The model hides the grid where it is in front; the axes show over it.
+@(private = "file")
+draw_grid :: proc() {
+  if !app.grid do return
+  rig := character.mech_rig(&app.mech)
+  centre: [3]f32
+  extent, step: f32 = 4, 0.5
+  if isolating() && app.part < len(rig.frames) {
+    centre = mech.rig_frame(rig, app.part).position * app.asset.model.scale
+    extent, step = 1.5, 0.1
+  } else do centre.y = 0.002 // just over the floor
+  n := int(math.round(extent / step))
+  GREY :: [4]f32{0.42, 0.42, 0.45, 1}
+  for i in -n ..= n {
+    c := f32(i) * step
+    render.debug_segment(&app.renderer, centre + {c, 0, -extent}, centre + {c, 0, extent}, GREY)
+    render.debug_segment(&app.renderer, centre + {-extent, 0, c}, centre + {extent, 0, c}, GREY)
+  }
+  render.debug_segment(&app.renderer, centre, centre + {extent, 0, 0}, {0.9, 0.4, 0.36, 1}, bypass_depth = true)
+  render.debug_segment(&app.renderer, centre, centre + {0, extent / 2, 0}, {0.5, 0.76, 0.36, 1}, bypass_depth = true)
+  render.debug_segment(&app.renderer, centre, centre + {0, 0, extent}, {0.36, 0.6, 0.9, 1}, bypass_depth = true)
 }
 
 // pick is the nearest piece under the cursor (CSS pixels from the canvas corner), of those

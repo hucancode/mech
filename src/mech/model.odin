@@ -30,15 +30,14 @@ Primitive :: enum u8 {
 
 // Shape is one primitive in its part's frame: centred at `position`, turned by `rotation` (euler
 // radians, see euler), `size` its full extent on each axis (for round shapes x and z are the
-// diameter, y the height). A shape that `span`s two of its part's slots ("" is the origin) is a
-// link's body: it is placed in the span's frame instead, between the two, +y from the first to the
-// second, and its y extent is the distance between them plus size.y, so moving a slot lengthens
-// it (span_frame, shape_place). Unspanned, the span's frame is the part's and the distance 0.
+// diameter, y the height). A shape that `stretch`es is a link's body: it runs the part's length,
+// from its origin up to where it hangs, centred between the two, and its y extent is the length
+// plus size.y, so the part's length lengthens it (shape_place).
 Shape :: struct {
   primitive: Primitive,
   param:     f32,
   material:  string,
-  span:      [2]string,
+  stretch:   bool,
   position:  [3]f32,
   rotation:  [3]f32,
   size:      [3]f32,
@@ -97,18 +96,21 @@ Axis :: enum u8 {
 }
 
 // Slot is a named face on a part, in its frame, facing out of the part: where a child is matched.
-// Every part also has a default slot, unnamed: its origin (Part).
+// Every part also has a default slot, unnamed: its origin, facing -y (Part), the next link of a
+// chain's seat; named slots are for its branches.
 Slot :: struct {
   name:                      string,
   position, normal, forward: [3]f32,
 }
 
 // Part is a rigid piece: its shapes, the slots children are matched with, and `joints`, what it
-// moves by: a stack from its parent's slot to its origin, which faces +y toward them (PART_FACE).
-// As a parent's slot the origin faces -y (SLOT_FACE). Parts are the model's library; the assembly
-// places them, as often as it likes.
+// moves by: a stack from its parent's slot to where it hangs, `length` above its origin, facing +y
+// toward them (part_face). Its origin is its default slot, facing -y (SLOT_FACE): a link's far end,
+// where the next one of a chain is matched. With no length the part hangs by its origin. Parts are
+// the model's library; the assembly places them, as often as it likes.
 Part :: struct {
   name:   string,
+  length: f32,
   joints: [dynamic]Joint,
   slots:  [dynamic]Slot,
   shapes: [dynamic]Shape,
@@ -145,11 +147,11 @@ InstanceJoint :: struct {
 // the axes it has. The tip's own joints (an ankle, a wrist) turn it to face the way their channels
 // turned it in the model's space: a planted foot stays as the clip angles it, however the knee
 // bends. The chain bends toward a pole the rig works out (ik_pole). Its channels are named after it
-// (IK_CHANNELS): <name>_x, _y, _z, the target in the model's space (model units) as an offset from
-// where the tip is at rest (0: the foot where it stands); <name>_swivel, radians turning the way
+// (model_channel_table): <name>, a POSITION, the target in the model's space (model units) as an
+// offset from where the tip is at rest (0: the foot where it stands); <name>.swivel, radians turning the way
 // the chain bends about the line from its limb's root (the joint above its middle one: a hip, a
 // shoulder) to the target (0: the pole worked out; an elbow flared, a knee swung out); and
-// <name>_weight, 0 leaving the chain as its joints' channels put it, 1 reaching. An aiming one
+// <name>.weight, 0 leaving the chain as its joints' channels put it, 1 reaching. An aiming one
 // has no bend, so no swivel.
 // With `aim`, the chain (the tip's own joints too: a neck) turns the tip to face the target
 // instead of reaching it: a head looking, a gun aiming. The target is then an offset from a
@@ -450,37 +452,18 @@ euler :: proc(r: [3]f32) -> quaternion128 {
   return linalg.normalize(qx * qy * qz)
 }
 
-// part_point is where slot `name` of part `p` sits in its frame: "" is the origin. ok is false
-// for a slot the part lacks (the origin is used).
-part_point :: proc(p: Part, name: string) -> (at: [3]f32, ok: bool) {
-  if name == "" do return {}, true
-  for s in p.slots do if s.name == name do return s.position, true
-  return {}, false
+// part_face is where part `p` hangs, in its frame: `length` above its origin, +y toward its
+// joints, +x forward (PART_FACE raised by the length).
+part_face :: proc(p: Part) -> geometry.Face {
+  return {{0, p.length, 0}, {0, 1, 0}, {1, 0, 0}}
 }
 
-// span_frame is the frame a shape spanning slots `span` of part `p` sits in, in the part's frame:
-// centred between the two, +y from the first to the second, +x as near the part's +x as that
-// allows (its +z when the span runs along x); `length` is the distance between them. Two slots in
-// the same place (no span: both the origin) give the part's own frame and length 0.
-span_frame :: proc(p: Part, span: [2]string) -> (position: [3]f32, rotation: quaternion128, length: f32) {
-  a, _ := part_point(p, span[0])
-  b, _ := part_point(p, span[1])
-  position, length = (a + b) / 2, linalg.length(b - a)
-  if length < 1e-6 do return position, linalg.QUATERNIONF32_IDENTITY, 0
-  y := (b - a) / length
-  x := [3]f32{1, 0, 0} if abs(y.x) < 0.999 else [3]f32{0, 0, 1}
-  x = linalg.normalize(x - linalg.dot(x, y) * y)
-  z := linalg.cross(x, y)
-  rotation = linalg.normalize(linalg.quaternion_from_matrix3_f32(matrix[3, 3]f32{x.x, y.x, z.x, x.y, y.y, z.y, x.z, y.z, z.z}))
-  return
-}
-
-// shape_place is where shape `s` of part `p` sits in the part's frame: its span's frame
-// (span_frame), then its own position and rotation; `size` is its extent, the span's length added
-// to its y.
+// shape_place is where shape `s` of part `p` sits in the part's frame: its position and rotation,
+// a stretched one's from halfway up the part's length; `size` is its extent, a stretched one's
+// length added to its y.
 shape_place :: proc(p: Part, s: Shape) -> (position: [3]f32, rotation: quaternion128, size: [3]f32) {
-  at, turn, length := span_frame(p, s.span)
-  return at + linalg.quaternion_mul_vector3(turn, s.position), linalg.normalize(turn * euler(s.rotation)), s.size + {0, length, 0}
+  if !s.stretch do return s.position, euler(s.rotation), s.size
+  return s.position + {0, p.length / 2, 0}, euler(s.rotation), s.size + {0, p.length, 0}
 }
 
 // shape_faces are the centres of a shape's six faces with their outward normals, in its part's

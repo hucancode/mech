@@ -4,15 +4,15 @@
 // the changed data to the viewer (the game's own code, in wasm). Views listen with `on`.
 
 import { listCharacters, readFile } from "./api.js";
-import { fromQuat } from "./math3.js";
-import { addValue, clone, respan, setDofsSource, uniqueName, zipValue } from "./model.js";
+import { eulerFrom, fromQuat, mul, transpose } from "./math3.js";
+import { addValue, clone, setDofsSource, uniqueName, zipValue } from "./model.js";
 import { blankCharacter, exportFile, loadLocal, localNames, pickFile, saveLocal } from "./store.js";
 import { Viewer } from "./viewer.js";
 
 /** the scale of the model the model tab shows (editor.alone): model units, as the part is written */
 export const ALONE_SCALE = 1;
 
-/** @typedef {"model" | "assemble" | "rig" | "animation"} Tab */
+/** @typedef {"model" | "assemble" | "animation"} Tab */
 /** @typedef {"character" | "part" | "material" | "ik" | "arc"} Inspect */
 /** @typedef {"data" | "select" | "time" | "status"} Change */
 
@@ -43,11 +43,11 @@ class Editor {
     this.def = 0;
     this.shape = -1;
     this.slot = -1;
-    /** @type {string} what the view's handles move in the rig and animate tabs: "root", an IK target's name, an arc's point (gizmo.arcHandle), or "" */
+    /** @type {string} what the view's handles move in the assemble and animate tabs: "root", an IK target's name, an arc's point (gizmo.arcHandle), or "" */
     this.handle = "";
     /** @type {number[]} shapes selected with the selected one (shift-click) */
     this.also = [];
-    /** @type {{spanned: any, flat: any}[]} shapes copied (Cmd-C): as they were, and in their part's frame */
+    /** @type {any[]} shapes copied (Cmd-C) */
     this.clipShapes = [];
     this.joint = -1; // of the joints the part hangs by, the one selected (the joint tool)
     /** @type {Record<string, import("./model.js").Value>} the part's joints tried, never saved: by their channels (jointChannel) */
@@ -56,9 +56,10 @@ class Editor {
     setDofsSource((j) => this.viewer?.query({ q: "dofs", joint: j }) ?? null);
     this.explode = 0; // the part's shapes pushed apart, 0 to 1
     this.mirrored = false; // preview the part as a mirrored instance shows it (the right side)
-    /** @type {"hidden" | "point" | "label"} IK targets and poles in the view (rig and animate tabs), kept in this browser */
+    this.grid = localStorage.getItem("grid") !== "off"; // the grid in the view, through the origin
+    /** @type {"hidden" | "point" | "label"} IK targets and poles in the view (assemble and animate tabs), kept in this browser */
     this.ikShow = /** @type {any} */ (localStorage.getItem("ikShow")) || "point";
-    // assemble and rig tabs
+    // assemble tab
     /** @type {Inspect} */
     this.inspect = "character";
     this.part = -1; // an instance of the assembly
@@ -68,6 +69,8 @@ class Editor {
     this.arc = "";
     /** @type {string} the position the edited arc is shown on when the motion shown doesn't use it */
     this.arcOn = "";
+    /** @type {string} the pose picked in the Poses list (Animation.poses), "" for none */
+    this.pose = "";
     /** @type {Record<string, import("./model.js").Value>} the pose test: channel values tried on the rest pose */
     this.test = {};
 
@@ -99,6 +102,12 @@ class Editor {
     this.pendingAnim = false;
     this.sentModel = false; // the viewer holds a model
     this.sentAlone = false; // what it holds is one part alone (the model tab)
+    // how each instance stands in the whole character at rest (rotations, by name), for the
+    // assembly it was worked out from (`standsOf`): the part alone is shown standing so (stand)
+    /** @type {Record<string, number[]>} */
+    this.stands = {};
+    this.standsOf = "";
+    this.stand = [0, 0, 0]; // the root's turn that stands the part alone as in the character
     this.scheduled = false;
     /** @type {((what: Change) => void)[]} */
     this.listeners = [];
@@ -117,6 +126,7 @@ class Editor {
   async start() {
     try {
       this.viewer = await Viewer.start((m) => this.setStatus(m));
+      this.viewer.grid(this.grid);
       this.assets = await listCharacters();
       this.refreshList();
       const first = this.characters.find((c) => c.name === "mech") ?? this.characters[0];
@@ -272,13 +282,37 @@ class Editor {
   /** setTry moves a joint the model tab shows, to try it; never saved @param {string} channel its channel (the joints query's) @param {import("./model.js").Value} v */
   setTry(channel, v) {
     if (channel) this.tries[channel] = v;
-    this.viewer?.showValues(this.tries);
+    this.showTries();
+  }
+
+  /** showTries shows the part alone standing as in the character, its joints as tried */
+  showTries() {
+    this.viewer?.showValues({ ...this.tries, "root.turn": this.stand });
+  }
+
+  /** restTurns: every instance's rotation in the model the viewer holds, at rest @returns {Record<string, number[]>} */
+  restTurns() {
+    const parts = this.viewer?.query({ q: "parts", rest: true }) ?? {};
+    return Object.fromEntries(Object.entries(parts).map(([name, f]) => [name, fromQuat(f.rotation)]));
+  }
+
+  /**
+   * standAlone: the root's turn (euler) that stands the part alone, as the viewer holds it, the
+   * way the first instance of it (mirrored ones, previewing the mirror) stands in the character
+   */
+  standAlone() {
+    const part = this.model.parts?.[this.def];
+    const all = (this.model.assembly ?? []).filter((/** @type {any} */ x) => x.part === part?.name);
+    const inst = all.find((/** @type {any} */ x) => !!x.mirror === this.mirrored) ?? all[0];
+    const want = inst && this.stands[inst.name];
+    const now = part && this.restTurns()[part.name];
+    return want && now ? eulerFrom(mul(want, transpose(now))) : [0, 0, 0];
   }
 
   /** resetTries puts the tried joints back at rest */
   resetTries() {
     this.tries = {};
-    this.viewer?.showValues(this.tries);
+    this.showTries();
     this.emit("select");
   }
 
@@ -292,7 +326,17 @@ class Editor {
     // a new character: drop the old animation first, so the new model is not compiled against it
     if (this.pendingModel && this.pendingAnim && this.sentModel) v.setAnimation({});
     if (this.pendingModel) {
-      this.sentModel = v.setModel(alone ? this.alone() : this.model) || this.sentModel;
+      // the part alone stands as its first instance does in the character: worked out on the
+      // whole one, whenever the assembly changed since
+      const assembly = JSON.stringify(this.model.assembly ?? []);
+      // (measured on the viewer once it holds the whole model, not the part alone it held before)
+      if (!alone || this.standsOf !== assembly) {
+        this.sentModel = v.setModel(this.model) || this.sentModel;
+        this.stands = this.restTurns();
+        this.standsOf = assembly;
+      }
+      if (alone) this.sentModel = v.setModel(this.alone()) || this.sentModel;
+      if (alone) this.stand = this.standAlone();
     }
     if (this.pendingAnim) v.setAnimation(alone ? {} : this.isolate ? this.isolated() : this.anim);
     this.pendingModel = this.pendingAnim = false;
@@ -306,7 +350,7 @@ class Editor {
   }
 
   // show tells the viewer what this tab shows: the part alone, exploded as asked, while modelling;
-  // the character at rest while assembling; the pose test while rigging; the clip while animating.
+  // the pose test (from the rest pose) while assembling; the clip while animating.
   show() {
     const v = this.viewer;
     if (!v) return;
@@ -316,14 +360,21 @@ class Editor {
       // held past the end it shows the end, not the start again
       v.play(this.clip, this.time, this.playing, this.speed, this.loop && this.playing);
     } else if (this.tab === "model") {
-      v.showValues(this.tries);
+      this.showTries();
       v.select(this.model.parts?.[this.def] ? 0 : -1, this.shape, true);
       v.explode(this.explode);
     } else {
-      v.showValues(this.tab === "rig" ? this.test : {});
+      v.showValues(this.test);
       v.select(this.part, -1, false);
       v.explode(0);
     }
+  }
+
+  /** setGrid shows or hides the view's grid through the origin, kept in this browser @param {boolean} on */
+  setGrid(on) {
+    this.grid = on;
+    localStorage.setItem("grid", on ? "on" : "off");
+    this.viewer?.grid(on);
   }
 
   /** setMirrored previews the model tab's part as the other side (true) or as modelled @param {boolean} on */
@@ -461,29 +512,22 @@ class Editor {
     });
   }
 
-  /** copyShapes keeps the selected shapes for pasteShapes, each as it is and in its part's frame (its span undone) */
+  /** copyShapes keeps the selected shapes for pasteShapes */
   copyShapes() {
     const part = this.model.parts?.[this.def];
     if (!part) return;
-    const none = this.spanFrame(part.name, ["", ""]);
-    this.clipShapes = this.selectedShapes().map((k) => {
-      const spanned = clone(part.shapes[k]);
-      const flat = clone(spanned);
-      respan(flat, ["", ""], this.spanFrame(part.name, spanned.span), none);
-      return { spanned, flat };
-    });
+    this.clipShapes = this.selectedShapes().map((k) => clone(part.shapes[k]));
     this.flash(`${this.clipShapes.length} shape${this.clipShapes.length === 1 ? "" : "s"} copied`);
   }
 
-  /** pasteShapes adds the copied shapes to the part the model tab shows, selected: spanning as they did when it has those slots, else where they were in their part */
+  /** pasteShapes adds the copied shapes to the part the model tab shows, selected (stretched ones run its length) */
   pasteShapes() {
     const part = this.model.parts?.[this.def];
     if (!part || !this.clipShapes.length) return;
-    const has = (/** @type {string} */ n) => !n || (part.slots ?? []).some((/** @type {any} */ x) => x.name === n);
     this.edit("model", () => {
       part.shapes ??= [];
       const at = part.shapes.length;
-      for (const c of this.clipShapes) part.shapes.push(clone(c.spanned.span?.every(has) ? c.spanned : c.flat));
+      for (const c of this.clipShapes) part.shapes.push(clone(c));
       this.shape = at;
       this.also = this.clipShapes.map((_, i) => at + i).slice(1);
     });
@@ -516,23 +560,14 @@ class Editor {
   }
 
   /**
-   * the frame a shape of library part `part` spanning slots `span` sits in (the "span" query)
-   * @param {string} part @param {string[] | undefined} span @returns {import("./model.js").SpanFrame}
-   */
-  spanFrame(part, span) {
-    const a = this.ask({ q: "span", part, span: span ?? ["", ""] });
-    return a ? { position: a.position, rotation: fromQuat(a.rotation), length: a.length } : { position: [0, 0, 0], rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1], length: 0 };
-  }
-
-  /**
    * setChannels sets channel values from the view's handles (by channel: a number or [x, y, z]):
-   * the pose test's in the rig tab; in the animate tab, the shown motion's move (the one picked,
+   * the pose test's in the assemble tab; in the animate tab, the shown motion's move (the one picked,
    * else its first) changes its amounts so the pose shown now becomes these values: by the change
    * over how much of them the move adds now (its shape at the playhead). `coalesce` makes a drag
    * one undo step. @param {Record<string, import("./model.js").Value>} values @param {string} [coalesce]
    */
   setChannels(values, coalesce) {
-    if (this.tab === "rig") {
+    if (this.tab === "assemble") {
       Object.assign(this.test, values);
       this.show();
       return;

@@ -34,14 +34,15 @@ To put a character in the game, export it and copy the file into `assets/charact
 | --- | --- |
 | Cmd/Ctrl-S | save in this browser (a dot by the save button means unsaved changes) |
 | Cmd/Ctrl-Z, Shift-Cmd/Ctrl-Z | undo, redo (a drag or a slider move is one step) |
-| 1, 2, 3, 4 | Model, Assemble, Rig, Animate tabs |
+| 1, 2, 3 | Model, Assemble, Animate tabs |
 | F, frame button (top right of the view) | frame the character (the part, in the Model tab) |
+| grid button (top right of the view) | show or hide the grid: flat through the part's origin in the Model tab, on the floor through the model's origin elsewhere, with its x (red), y (green) and z (blue) axes; drawn by the viewer; remembered |
 | I, inspector button (top right of the view) | hide or show the inspector (the right panel); remembered |
 | dock span toggles (right end of the dock bar) | let the curve editor or pose test run under the left panel, the right panel, or both; remembered |
-| Esc | clear the selection: the inspector shows the character's settings (Assemble, Rig) |
+| Esc | clear the selection: the inspector shows the character's settings (Assemble) |
 | drag / scroll in the view | orbit / zoom (dragging leaves a side view for the free orbit) |
 | view gizmo (top right of the view) | the world axes as the camera sees them: click an axis end to look from that side, front (+z), the character's left (+x), top (+y) or their opposites, orthographic and framed; click the disc for the free perspective orbit |
-| click in the view | select the shape (Model) or the instance (Assemble, Rig) under the pointer |
+| click in the view | select the shape (Model) or the instance (Assemble, Animate) under the pointer |
 | W, E, R, T, J (Model tab), or the tool buttons at the top right of the view | the view's handles: move, turn, size the selected shape; place the part's slots; try its joints |
 
 - Number fields: type a value or arithmetic (`0.3*2`, `(0.4+0.1)/2`); start with `*`, `/` or `+`
@@ -59,30 +60,36 @@ To put a character in the game, export it and copy the file into `assets/charact
   slot its parent's part lacks, a value shaped otherwise than its channel, an arc the animation lacks, and so on) collect under ⚠ in the header.
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
-The Model tab makes parts, their slots and their joints; the Assemble tab only hangs parts on
-slots; the Rig tab drives the joints.
+The Model tab makes parts, their slots and their joints; the Assemble tab hangs parts on
+slots and rigs them (IK targets, the rest pose); the Animate tab moves them.
 
 ## Model
 
-The selected part shows **alone**, at the origin, unposed, hanging by its origin with its own
-joints (or by the selected slot, when that has joints, so they show), with its frame drawn as RGB axes and
-only the selected shape outlined. The **explode** slider at the top right of the
+The selected part shows **alone**, unposed, hanging by its own joints and standing as its first
+instance does in the character (a torso upright on its waist, a shin hanging from its knee), with
+its frame drawn as RGB axes and only the selected shape outlined. The viewer draws no shadows. The **explode** slider at the top right of the
 view pushes its shapes apart, each out from the part's middle (double-click it to put them back);
 the handles hide while exploded. The **⇋** button beside it previews the part mirrored, as a
 `mirror` instance (the right side) shows it; model the left side, and the handles hide while
 previewing. Nothing about the view is saved.
 
-- **Parts**: the library. Each row says how often the assembly places the part (`unused` when
+- **Parts** (the sidebar): the library. Each row says how often the assembly places the part (`unused` when
   never). **+** adds a small box, ⧉ duplicates, ✕ deletes a part nothing places.
-- **The selected part**:
+- **The selected part** fills the dock (the bottom panel): its name, **length** and **tidy** in the dock bar,
+  and its **shapes**, **slots** and **joints**, a list each, side by side, each with its own
+  add/delete buttons (joints also ↑ ↓ to reorder the stack, ↺ to put tried joints back at rest).
+  Pick one (shapes and slots in the view too) and the inspector edits it; a shape, a slot and a
+  joint can be picked at once, each its own section. Esc lets them all go.
   - name (renaming carries to the instances), and its own
-    **joints**: what it hangs by, from its parent's slot to its origin. To make a part
+    **joints**: what it hangs by, from its parent's slot to where it hangs. The part hangs its
+    **length** above its origin: model a link with its origin at its far end, where the next link
+    hangs (the origin is the default slot), and set the length to the link's. To make a part
     bigger or smaller, select its shapes (Cmd-A selects them all) and drag the size tool's middle
     box: they scale together about their middle. A joint stack is listed from the parent's
-    side, each joint on the one before, edited in place: its **name** (unique in the part;
+    side, each joint on the one before; the inspector edits the picked one: its **name** (unique in the part;
     its channel, `<instance>.<joint>`, is named by it), its **kind** (hinge, linear or ball) and a
     hinge's **axis** (X a pin, Y a turntable; a new joint is a pin sized to the first shape with
-    room for lugs, and switching kind or axis keeps the size and drops a pin's reach), ↑ to move it up, ✕, its **range** on each axis it moves
+    room for lugs, and switching kind or axis keeps the size and drops a pin's reach), its **range** on each axis it moves
     (its stops, from rest; equal ends leave it free; drives and IK stay inside; a linear's is its
     **stroke**, in model units), **size** (the hardware
     scales with it; 0 builds none; **fit** sizes it to the face of the part's shapes where it
@@ -93,20 +100,21 @@ previewing. Nothing about the view is saved.
     after the pin); the pin's plate next to it shows round. The engine measures every other piece of hardware from these, so they always fit
     together: a ball's neck, for one, is as long as its range needs ([modeling.md](modeling.md#joints)).
     Joints live on the part, so every instance of the part shares them.
-  - its **slots**: the named faces it is matched with other parts by; the origin needs no name.
+  - its **slots**: the origin first (the default slot, listed with what hangs on it), then the
+    named faces its branches are matched on (a chain needs none).
     Select one to rename it (carried to the instances matched on it), **snap** it to one of the
     six faces of a shape (**inset** moves the next snap in toward the shape's centre), or type
     its position, normal and forward. A slot something is matched on can't be deleted.
-  - its **shapes**: primitive, taper or top radius, material, **span**, position, **turn**
+  - its **shapes**: primitive, taper or top radius, material, **stretch**, position, **turn**
     (a quarter turn about the part's X, Y or Z; a box, a sphere or an upright cylinder shows it
     as its size instead of a rotation), rotation (degrees; shown when there is one) and size (the
     full extent; round shapes show a diameter and a height). **tidy** does that for every shape
     of the part and rounds its numbers to 0.001. Shift-click shapes, in the list or the view, to
     select several (Cmd-A: all): primitive, material, turns, moving, sizing it all (the size
-    tool's middle box), duplicating and deleting apply to all of them. Cmd-C / Cmd-V copy shapes to another part (they keep their span when it has the slots). A shape
-    spanning two slots (the origin is one) is a link's body: it sits between them, its y size is
-    how far it runs past them, and moving either slot lengthens it. Changing the span keeps the
-    shape where it is. A slot a shape spans can't be deleted.
+    tool's middle box), duplicating and deleting apply to all of them. Cmd-C / Cmd-V copy shapes to another part. A
+    stretched shape is a link's body: it runs the part's length, from the origin up to where the
+    part hangs, its y size is how far it runs past the ends, and changing the length lengthens it.
+    Turning stretch on or off keeps the shape where it is.
 - **Materials**: colour, metallic, roughness, emissive. Renaming carries through to shapes and
   hardware.
 
@@ -120,8 +128,9 @@ previewing. Nothing about the view is saved.
   (alt: both ways from its centre); the middle box sizes it all (drag right or up), and every
   selected shape with it, about their middle. Shift snaps
   to 0.01.
-- **slots** (T): a ring on each slot (click to select it) and a dot on each face of the shapes
-  that faces you: click one to put the selected slot there, or a new slot when none is selected.
+- **slots** (T): a ring on each slot (click to select it), a dashed one on the origin and a
+  square where the part hangs, its length above, and a dot on each face of the shapes that faces
+  you: click one to put the selected slot there, or a new slot when none is selected.
 - **joints** (J): at each pivot of the joints the part hangs by, a ring per axis it turns about,
   its range as a thick arc and where it is now as a spoke; a linear's, an arrow out along its
   stroke. Click one to select the joint; drag it to try the joint (shift: 15° steps, 0.01
@@ -136,8 +145,9 @@ part does too. A part's joints show straight here: how they sit at rest is each 
   selection): name, stand-on-the-ground, and the materials joint hardware is painted in.
 - **Assembly**: the tree of instances (the inspector shows the part each places, its slots, and
   whether it is mirrored).
-  - **+ child** makes a new part and matches its origin with the selection's first free slot (a new slot on
-    the bottom of its first shape when all are taken); **+ root** adds a free-standing one.
+  - **+ child** makes a new part and hangs it on the selection's origin when that is a link's far
+    end (it has a length) with nothing on it, else on its first free slot (a new slot on the
+    bottom of its first shape when all are taken); **+ root** adds a free-standing one.
   - **⇋ mirror** copies the selected limb (from the topmost `l_`/`r_` instance, or
     `left`/`right`) to the other side of the body, replacing what is there. The copies place the
     **same parts**, mirrored, so editing a left hand edits both. They get the other side's names,
@@ -158,19 +168,15 @@ part does too. A part's joints show straight here: how they sit at rest is each 
   twin moves in clips move both; a mirror copy sets it), and how it sets its part's joints at rest: per joint, a **twist** (turning it on
   its socket first, about the socket's normal) and a **bend** (turning its first axis), in degrees,
   each with 0 / 90 / 180 / −90 buttons. The joint's range is from there. A mirror copy keeps them.
+  Each joint also shows its **channel** and what kind it is (a turn, a rotation, a slide).
 
-The view shows the character at rest, with no dock: the tree has the sidebar's full height.
-Bend joints to check clearances in the Rig tab's pose test.
-
-## Rig
+### Rigging
 
 Every joint is already a channel motions name (`l_forearm.elbow`), so rigging is only IK targets
 and the rest pose clips start from. Several joints moving together (a hand closing) are a
 motion's move. Motions are the Animate tab's.
 
-- **An instance**: its part's joints, one row each, with its channel and what kind it is (a turn,
-  a rotation, a slide).
-- **IK targets**: **+** makes one for the selected instance (the tip). Its channels are named
+- **IK targets** (the sidebar, under the tree): **+** makes one for the selected instance (the tip). Its channels are named
   after it: `<name>` (the target, a position), `<name>.swivel`, `<name>.weight`. Its inspector sets the name (carried through the rest
   pose and the open animation), **tip** and **aim** (look at the target instead of reaching it: a
   head), and shows its **root**, which the engine finds (`mech.ik_root`: below the nearest branch
@@ -182,19 +188,19 @@ motion's move. Motions are the Animate tab's.
   target on the tip at full weight, to drag from there. ✕ deletes the target.
 
 The **pose test** in the dock has a row per channel (the engine's list, its control by kind),
-starting from the rest pose, to try the rig: a joint's slider runs over its range, a position or
+starting from the rest pose, to try the rig and check clearances: a joint's slider runs over its range, a position or
 a rotation is one x/y/z row. It moves the view only, until **Set rest
 pose** saves what it shows as the model's rest pose: the stance every clip starts from and adds
 onto ([modeling.md](modeling.md#the-rest-pose)), one side for both when the two sides match (a
 twin pose; the engine's `twins` query says which channel is whose twin). ↺ goes back to the rest
 pose.
 
-**Handles in the view** (Rig and Animate): a diamond on the model's root, a dot on each IK
+**Handles in the view** (Assemble and Animate): a diamond on the model's root, a dot on each IK
 target, and a ring on each pole. Click a handle to select it: arrows move it along the model's axes (shift: 0.01 steps), and
 the root's rings turn it (shift: 15° steps). Drag a pole round the limb to set its target's
 **swivel** (`<name>.swivel`; shift: 15° steps): while its target is picked or it is dragged, a
 dashed circle shows everywhere it can go (the engine's, query `handles`: `ring`), and it follows
-the pointer to the nearest point of it. In the Rig tab they set the pose test. In the
+the pointer to the nearest point of it. In the Assemble tab they set the pose test. In the
 Animate tab they pose the motion shown: its picked move (else its first) changes its amounts so
 the view shows what you dragged to, by the change over how much of them the move adds at the
 playhead (a held motion: all of it). Dragging the other side of a twin move changes the amounts
@@ -210,8 +216,11 @@ point. Drag a dot to move its point across the view (its depth kept; shift: 0.01
 picks it too (click a picked one to let it go), and the picked one's arrows move it along the
 model's axes. Double-click its curve to add a point there; Delete removes the picked point (an
 arc keeps two). Each is one undo step, and every move naming the arc follows. A point added or
-removed moves the later ones along the shape (point k is at k / (n − 1)). The position follows the
-curve as the motion's shape says, so draw the path where the arm can reach. Esc stops editing.
+removed keeps each move's timing along the arc: the shapes of the motions following it are
+carried to the new points (point k is at k / (n − 1)), so the strike still lands on its impact.
+A motion whose shape other moves follow too (amounts, poses, another arc) keeps its shape, and the
+editor says so. The position follows the curve as the motion's shape says, so draw the path where
+the arm can reach. Esc stops editing.
 
 ## Animate
 
@@ -227,9 +236,16 @@ at a moment is a shape stepping into it there.
   one edited and the moves' values naming it (asking first when some do). Its inspector, while it
   is edited: its **name** (renamed through the moves naming it), **shown on** (the position it is
   drawn on when no move of the motion shown uses it), its **points** (the one picked in the view,
-  else the last: typed in, **+** adds one after it, **−** removes it), **used by** (each move
+  else the last: typed in, **+** adds one after it, **−** removes it), **corner** (the picked
+  point is sharp: the path turns hard there and runs straight to a corner next to it),
+  **used by** (each move
   naming it: click to go there) and **+ assign to the picked move** (puts a position of the
   picked move on it).
+- **Poses** (the sidebar, under Arcs): the animation's poses ([animation.md](animation.md#poses)),
+  named sets of amounts shared by every clip, each with how many amounts it holds and how many
+  moves add it. Click one to edit its **name** (renamed through the moves adding it) and its
+  amounts (as a move's); the bin deletes it and the moves' values adding it. A pose is made from a
+  move: **make pose** on an unfolded move.
 - **Motions** (the sidebar, under Clips): the clip's motions. Click picks one (the dock and the
   inspector show it); shift- or cmd-click picks several, the last picked the one shown.
   - **+** adds a motion holding a pose (no shape, one empty move): pose it with the view's
@@ -246,8 +262,9 @@ at a moment is a shape stepping into it there.
   OPPOSITE: half a cycle later, the other foot or arm). Click a move's head to pick it (the view's handles pose it), shift- or
   cmd-click to pick several. **Split** moves the picked moves into a new motion right after it,
   with the same shape; ✕ removes them; + adds a move (unfolded). Moves are folded, showing their
-  channels' names; the caret unfolds one to edit its amounts (+ channel adds one at rest) and the
-  positions it puts on **arcs**: each lists the arc it follows (switch it), ✎ edits it, ✕ takes
+  channels' names; the caret unfolds one to edit its amounts (+ channel adds one at rest), the
+  **poses** it adds (each how much of it; **+ pose** adds one; **make pose** makes the move's
+  amounts a new pose the move adds instead), and the positions it puts on **arcs**: each lists the arc it follows (switch it), ✎ edits it, ✕ takes
   the position off it; **+ arc** puts another position (an IK target, the root) on the arc being
   edited, else on a new one.
 - **The curve editor** (the dock) shows the motion picked as curves. Everything drawn comes from

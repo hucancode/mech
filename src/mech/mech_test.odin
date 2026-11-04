@@ -165,27 +165,19 @@ test_ball_dims :: proc(t: ^testing.T) {
   testing.expect(t, free.stud_len >= last - 1e-6, "a free ball tilts the furthest")
 }
 
-// A shape spanning two slots sits between them, +y from the first to the second, its length the
-// distance plus its size.y; moving a slot lengthens it.
+// A stretched shape runs its part's length, from the origin up to where it hangs: centred halfway,
+// its size.y plus the length; a longer part lengthens it. Unstretched, the part's frame.
 @(test)
-test_shape_span :: proc(t: ^testing.T) {
+test_shape_stretch :: proc(t: ^testing.T) {
   near :: proc(a, b: [3]f32) -> bool {return abs(a.x - b.x) + abs(a.y - b.y) + abs(a.z - b.z) < 1e-4}
-  p := Part{}
-  append(&p.slots, Slot{name = "end", position = {0, -0.6, 0}})
-  defer delete(p.slots)
-  s := Shape{span = {"end", ""}, position = {0, 0.01, 0}, size = {0.3, 0.04, 0.3}}
-  at, turn, size := shape_place(p, s)
-  testing.expect(t, near(at, {0, -0.29, 0}) && near(size, {0.3, 0.64, 0.3}))
-  testing.expect(t, near(linalg.quaternion_mul_vector3(turn, [3]f32{1, 0, 0}), {1, 0, 0}), "a span along +y keeps the part's axes")
-  p.slots[0].position = {0, -1, 0}
+  p := Part{length = 0.6}
+  s := Shape{stretch = true, position = {0, 0.01, 0}, size = {0.3, 0.04, 0.3}}
+  at, _, size := shape_place(p, s)
+  testing.expect(t, near(at, {0, 0.31, 0}) && near(size, {0.3, 0.64, 0.3}))
+  p.length = 1
   _, _, size = shape_place(p, s)
   testing.expect(t, abs(size.y - 1.04) < 1e-4)
-  // the other way round, +y points down: turned half a turn about x
-  s.span = {"", "end"}
-  _, turn, _ = shape_place(p, s)
-  testing.expect(t, near(linalg.quaternion_mul_vector3(turn, [3]f32{0, 1, 0}), {0, -1, 0}) && near(linalg.quaternion_mul_vector3(turn, [3]f32{1, 0, 0}), {1, 0, 0}))
-  // unspanned: the part's frame
-  at, turn, size = shape_place(p, Shape{position = {1, 2, 3}, size = {1, 1, 1}})
+  at, _, size = shape_place(p, Shape{position = {1, 2, 3}, size = {1, 1, 1}})
   testing.expect(t, near(at, {1, 2, 3}) && near(size, {1, 1, 1}))
 }
 
@@ -758,10 +750,24 @@ test_twins :: proc(t: ^testing.T) {
 @(test)
 test_arc :: proc(t: ^testing.T) {
   pts := [][3]f32{{0, 0, 0}, {0, 1, 1}, {1, 2, 1}, {2, 2, 0}}
-  for p, k in pts do testing.expectf(t, linalg.length(arc_at(pts, f32(k) / 3) - p) < 1e-5, "point %d at %d/3: %v", k, k, arc_at(pts, f32(k) / 3))
-  testing.expectf(t, linalg.length(arc_at(pts, 1.1) - ({2, 2, 0} + 0.3 * ({2, 2, 0} - {1, 2, 1}))) < 1e-4, "past its end, on along it: %v", arc_at(pts, 1.1))
-  mid := arc_at(pts, 0.5)
+  for p, k in pts do testing.expectf(t, linalg.length(arc_at(pts, nil, f32(k) / 3) - p) < 1e-5, "point %d at %d/3: %v", k, k, arc_at(pts, nil, f32(k) / 3))
+  testing.expectf(t, linalg.length(arc_at(pts, nil, 1.1) - ({2, 2, 0} + 0.3 * ({2, 2, 0} - {1, 2, 1}))) < 1e-4, "past its end, on along it: %v", arc_at(pts, nil, 1.1))
+  mid := arc_at(pts, nil, 0.5)
   testing.expectf(t, linalg.length(mid - ({0, 1, 1} + {1, 2, 1}) / 2) > 0.01, "between points it curves, not a straight line: %v", mid)
+  // between two corners it runs straight, at a steady speed (a foot on the ground)
+  sharp := []bool{false, true, true, false}
+  for s in ([]f32{0.4, 0.5, 0.6}) {
+    want := linalg.lerp([3]f32{0, 1, 1}, [3]f32{1, 2, 1}, s * 3 - 1)
+    testing.expectf(t, linalg.length(arc_at(pts, sharp, s) - want) < 1e-5, "between corners at %v, straight and steady: %v, want %v", s, arc_at(pts, sharp, s), want)
+  }
+  // a closed arc (its last point its first) runs smooth through its seam, unless it is a corner
+  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 0, 0}}
+  e: f32 = 1e-3
+  into, leave := (loop[4] - arc_at(loop, nil, 1 - e)) / e, (arc_at(loop, nil, e) - loop[0]) / e
+  testing.expectf(t, linalg.length(into - leave) < 0.05 * linalg.length(leave), "smooth through the seam: in %v, out %v", into, leave)
+  corner := []bool{true, false, false, false, false}
+  into, leave = (loop[4] - arc_at(loop, corner, 1 - e)) / e, (arc_at(loop, corner, e) - loop[0]) / e
+  testing.expectf(t, linalg.dot(linalg.normalize(into), linalg.normalize(leave)) < 0.1, "a corner at the seam turns hard: in %v, out %v", into, leave)
 
   text := read(t, "mech.json")
   defer delete(text)
@@ -787,7 +793,7 @@ test_arc :: proc(t: ^testing.T) {
   r := [3]int{value_of(m, "r_hand"), value_of(m, "r_hand", 1), value_of(m, "r_hand", 2)}
   for x in ([]f32{0, 0.25, 0.5, 0.75}) {
     clip_sample(&clips, 0, x, values)
-    want := arc_at([][3]f32{{0, 0, 0}, {0.5, 1, 1}, {1, 2, 0}}, x)
+    want := arc_at([][3]f32{{0, 0, 0}, {0.5, 1, 1}, {1, 2, 0}}, nil, x)
     got := [3]f32{values[l[0]], values[l[1]], values[l[2]]} - {clips.pose[l[0]], clips.pose[l[1]], clips.pose[l[2]]}
     testing.expectf(t, linalg.length(got - want) < 1e-5, "at %v the hand is on its arc: %v, want %v", x, got, want)
     twin := [3]f32{values[r[0]], values[r[1]], values[r[2]]} - {clips.pose[r[0]], clips.pose[r[1]], clips.pose[r[2]]}
@@ -963,4 +969,56 @@ test_ik_swivel :: proc(t: ^testing.T) {
   _, _, _, lm := bent(rig, l, values)
   _, _, _, rm := bent(rig, r, values)
   testing.expectf(t, linalg.length(lm - [3]f32{-rm.x, rm.y, rm.z}) < 0.02 * l.length, "twin swivels mirror: %v %v", lm, rm)
+}
+
+// A pose is a named set of amounts a move adds by name, times a number; the move's twin applies
+// to them. A pose holds amounts only (no arcs, no poses), and a channel's name wins over a pose's.
+@(test)
+test_poses :: proc(t: ^testing.T) {
+  text := read(t, "mech.json")
+  defer delete(text)
+  m, a, ok := character_parse(text)
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  defer animation_destroy(a)
+  POSES :: `{"arcs": [{"name": "reach", "points": [[0, 0, 0], [0, 1, 0]]}],
+    "poses": [{"name": "fist", "by": {"r_finger_a_1.knuckle": -0.4, "r_leg": [0, 0.2, 0]}},
+      {"name": "odd", "by": {"fist": 1, "r_hand": "reach", "root": [0, 0.1, 0]}},
+      {"name": "root", "by": {"pelvis.spin": 1}}],
+    "clips": [{"name": "one", "duration": 1, "motions": [{"moves": [{"by": {"fist": 1}}]}]},
+    {"name": "both", "duration": 1, "motions": [{"moves": [{"twin": "WITH", "by": {"fist": 0.5}}]}]},
+    {"name": "odd", "duration": 1, "motions": [{"moves": [{"by": {"odd": 2, "root": [0, 0.3, 0]}}]}]}]}`
+  anim, aok := animation_parse(transmute([]u8)string(POSES))
+  if !testing.expect(t, aok) do return
+  defer animation_destroy(anim)
+  clips := clips_build(anim, m)
+  defer clips_destroy(&clips)
+  values := make([]f32, model_channels(m))
+  defer delete(values)
+  near :: proc(a, b: f32) -> bool {return abs(a - b) < 1e-5}
+  moved :: proc(clips: ^Clips, values: []f32, i: int) -> f32 {return values[i] - clips.pose[i]}
+  rk, lk := value_of(m, "r_finger_a_1.knuckle"), value_of(m, "l_finger_a_1.knuckle")
+  ry, ly := value_of(m, "r_leg", 1), value_of(m, "l_leg", 1)
+  clip_sample(&clips, 0, 0.5, values)
+  testing.expectf(t, near(moved(&clips, values, rk), -0.4) && near(moved(&clips, values, ry), 0.2), "a pose adds its amounts: %v %v", moved(&clips, values, rk), moved(&clips, values, ry))
+  testing.expect(t, near(moved(&clips, values, lk), 0), "without a twin, one side")
+  clip_sample(&clips, 1, 0.5, values)
+  for i in ([]int{rk, lk}) do testing.expectf(t, near(moved(&clips, values, i), -0.2), "times its number, on both sides with WITH: %v", moved(&clips, values, i))
+  for i in ([]int{ry, ly}) do testing.expectf(t, near(moved(&clips, values, i), 0.1), "an IK target too: %v", moved(&clips, values, i))
+  // in a pose, a pose and an arc are skipped; its amounts are times the move's number; the
+  // channel `root` wins over the pose `root`
+  clip_sample(&clips, 2, 0.5, values)
+  testing.expectf(t, near(moved(&clips, values, rk), 0), "no pose in a pose: %v", moved(&clips, values, rk))
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "r_hand", 1)), 0), "no arc in a pose")
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0.5), "pose amounts times 2, the channel root's 0.3: %v", moved(&clips, values, value_of(m, "root", 1)))
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "pelvis.spin")), 0), "the channel wins over the pose")
+  // poses round-trip
+  out := animation_format(anim)
+  defer delete(out)
+  back, bok := animation_parse(transmute([]u8)out)
+  if !testing.expect(t, bok) do return
+  defer animation_destroy(back)
+  again := animation_format(back)
+  defer delete(again)
+  testing.expectf(t, out == again, "poses round-trip: %s", out)
 }

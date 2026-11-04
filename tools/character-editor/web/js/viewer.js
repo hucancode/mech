@@ -95,6 +95,11 @@ export class Viewer {
     this.x.viewer_explode(amount);
   }
 
+  /** @param {boolean} on show the grid through the origin */
+  grid(on) {
+    this.x.viewer_grid(on ? 1 : 0);
+  }
+
   frame() {
     this.x.viewer_frame();
   }

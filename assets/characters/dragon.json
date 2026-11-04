@@ -222,57 +222,52 @@
       },
       {
         "name": "segment",
+        "length": 1.35,
         "joints": [
           {"name": "spine", "kind": "BALL", "size": 0.52}
-        ],
-        "slots": [
-          {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
         ],
         "shapes": [
           {
             "primitive": "HALF_CYLINDER",
             "material": "green",
-            "span": [
-              "next",
-              ""
-            ],
+            "stretch": true,
             "rotation": [3.14159, 1.57079, 0],
             "size": [1, 0, 1]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -1.125, 0],
+            "position": [0, 0.225, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -0.675, 0],
+            "position": [0, 0.675, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -0.225, 0],
+            "position": [0, 1.125, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
-          {"material": "yellow", "position": [0, -0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [0, -0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, 0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, 0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.45, -0.945, 0],
+            "position": [0.45, 0.405, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.45, -0.405, 0],
+            "position": [0.45, 0.945, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           }
@@ -280,59 +275,56 @@
       },
       {
         "name": "segment_limbs",
+        "length": 1.35,
         "joints": [
           {"name": "spine", "kind": "BALL", "size": 0.52}
         ],
         "slots": [
-          {"name": "next", "position": [0, -1.35, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-          {"name": "l_limb", "position": [0, -0.675, -0.6], "normal": [0, 0, -1], "forward": [0, 1, 0]},
-          {"name": "r_limb", "position": [0, -0.675, 0.6], "normal": [0, 0, 1], "forward": [0, -1, 0]}
+          {"name": "l_limb", "position": [0, 0.675, -0.6], "normal": [0, 0, -1], "forward": [0, 1, 0]},
+          {"name": "r_limb", "position": [0, 0.675, 0.6], "normal": [0, 0, 1], "forward": [0, -1, 0]}
         ],
         "shapes": [
           {
             "primitive": "HALF_CYLINDER",
             "material": "green",
-            "span": [
-              "next",
-              ""
-            ],
+            "stretch": true,
             "rotation": [3.14159, 1.57079, 0],
             "size": [1, 0, 1]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -1.125, 0],
+            "position": [0, 0.225, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -0.675, 0],
+            "position": [0, 0.675, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
           {
             "primitive": "HALF_CYLINDER",
             "material": "yellow",
-            "position": [0, -0.225, 0],
+            "position": [0, 1.125, 0],
             "rotation": [0, -1.57079, 0],
             "size": [0.94, 0.38, 0.94]
           },
-          {"material": "yellow", "position": [0, -0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
-          {"material": "yellow", "position": [0, -0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, 0.675, 0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
+          {"material": "yellow", "position": [0, 0.675, -0.55], "rotation": [-1.5708, 0, -1.5708], "size": [0.1, 0.475, 1.161]},
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.45, -0.945, 0],
+            "position": [0.45, 0.405, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.45, -0.405, 0],
+            "position": [0.45, 0.945, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.76, 0.12, 0.76]
           }
@@ -340,35 +332,30 @@
       },
       {
         "name": "taper_1",
+        "length": 1.15,
         "joints": [
           {"name": "spine", "kind": "BALL", "size": 0.52}
-        ],
-        "slots": [
-          {"name": "taper_2", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
         ],
         "shapes": [
           {
             "primitive": "CONE",
             "param": 1.19,
             "material": "lime",
-            "span": [
-              "taper_2",
-              ""
-            ],
+            "stretch": true,
             "rotation": [0, -1.57079, 0],
             "size": [0.84, 0, 0.84]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "navy",
-            "position": [0.394, -0.805, 0],
+            "position": [0.394, 0.345, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.68, 0.12, 0.68]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "navy",
-            "position": [0.426, -0.345, 0],
+            "position": [0.426, 0.805, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.68, 0.12, 0.68]
           }
@@ -376,35 +363,30 @@
       },
       {
         "name": "taper",
+        "length": 1.15,
         "joints": [
           {"name": "spine2", "kind": "BALL", "size": 0.48}
-        ],
-        "slots": [
-          {"name": "next", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
         ],
         "shapes": [
           {
             "primitive": "CONE",
             "param": 1.235,
             "material": "slate",
-            "span": [
-              "next",
-              ""
-            ],
+            "stretch": true,
             "rotation": [0, -1.57079, 0],
             "size": [0.68, 0, 0.68]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.314, -0.805, 0],
+            "position": [0.314, 0.345, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.6, 0.12, 0.6]
           },
           {
             "primitive": "QUARTER_CYLINDER",
             "material": "charcoal",
-            "position": [0.346, -0.345, 0],
+            "position": [0.346, 0.805, 0],
             "rotation": [-1.5708, 0, 0],
             "size": [0.6, 0.12, 0.6]
           }
@@ -462,29 +444,19 @@
       },
       {
         "name": "upper_arm",
+        "length": 0.45,
         "joints": [
           {"name": "shoulder_top", "axis": "Y"},
           {"name": "shoulder", "size": 0.21, "reach": 1.73333},
           {"name": "shoulder_bottom", "axis": "Y"}
         ],
-        "slots": [
-          {"name": "forearm", "position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
-        ],
         "shapes": [
-          {
-            "material": "sky",
-            "span": [
-              "forearm",
-              ""
-            ],
-            "rotation": [0, 1.5708, 0],
-            "size": [0.38, 0, 0.42]
-          },
+          {"material": "sky", "stretch": true, "rotation": [0, 1.5708, 0], "size": [0.38, 0, 0.42]},
           {
             "primitive": "WEDGE",
             "param": 0.5,
             "material": "brown",
-            "position": [0.24, -0.18, 0],
+            "position": [0.24, 0.27, 0],
             "rotation": [0, 1.5708, 0],
             "size": [0.3192, 0.27, 0.08]
           }
@@ -550,24 +522,14 @@
       },
       {
         "name": "thigh",
+        "length": 0.5,
         "joints": [
           {"name": "hip_top", "axis": "Y"},
           {"name": "hip", "size": 0.25, "reach": 1.552},
           {"name": "hip_bottom", "axis": "Y"}
         ],
-        "slots": [
-          {"name": "shin", "position": [0, -0.5, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
-        ],
         "shapes": [
-          {
-            "material": "orange",
-            "span": [
-              "shin",
-              ""
-            ],
-            "rotation": [0, 1.5708, 0],
-            "size": [0.46, 0, 0.54]
-          }
+          {"material": "orange", "stretch": true, "rotation": [0, 1.5708, 0], "size": [0.46, 0, 0.54]}
         ]
       },
       {
@@ -613,16 +575,16 @@
       {"name": "head", "part": "head"},
       {"name": "jaw", "part": "jaw", "parent": "head", "parent_slot": "jaw"},
       {"name": "segment_1", "part": "segment", "parent": "head", "parent_slot": "segment_1"},
-      {"name": "segment_2", "part": "segment_limbs", "parent": "segment_1", "parent_slot": "next"},
-      {"name": "segment_3", "part": "segment", "parent": "segment_2", "parent_slot": "next"},
-      {"name": "segment_4", "part": "segment", "parent": "segment_3", "parent_slot": "next"},
-      {"name": "segment_5", "part": "segment_limbs", "parent": "segment_4", "parent_slot": "next"},
-      {"name": "segment_6", "part": "segment", "parent": "segment_5", "parent_slot": "next"},
-      {"name": "taper_1", "part": "taper_1", "parent": "segment_6", "parent_slot": "next"},
-      {"name": "taper_2", "part": "taper", "parent": "taper_1", "parent_slot": "taper_2"},
-      {"name": "taper_3", "part": "taper", "parent": "taper_2", "parent_slot": "next"},
-      {"name": "taper_4", "part": "taper", "parent": "taper_3", "parent_slot": "next"},
-      {"name": "tail", "part": "tail", "parent": "taper_4", "parent_slot": "next"},
+      {"name": "segment_2", "part": "segment_limbs", "parent": "segment_1"},
+      {"name": "segment_3", "part": "segment", "parent": "segment_2"},
+      {"name": "segment_4", "part": "segment", "parent": "segment_3"},
+      {"name": "segment_5", "part": "segment_limbs", "parent": "segment_4"},
+      {"name": "segment_6", "part": "segment", "parent": "segment_5"},
+      {"name": "taper_1", "part": "taper_1", "parent": "segment_6"},
+      {"name": "taper_2", "part": "taper", "parent": "taper_1"},
+      {"name": "taper_3", "part": "taper", "parent": "taper_2"},
+      {"name": "taper_4", "part": "taper", "parent": "taper_3"},
+      {"name": "tail", "part": "tail", "parent": "taper_4"},
       {
         "name": "l_upper_arm",
         "part": "upper_arm",
@@ -632,7 +594,14 @@
           {"name": "shoulder", "bend": 1.5707964}
         ]
       },
-      {"name": "l_forearm", "part": "forearm", "parent": "l_upper_arm", "parent_slot": "forearm"},
+      {
+        "name": "l_forearm",
+        "part": "forearm",
+        "parent": "l_upper_arm",
+        "joints": [
+          {"name": "elbow", "twist": -1.5707963}
+        ]
+      },
       {
         "name": "r_upper_arm",
         "part": "upper_arm",
@@ -647,8 +616,10 @@
         "name": "r_forearm",
         "part": "forearm",
         "parent": "r_upper_arm",
-        "parent_slot": "forearm",
-        "mirror": "l_forearm"
+        "mirror": "l_forearm",
+        "joints": [
+          {"name": "elbow", "twist": -1.5707963}
+        ]
       },
       {
         "name": "l_thigh",
@@ -659,7 +630,14 @@
           {"name": "hip", "bend": 1.5707964}
         ]
       },
-      {"name": "l_shin", "part": "shin", "parent": "l_thigh", "parent_slot": "shin"},
+      {
+        "name": "l_shin",
+        "part": "shin",
+        "parent": "l_thigh",
+        "joints": [
+          {"name": "knee", "twist": -1.5707963}
+        ]
+      },
       {
         "name": "r_thigh",
         "part": "thigh",
@@ -674,8 +652,10 @@
         "name": "r_shin",
         "part": "shin",
         "parent": "r_thigh",
-        "parent_slot": "shin",
-        "mirror": "l_shin"
+        "mirror": "l_shin",
+        "joints": [
+          {"name": "knee", "twist": -1.5707963}
+        ]
       }
     ]
   },

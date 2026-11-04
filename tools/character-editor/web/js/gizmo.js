@@ -1,6 +1,6 @@
 // @ts-check
 // The view's direct manipulation. Click a piece to select it: its shape in the model tab, its
-// instance in the assemble and rig tabs. In the model tab, drag handles drawn over the view to edit
+// instance in the assemble tab. In the model tab, drag handles drawn over the view to edit
 // the selected shape, or place the part's slots:
 //   move (W)    arrows along the part's axes move the shape, snapping to the other shapes' faces;
 //               dots on those faces stack it there (shift: close the gap; alt: a new box on it)
@@ -11,7 +11,7 @@
 //               put the selected slot there, or a new one when none is selected
 //   joint (J)   rings about the axes of the joints the part hangs by, their
 //               ranges as arcs: drag one to try the joint (not saved; shift: 15° steps)
-// In the rig and animate tabs, markers on the model's root and IK targets: click one, then drag
+// In the assemble and animate tabs, markers on the model's root and IK targets: click one, then drag
 // its arrows (and the root's rings) to move (turn) it, in the pose test or the selected key; drag
 // an IK's pole round its ring to swivel the bend. In the animate tab, the shown motion's arcs: drag
 // a point (or its arrows), double-click the curve to add one, Delete to remove the picked one.
@@ -23,7 +23,7 @@
 import { hold, release } from "./dom.js";
 import { ALONE_SCALE, editor } from "./editor.js";
 import { add, apply, cross, euler, eulerFrom, fromQuat, mul, rotation, scale, transpose } from "./math3.js";
-import { addSlot, faceCentre, FACE_NAMES, insertArcPoint, perpendicular, removeArcPoint, shapeOnFace, snapSocket, socketFace, stackOn } from "./model.js";
+import { addSlot, faceCentre, FACE_NAMES, insertArcPoint, perpendicular, removeArcPoint, shapeFrame, shapeOnFace, snapSocket, socketFace, stackOn } from "./model.js";
 
 /** @typedef {"move" | "rotate" | "scale" | "slot" | "joint"} Mode */
 /** @type {{mode: Mode}} */
@@ -117,7 +117,7 @@ function draw() {
   svg.replaceChildren();
   const m = editor.model;
   const part = m.parts?.[editor.def];
-  if (editor.viewer && (editor.tab === "rig" || editor.tab === "animation")) return drawHandles();
+  if (editor.viewer && (editor.tab === "assemble" || editor.tab === "animation")) return drawHandles();
   // previewing the mirror shows the part as it is not written: nothing to drag
   if (editor.tab !== "model" || !part || !editor.viewer || editor.explode > 0 || editor.mirrored) return;
   // the model tab shows the part alone, in model units (editor.alone)
@@ -127,8 +127,8 @@ function draw() {
   const shape = part.shapes?.[editor.shape];
   const f = frameOf(part.name);
   if (!shape || !f) return;
-  // the shape sits in its span's frame (the part's, unspanned)
-  const span = editor.spanFrame(part.name, shape.span);
+  // the shape sits in its frame: a stretched one's halfway up the part (shapeFrame)
+  const span = shapeFrame(part, shape);
   const back = transpose(span.rotation);
   const centre = add(f.position, apply(f.rotation, scale(add(span.position, apply(span.rotation, shape.position ?? [0, 0, 0])), s)));
   // move and rotate go by the part's axes, scale by the shape's own
@@ -149,7 +149,7 @@ function draw() {
     // the other selected shapes, each in its span's frame, where it is in the part's
     const others = editor.selectedShapes().slice(1).map((k) => {
       const o = part.shapes[k];
-      const frame = editor.spanFrame(part.name, o.span);
+      const frame = shapeFrame(part, o);
       return { shape: o, span: frame, p0: centreOf(o, frame) };
     });
     // the other shapes' faces: click one to stack the shape on it, shift-click to only close the
@@ -162,7 +162,7 @@ function draw() {
         const target = faces[k][n];
         if (e.altKey) {
           const on = part.shapes[k];
-          const frame = editor.spanFrame(part.name, on.span);
+          const frame = shapeFrame(part, on);
           editor.edit("model", () => {
             part.shapes.push(shapeOnFace(on, n, target, frame));
             editor.shape = part.shapes.length - 1;
@@ -209,7 +209,7 @@ function draw() {
       el("path", { d: `M${c[0]},${c[1]}L${end[0]},${end[1]}`, stroke: COLORS[i], "stroke-width": 2, "pointer-events": "none" });
       handleBox(end, COLORS[i], (e) => {
         const s0 = [...(shape.size ?? [0.2, 0.2, 0.2])];
-        // a span's length adds to y: the shape stays at least 0.005 long all told
+        // a stretched one's length adds to y: the shape stays at least 0.005 long all told
         const least = 0.005 - (i === 1 ? span.length : 0);
         const p0 = [...(shape.position ?? [0, 0, 0])];
         // the shape's axis i in its span's frame: the side that grows
@@ -229,14 +229,14 @@ function draw() {
       // every selected shape, about their middle: sizes and places scale together
       const all = editor.selectedShapes().map((k) => {
         const o = part.shapes[k];
-        const frame = editor.spanFrame(part.name, o.span);
+        const frame = shapeFrame(part, o);
         return { shape: o, span: frame, size: [...(o.size ?? [0.2, 0.2, 0.2])], at: centreOf(o, frame) };
       });
       const middle = all.reduce((m, o) => add(m, scale(o.at, 1 / all.length)), [0, 0, 0]);
       startDrag(e, (d, ev) => {
         const f = Math.max(0.05, 1 + (d[0] - d[1]) / 150);
         for (const o of all) {
-          // the whole extent scales, a span's length included
+          // the whole extent scales, a stretched one's length included
           const length = o.size.map((_, k) => (k === 1 ? o.span.length : 0));
           o.shape.size = o.size.map((x, k) => r5(Math.max(0.005, round((x + length[k]) * f, ev.shiftKey ? 0.01 : 1e-4)) - length[k]));
           if (all.length > 1) {
@@ -347,6 +347,11 @@ function drawSlots(part, s) {
         }
       }),
   });
+  // the origin, the default slot (dashed), and where the part hangs, its length above, joined
+  const [o, top] = project([world([0, 0, 0]), world([0, part.length ?? 0, 0])]);
+  if (o && top && part.length) el("line", { x1: o[0], y1: o[1], x2: top[0], y2: top[1], stroke: "#e5b45b", "stroke-width": 1.5, "stroke-dasharray": "4 3", opacity: 0.7 });
+  if (o) el("title", {}, el("circle", { cx: o[0], cy: o[1], r: 9, fill: "transparent", stroke: "#e5b45b", "stroke-width": 2, "stroke-dasharray": "3 3" })).textContent = "the origin: the default slot, where the next link of a chain is matched";
+  if (top && part.length) el("title", {}, el("rect", { x: top[0] - 5, y: top[1] - 5, width: 10, height: 10, fill: "transparent", stroke: "#e5b45b", "stroke-width": 2 })).textContent = `where the part hangs, its length (${part.length}) above its origin`;
   const pts = project(slots.map((/** @type {any} */ x) => world(x.position ?? [0, 0, 0])));
   slots.forEach((/** @type {any} */ x, /** @type {number} */ i) => {
     const sp = pts[i];
@@ -445,10 +450,10 @@ function drawJoints(part, s) {
 }
 
 /**
- * drawHandles (rig and animate tabs): a marker on the model's root and on each IK target, and its
+ * drawHandles (assemble and animate tabs): a marker on the model's root and on each IK target, and its
  * pole. Click one to select it: arrows move it along the model's axes (its position channel), and
  * the root's rings turn it (its rotation); drag a pole round its ring to swivel the bend. They set
- * the pose test (rig), the picked move (animate).
+ * the pose test (assemble), the picked move (animate).
  */
 function drawHandles() {
   const a = editor.viewer?.query({ q: "handles" });
@@ -625,7 +630,7 @@ function editArc(a, s) {
     const rest = a.points[0].map((/** @type {number} */ x, /** @type {number} */ c) => x - points[0][c] * s);
     const at = a.curve[n].map((/** @type {number} */ x, /** @type {number} */ c) => r5(round((x - rest[c]) / s)));
     editor.edit("anim", () => {
-      insertArcPoint(points, after, at);
+      if (insertArcPoint(editor.anim, arc, after, at)) editor.flash("Motions whose shape other moves follow too keep their shape: check their timing on the arc");
       editor.handle = arcHandle(a.arc, after + 1);
     });
   });
@@ -697,8 +702,7 @@ export function removePickedArcPoint() {
     return true;
   }
   editor.edit("anim", () => {
-    removeArcPoint(arc, p.i);
-    editor.handle = arcHandle(p.name, Math.max(p.i - 1, 0));
+    if (removeArcPoint(editor.anim, arc, p.i)) editor.handle = arcHandle(p.name, Math.max(p.i - 1, 0));
   });
   return true;
 }
@@ -827,7 +831,7 @@ function snapTo(p, own, planes, near) {
 /** v held in lo..hi, unless they are equal (free) @param {number} v @param {number} lo @param {number} hi */
 const clampTo = (v, lo, hi) => (lo === hi ? v : Math.min(hi, Math.max(lo, v)));
 
-/** pickAt selects what is under a point of the canvas: a shape in the model tab (`add`: shift, to the selection), an instance in the assemble and rig tabs, and in the animate tab an instance, lit (empty space: none) @param {number} x @param {number} y @param {boolean} [add] */
+/** pickAt selects what is under a point of the canvas: a shape in the model tab (`add`: shift, to the selection), an instance in the assemble tab, and in the animate tab an instance, lit (empty space: none) @param {number} x @param {number} y @param {boolean} [add] */
 function pickAt(x, y, add = false) {
   const hit = editor.viewer?.query({ q: "pick", x, y });
   if (editor.tab === "animation") return editor.select(() => (editor.part = hit && hit.part >= 0 ? hit.part : -1));

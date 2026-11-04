@@ -150,6 +150,7 @@
       },
       {
         "name": "arm",
+        "length": 0.62,
         "joints": [
           {"name": "shoulder_top", "axis": "Y", "min": [0, -1.4, 0], "max": [0, 2.6, 0]},
           {
@@ -161,19 +162,13 @@
           },
           {"name": "shoulder_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
-        "slots": [
-          {"name": "cannon", "position": [0, -0.62, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
-        ],
         "shapes": [
-          {"material": "shell", "position": [0, 0.12, 0], "size": [0.62, 0.5, 0.62]},
-          {"material": "trim", "position": [0, 0.39, 0], "size": [0.5, 0.06, 0.5]},
+          {"material": "shell", "position": [0, 0.74, 0], "size": [0.62, 0.5, 0.62]},
+          {"material": "trim", "position": [0, 1.01, 0], "size": [0.5, 0.06, 0.5]},
           {
             "primitive": "CYLINDER",
             "material": "shell",
-            "span": [
-              "cannon",
-              ""
-            ],
+            "stretch": true,
             "position": [0, 0.02, 0],
             "size": [0.32, 0.02, 0.32]
           }
@@ -191,9 +186,6 @@
           },
           {"name": "elbow_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
-        "slots": [
-          {"name": "muzzle", "position": [0, -1.15, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
-        ],
         "shapes": [
           {"material": "shell", "position": [0, -0.3, 0], "size": [0.42, 0.6, 0.42]},
           {"material": "dark", "position": [0, -0.3, 0.23], "size": [0.3, 0.42, 0.06]},
@@ -204,6 +196,7 @@
       },
       {
         "name": "thigh",
+        "length": 0.68,
         "joints": [
           {"name": "hip_top", "axis": "Y", "min": [0, -1.2, 0], "max": [0, 1.2, 0]},
           {
@@ -215,30 +208,15 @@
           },
           {"name": "hip_bottom", "axis": "Y", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
         ],
-        "slots": [
-          {"name": "shin", "position": [0, -0.68, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]}
-        ],
         "shapes": [
-          {
-            "material": "shell",
-            "span": [
-              "shin",
-              ""
-            ],
-            "size": [0.5, 0, 0.46]
-          },
-          {"material": "trim", "position": [0, -0.12, 0.25], "size": [0.36, 0.4, 0.06]},
-          {
-            "primitive": "CYLINDER",
-            "material": "dark",
-            "position": [0, -0.68, 0],
-            "rotation": [0, 0, 1.5707964],
-            "size": [0.36, 0.6, 0.36]
-          }
+          {"material": "shell", "stretch": true, "size": [0.5, 0, 0.46]},
+          {"material": "trim", "position": [0, 0.56, 0.25], "size": [0.36, 0.4, 0.06]},
+          {"primitive": "CYLINDER", "material": "dark", "rotation": [0, 0, 1.5707964], "size": [0.36, 0.6, 0.36]}
         ]
       },
       {
         "name": "shin",
+        "length": 0.8,
         "joints": [
           {
             "name": "knee",
@@ -248,25 +226,16 @@
             "max": [1.2, 0, 0]
           }
         ],
-        "slots": [
-          {"name": "hock", "position": [0, -0.8, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
-        ],
         "shapes": [
-          {
-            "material": "shell",
-            "span": [
-              "hock",
-              ""
-            ],
-            "size": [0.54, -0.1, 0.6]
-          },
-          {"material": "trim", "position": [0, -0.12, 0], "size": [0.6, 0.3, 0.66]},
-          {"primitive": "CYLINDER", "material": "metal", "position": [0, -0.42, -0.38], "size": [0.11, 0.56, 0.11]},
-          {"material": "dark", "position": [0, -0.4, 0.31], "size": [0.42, 0.36, 0.08]}
+          {"material": "shell", "stretch": true, "size": [0.54, -0.1, 0.6]},
+          {"material": "trim", "position": [0, 0.68, 0], "size": [0.6, 0.3, 0.66]},
+          {"primitive": "CYLINDER", "material": "metal", "position": [0, 0.38, -0.38], "size": [0.11, 0.56, 0.11]},
+          {"material": "dark", "position": [0, 0.4, 0.31], "size": [0.42, 0.36, 0.08]}
         ]
       },
       {
         "name": "hock",
+        "length": 0.45,
         "joints": [
           {
             "name": "ankle",
@@ -276,20 +245,9 @@
             "max": [0.8, 0, 0]
           }
         ],
-        "slots": [
-          {"name": "foot", "position": [0, -0.45, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}
-        ],
         "shapes": [
-          {
-            "primitive": "CYLINDER",
-            "material": "shell",
-            "span": [
-              "foot",
-              ""
-            ],
-            "size": [0.4, -0.08, 0.4]
-          },
-          {"material": "trim", "position": [0, -0.22, 0.21], "size": [0.26, 0.2, 0.06]}
+          {"primitive": "CYLINDER", "material": "shell", "stretch": true, "size": [0.4, -0.08, 0.4]},
+          {"material": "trim", "position": [0, 0.23, 0.21], "size": [0.26, 0.2, 0.06]}
         ]
       },
       {
@@ -340,7 +298,14 @@
           {"name": "shoulder", "bend": 1.5707964}
         ]
       },
-      {"name": "l_cannon", "part": "cannon", "parent": "l_arm", "parent_slot": "cannon"},
+      {
+        "name": "l_cannon",
+        "part": "cannon",
+        "parent": "l_arm",
+        "joints": [
+          {"name": "elbow", "twist": -1.5707963}
+        ]
+      },
       {
         "name": "l_thigh",
         "part": "thigh",
@@ -355,16 +320,14 @@
         "name": "l_shin",
         "part": "shin",
         "parent": "l_thigh",
-        "parent_slot": "shin",
         "joints": [
-          {"name": "knee", "bend": 1.25}
+          {"name": "knee", "twist": -1.5707963, "bend": 1.25}
         ]
       },
       {
         "name": "l_hock",
         "part": "hock",
         "parent": "l_shin",
-        "parent_slot": "hock",
         "joints": [
           {"name": "ankle", "bend": -1}
         ]
@@ -373,7 +336,6 @@
         "name": "l_foot",
         "part": "foot",
         "parent": "l_hock",
-        "parent_slot": "foot",
         "joints": [
           {"name": "toe", "bend": 0.3}
         ]
@@ -392,8 +354,10 @@
         "name": "r_cannon",
         "part": "cannon",
         "parent": "r_arm",
-        "parent_slot": "cannon",
-        "mirror": "l_cannon"
+        "mirror": "l_cannon",
+        "joints": [
+          {"name": "elbow", "twist": -1.5707963}
+        ]
       },
       {
         "name": "r_thigh",
@@ -410,17 +374,15 @@
         "name": "r_shin",
         "part": "shin",
         "parent": "r_thigh",
-        "parent_slot": "shin",
         "mirror": "l_shin",
         "joints": [
-          {"name": "knee", "bend": 1.25}
+          {"name": "knee", "twist": -1.5707963, "bend": 1.25}
         ]
       },
       {
         "name": "r_hock",
         "part": "hock",
         "parent": "r_shin",
-        "parent_slot": "hock",
         "mirror": "l_hock",
         "joints": [
           {"name": "ankle", "bend": -1}
@@ -430,7 +392,6 @@
         "name": "r_foot",
         "part": "foot",
         "parent": "r_hock",
-        "parent_slot": "foot",
         "mirror": "l_foot",
         "joints": [
           {"name": "toe", "bend": 0.3}
@@ -439,6 +400,28 @@
     ]
   },
   "animation": {
+    "arcs": [
+      {
+        "name": "step",
+        "points": [
+          [0, 0, 0.65],
+          [0, 0, -0.65],
+          [0, 0.45, 0],
+          [0, 0, 0.65]
+        ],
+        "corners": [0, 1]
+      },
+      {
+        "name": "stride",
+        "points": [
+          [0, 0, 1.04],
+          [0, 0, -1.04],
+          [0, 0.6, 0],
+          [0, 0, 1.04]
+        ],
+        "corners": [0, 1]
+      }
+    ],
     "clips": [
       {
         "name": "idle",
@@ -543,30 +526,15 @@
           },
           {
             "shape": [
-              {"v": 0.5},
-              {"u": 0.55, "v": -0.5},
-              {"u": 1, "v": 0.5}
+              {},
+              {"u": 0.55, "v": 0.3333},
+              {"u": 1, "v": 1}
             ],
             "moves": [
               {
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_leg": [0, 0, 1.3]
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {"u": 0.55},
-              {"u": 0.775, "v": 1, "ease": "OUT"},
-              {"u": 1, "ease": "IN"}
-            ],
-            "moves": [
-              {
-                "twin": "OPPOSITE",
-                "by": {
-                  "l_leg": [0, 0.45, 0]
+                  "l_leg": "step"
                 }
               }
             ]
@@ -640,30 +608,15 @@
           },
           {
             "shape": [
-              {"v": 0.5},
-              {"u": 0.35, "v": -0.5},
-              {"u": 1, "v": 0.5}
+              {},
+              {"u": 0.35, "v": 0.3333},
+              {"u": 1, "v": 1}
             ],
             "moves": [
               {
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_leg": [0, 0, 2.08]
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {"u": 0.35},
-              {"u": 0.675, "v": 1, "ease": "OUT"},
-              {"u": 1, "ease": "IN"}
-            ],
-            "moves": [
-              {
-                "twin": "OPPOSITE",
-                "by": {
-                  "l_leg": [0, 0.6, 0]
+                  "l_leg": "stride"
                 }
               }
             ]

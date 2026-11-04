@@ -2,8 +2,8 @@
 // The character editor: a model (its parts, and the assembly placing them), its rig and its
 // animation, edited in the browser and shown by the game's own code in wasm (see viewer.js). This
 // file lays out the page and wires the shortcuts:
-//   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 4 tabs
-//   Esc back to the character's settings (assemble and rig tabs), out of an arc's edit mode (animate)    I show/hide the inspector
+//   Cmd/Ctrl-S save    Cmd/Ctrl-Z undo    Shift-Cmd/Ctrl-Z redo    1 2 3 tabs
+//   Esc back to the character's settings (assemble tab), out of an arc's edit mode (animate)    I show/hide the inspector
 //   W E R T move, rotate, scale a shape, place slots (model tab; see gizmo.js)    click the view to pick
 //   space play/pause   Delete remove the arc point picked in the view, else the shape's point (animate tab)   F frame
 import { btn, h, segmented, ui } from "./dom.js";
@@ -14,9 +14,8 @@ import { gizmo, install as installGizmo, removePickedArcPoint, setMode } from ".
 import { install as installViewGizmo } from "./viewGizmo.js";
 import { animInspector, animSidebar } from "./panels/animation.js";
 import { assembleInspector, assembleSidebar } from "./panels/assemble.js";
-import { modelInspector, modelSidebar } from "./panels/model.js";
+import { modelDock, modelInspector, modelSidebar } from "./panels/model.js";
 import { poseTest } from "./panels/poseTest.js";
-import { rigInspector, rigSidebar } from "./panels/rig.js";
 import { Curves } from "./panels/curves.js";
 import { renderPlayer, tickPlayer } from "./player.js";
 
@@ -30,7 +29,6 @@ const curves = new Curves();
 const TABS = /** @type {const} */ ([
   ["model", "Model"],
   ["assemble", "Assemble"],
-  ["rig", "Rig"],
   ["animation", "Animate"],
 ]);
 
@@ -53,19 +51,16 @@ function render() {
   } else if (editor.tab === "assemble") {
     sidebar.replaceChildren(...[assembleSidebar()].flat());
     inspector.replaceChildren(...[assembleInspector()].flat().filter(Boolean));
-  } else if (editor.tab === "rig") {
-    sidebar.replaceChildren(...[rigSidebar()].flat());
-    inspector.replaceChildren(...[rigInspector()].flat().filter(Boolean));
   } else {
     sidebar.replaceChildren(...[animSidebar()].flat());
     inspector.replaceChildren(...[animInspector()].flat().filter(Boolean));
   }
   [sidebar.scrollTop, inspector.scrollTop] = keep;
+  renderDock();
   for (const [key, top] of lists) {
     const el = document.querySelector(`#${key.panel} section[data-section="${CSS.escape(key.section)}"] .list`);
     if (el) el.scrollTop = top;
   }
-  renderDock();
 }
 ui.onIdle = () => pending && render();
 
@@ -74,9 +69,9 @@ ui.onIdle = () => pending && render();
 function listScrolls() {
   /** @type {[{panel: string, section: string}, number][]} */
   const out = [];
-  for (const el of document.querySelectorAll("#sidebar section[data-section] .list, #inspector section[data-section] .list")) {
-    const section = /** @type {HTMLElement} */ (el.closest("section")).dataset.section ?? "";
-    const panel = /** @type {HTMLElement} */ (el.closest("aside")).id;
+  for (const el of document.querySelectorAll("#sidebar section[data-section] .list, #inspector section[data-section] .list, #dock section[data-section] .list")) {
+    const section = /** @type {HTMLElement} */ (el.closest("section[data-section]")).dataset.section ?? "";
+    const panel = /** @type {HTMLElement} */ (el.closest("#sidebar, #inspector, #dock")).id;
     if (el.scrollTop > 0) out.push([{ panel, section }, el.scrollTop]);
   }
   return out;
@@ -88,14 +83,17 @@ function renderDock() {
     document.body.dataset.tab = editor.tab;
     refit();
   }
-  if (editor.tab === "model" || editor.tab === "assemble") return; // no dock: nothing to pose here
-  if (editor.tab === "animation") {
+  if (editor.tab === "model") {
+    // the part's shapes, slots and joints: rebuilt with the panels
+    dock.replaceChildren(...modelDock());
+    dockTab = "model";
+  } else if (editor.tab === "animation") {
     // the clip's motions as curves
     if (dockTab !== "animation") dock.replaceChildren(...curves.el);
     dockTab = "animation";
     curves.refresh();
   } else {
-    // the pose test (rig tab) keeps its sliders' state: rebuild it only when the model changes
+    // the pose test (assemble tab) keeps its sliders' state: rebuild it only when the model changes
     const stamp = `pose:${JSON.stringify([editor.model.iks ?? [], editor.model.assembly ?? []])}:${Object.keys(editor.test).length}`;
     if (dockTab !== stamp) dock.replaceChildren(...poseTest());
     dockTab = stamp;
@@ -173,14 +171,14 @@ window.addEventListener("keydown", (e) => {
   } else if (cmd && key === "y") {
     e.preventDefault();
     editor.redo();
-  } else if (!cmd && ["1", "2", "3", "4"].includes(key)) {
+  } else if (!cmd && ["1", "2", "3"].includes(key)) {
     editor.setTab(TABS[Number(key) - 1][0]);
   } else if (key === "escape" && editor.tab === "animation") {
     // out of an arc's edit mode
     if (editor.arc) editor.select(() => ((editor.arc = ""), (editor.handle = ""), editor.inspect === "arc" && (editor.inspect = "character")));
   } else if (key === "escape") {
     editor.select(() => {
-      if (editor.tab === "model") (editor.shape = editor.slot = -1), (editor.also = []);
+      if (editor.tab === "model") (editor.shape = editor.slot = editor.joint = -1), (editor.also = []);
       else editor.part = -1;
       editor.inspect = editor.tab === "model" ? "part" : "character";
     });
@@ -254,7 +252,7 @@ function viewportTools() {
         title: editor.mirrored ? "Back to the part as modelled (the left side)" : "Preview the part mirrored, as the right side shows it (gizmos hide)",
       }),
     ]),
-    (editor.tab === "rig" || editor.tab === "animation") &&
+    (editor.tab === "assemble" || editor.tab === "animation") &&
       segmented({
         value: editor.ikShow,
         options: IK_SHOW.map(([show, ic, title]) => ({ value: show, label: icon(ic), title })),
@@ -266,6 +264,10 @@ function viewportTools() {
           viewportTools();
         },
       }),
+    btn(icon("grid"), () => (editor.setGrid(!editor.grid), viewportTools()), {
+      on: editor.grid,
+      title: `${editor.grid ? "Hide" : "Show"} the grid: flat through ${editor.tab === "model" ? "the part's origin" : "the model's origin, on the floor"}, its x (red), y (green) and z (blue) axes through it`,
+    }),
     btn(icon("frame"), () => editor.viewer?.frame(), { title: editor.tab === "model" ? "Frame the part (F)" : "Frame the character (F)" }),
     inspectorButton(viewportTools),
     ].filter(Boolean),

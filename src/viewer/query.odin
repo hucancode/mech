@@ -40,7 +40,7 @@ import "../mjolnir/render"
 //     the box around the posed model
 //   {"q": "faces", "part": "torso"}
 //     the six faces of each of a part's shapes (the library's part, by name: {position, normal}
-//     in its frame, model units; +x, -x, +y, -y, +z, -z of the shape's axes, spans resolved; and
+//     in its frame, model units; +x, -x, +y, -y, +z, -z of the shape's axes, stretch resolved; and
 //     `extent`, the face's two widths: the shape's size along its other axes), for snapping slots
 //     and fitting joints to them
 //   {"q": "dofs", "joint": {..}}
@@ -65,9 +65,6 @@ import "../mjolnir/render"
 //     mech.ik_pole, worked out and turned by its swivel, unless it aims; then `swivel` and `ring`,
 //     the pole at every swivel from this one on round a whole turn, 48 points), with the model's
 //     `scale` (metres per model unit)
-//   {"q": "span", "part": "shin", "span": ["foot", ""]}
-//     the frame a shape spanning those slots of a library part would sit in: {position, rotation,
-//     length} (mech.span_frame), for changing a shape's span without moving it
 //   {"q": "project", "points": [[x, y, z], ..]}
 //     where world points show on the canvas (CSS pixels from its corner), null behind the
 //     camera: {points: [[x, y] | null, ..]}, for drawing over the view
@@ -106,7 +103,6 @@ Query :: struct {
   rest:     bool,
   x, y:     f32,
   points:   [][3]f32,
-  span:     [2]string,
   motion:   int,
   arc, on:  string,
   joint:    mech.Joint,
@@ -266,7 +262,7 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
         c, _, _ := mech.value_channel(m, a.channels[0])
         if !first do strings.write_byte(b, ',')
         first = false
-        write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], a.flip)
+        write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], a.flip)
       }
       strings.write_byte(b, ']')
     }
@@ -353,7 +349,9 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
     if k < 0 do return fail(&b, "no arc %s", q.arc)
     c, ok := mech.model_channel(m, q.on)
     if !ok || c.kind != .POSITION do return fail(&b, "no position %s", q.on)
-    write_arc(&b, rig, app.asset.clips.pose[:], c, q.arc, app.asset.anim.arcs[k].points[:], 1)
+    sharp := make([dynamic]bool, context.temp_allocator)
+    mech.arc_sharp(app.asset.anim.arcs[k], &sharp)
+    write_arc(&b, rig, app.asset.clips.pose[:], c, q.arc, app.asset.anim.arcs[k].points[:], sharp[:], 1)
   case "twins":
     strings.write_byte(&b, '{')
     first := true
@@ -400,11 +398,6 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       strings.write_byte(&b, '}')
     }
     strings.write_string(&b, "]}")
-  case "span":
-    part := mech.model_part(m, q.part)
-    if part < 0 do return fail(&b, "no part %s", q.part)
-    p, r, length := mech.span_frame(m.parts[part], q.span)
-    fmt.sbprintf(&b, `{{"position":[%v,%v,%v],"rotation":[%v,%v,%v,%v],"length":%v}}`, p.x, p.y, p.z, r.x, r.y, r.z, r.w, length)
   case "bounds":
     solve_at(clip, q.time, values)
     lo, hi := mech.rig_bounds(rig)
@@ -437,12 +430,12 @@ solve_at :: proc(clip: int, time: Maybe(f32), values: []f32) {
   mech.rig_solve(rig, values)
 }
 
-// write_arc writes arc `name`'s points `pts` as they put position channel `c` (times `flip`: a
+// write_arc writes arc `name`'s points `pts` (`sharp`: its corners) as they put position channel `c` (times `flip`: a
 // twin's, mirrored), for drawing and dragging: {name (the channel), arc, points, curve (the arc
 // through them, 64 points)}, in metres. They are offsets from where the channel is at rest (an
 // IK target's tip, or the origin, lifted), with the rest pose's amounts: where the rest pose has it.
 @(private = "file")
-write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Channel, name: string, pts: [][3]f32, flip: [3]f32) {
+write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Channel, name: string, pts: [][3]f32, sharp: []bool, flip: [3]f32) {
   m := rig.model
   rest := [3]f32{0, rig.lift, 0}
   for ik in rig.iks do if ik.channel == c.first do rest = ik.rest
@@ -458,7 +451,7 @@ write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Chan
   N :: 64
   for i in 0 ..< N {
     if i > 0 do strings.write_byte(b, ',')
-    point(b, (rest + mech.arc_at(pts, f32(i) / (N - 1)) * flip) * s)
+    point(b, (rest + mech.arc_at(pts, sharp, f32(i) / (N - 1)) * flip) * s)
   }
   strings.write_string(b, "]}")
 }

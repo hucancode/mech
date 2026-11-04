@@ -1,8 +1,8 @@
 # The mech modeling engine
 
 `src/mech` builds mechs from data. A **model** (the `"model"` half of a character file) is a
-library of rigid **parts**, each a few **primitive shapes**, named **slots** (the faces children
-are matched on) and the **joints** the part moves by; and an **assembly**: a tree of
+library of rigid **parts**, each a few **primitive shapes**, a **length**, named **slots** (the
+faces its branches are matched on) and the **joints** the part moves by; and an **assembly**: a tree of
 **instances**, each hanging a part by its joints from a slot of its parent's part. A **rig** is a
 model put into a scene: one bone per joint, one scene node per primitive. A mech is
 **rigid**: things turn and slide, nothing scales or bends. What moves is a **channel**, one of
@@ -51,10 +51,12 @@ edits models ([editors.md](editors.md)).
   model units and radians.
 - Characters face **+z**, with **+y** up. The mech's left side is +x.
 - Every part has a **frame**: a place on one of the rig's bones. A part's shapes and its slots
-  are given in that frame. Its origin is its **default slot**, unnamed: the part hangs by it, its
-  origin on its last joint's male face with **+y toward the joint**, +x along the face's
-  forward (`PART_FACE`), so a part hanging down from its joints grows toward -y. As a parent's
-  slot, the origin faces -y (`SLOT_FACE`): a child hangs below it.
+  are given in that frame. The part hangs `length` above its origin (`mech.part_face`): there it
+  sits on its last joint's male face with **+y toward the joint**, +x along the face's forward
+  (`PART_FACE`, raised by the length), so a part hanging down from its joints grows toward -y.
+  Its origin is its **default slot**, unnamed, facing -y (`SLOT_FACE`): a link's far end, where
+  the next link of a chain hangs, with no slot to name. With no length the part hangs by its
+  origin.
 - Rotations in files are **euler angles in radians**, `[x, y, z]`, applied as
   `R = Rx * Ry * Rz` (`mech.euler`, inverted by `mech.euler_from`).
 - A **face** (`{position, normal, forward}`) is a point with a direction out of the surface and
@@ -74,7 +76,7 @@ Top level:
 | `hardware` | the materials joint hardware uses: `{female, male, metal}` |
 | `iks` | IK targets: `{name, tip, aim}` |
 | `pose` | the rest pose clips start from: a move, `{twin, by}` ([below](#the-rest-pose)) |
-| `parts` | the library: `{name, joints, slots, shapes}` |
+| `parts` | the library: `{name, length, joints, slots, shapes}` |
 | `assembly` | the tree placing parts: `{name, part, parent, parent_slot, mirror, joints}`, parents first |
 
 The loader fills omitted fields with zero, and the writer leaves zero fields out. So a shape
@@ -86,20 +88,24 @@ without `"primitive"` is a `BOX`, and one without `"rotation"` is unrotated.
 "parts": [
   {
     "name": "shin",
+    "length": 0.58051,
     "joints": [{"name": "knee", "kind": "HINGE", "size": 0.29, "reach": 0.96551, "min": [-2.61799, 0, 0]}],
-    "slots": [{"name": "ankle", "position": [0, -0.56, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]}],
-    "shapes": [{"primitive": "CYLINDER", "material": "shell", "position": [0, -0.28026, 0], "size": [0.31559, 0.64051, 0.31559]}]
+    "shapes": [{"primitive": "CYLINDER", "material": "shell", "stretch": true, "position": [0, 0.01, 0], "size": [0.31559, 0.06, 0.31559]}]
   }
 ],
 "assembly": [
-  {"name": "l_shin", "part": "shin", "parent": "l_thigh", "parent_slot": "knee"},
-  {"name": "r_shin", "part": "shin", "parent": "r_thigh", "parent_slot": "knee", "mirror": "l_shin"}
+  {"name": "l_shin", "part": "shin", "parent": "l_thigh", "joints": [{"name": "knee", "twist": -1.5707963}]},
+  {"name": "r_shin", "part": "shin", "parent": "r_thigh", "mirror": "l_shin", "joints": [{"name": "knee", "twist": -1.5707963}]},
+  {"name": "l_foot", "part": "foot", "parent": "l_shin"}
 ]
 ```
 
 A **part** is a rigid piece, placed as often as the assembly likes:
-- **slots**: named faces in the part's frame, facing out of it, where children are matched.
-- **joints**: what the part moves by, from its parent's slot to its origin.
+- **length**: how far above its origin it hangs. Model a link with its origin at its far end, so
+  the next link hangs on the origin (the shin's foot) and its length lives in one number.
+- **slots**: named faces in the part's frame, facing out of it, where its branches are matched
+  (the torso's arms, the palm's fingers); a chain needs none.
+- **joints**: what the part moves by, from its parent's slot to where it hangs.
 - **shapes**: its primitives.
 
 A part's joints are a **stack**, listed from the parent's side: each joint is
@@ -118,9 +124,11 @@ An **instance** places a part in the tree, hanging it from a slot of its parent'
 children refer to it by, is its part's when left empty (name them when a part is placed twice).
 - **parent**: the instance it hangs from; instances come after their parent. One with no parent
   is a **root**, matched with the model origin.
-- **parent_slot**: the slot of the parent's part it is matched with; empty is the parent's origin.
-  The first joint's female half bolts onto it, and the part's origin onto the last joint's male
-  half. A part hangs by its origin only: to hang one the other way, make it its own part.
+- **parent_slot**: the slot of the parent's part it is matched with; empty is the parent's origin,
+  the next link of a chain. The first joint's female half bolts onto it, and the part (`length`
+  above its origin) onto the last joint's male half. A part hangs one way only: to hang one the
+  other way, make it its own part. The origin faces -y with +x forward; a link turned on it (a
+  knee's pin across the hip's) twists its first joint (`joints`, below).
 - **mirror**: the instance this one is the other side of, its **twin** (`mech.model_twin`). The
   part shows reflected, so one part serves both sides (below), and a clip's twin moves move both
   ([animation.md](animation.md#twins)).
@@ -153,23 +161,22 @@ mirrored, and the Model tab can preview a part that way.
 
 ### Shapes
 
-`{primitive, param, material, span, position, rotation, size}`: a primitive centred at
+`{primitive, param, material, stretch, position, rotation, size}`: a primitive centred at
 `position` in the part's frame, turned by `rotation`, with `size` its full extent on each axis.
 For round shapes, x and z are the diameter and y is the height (along the shape's own y).
 
-**Links.** A limb part is a link: its length is the distance between its joints, and its body
-follows. A shape that `span`s two of its part's slots (`""` is the origin) sits in the span's
-frame instead of the part's (`mech.span_frame`): centred between the two, +y from the first to the
-second, +x as near the part's +x as that allows. Its y extent is the distance between them plus
-`size.y`, so `size.y` is how far it runs past the ends. Moving a slot lengthens every shape
-spanning it, so a limb's length lives in one place. Unspanned (origin to origin), the frame is
-the part's and the distance 0, so the same rule covers every shape.
+**Links.** A limb part is a link: its `length` is the distance from where it hangs to its
+origin, where the next link hangs, and its body follows. A shape that `stretch`es runs that
+length (`mech.shape_place`): its position is from halfway up it, and its y extent is the length
+plus `size.y`, so `size.y` is how far it runs past the ends. Changing the length lengthens every
+stretched shape, so a limb's length lives in one place. Unstretched, a shape sits in the part's
+frame as given.
 
 ```json
-{"primitive": "CYLINDER", "span": ["foot", ""], "position": [0, 0.00999, 0], "size": [0.31559, 0.06, 0.31559]}
+{"primitive": "CYLINDER", "stretch": true, "position": [0, 0.01, 0], "size": [0.31559, 0.06, 0.31559]}
 ```
 
-The mech's shin body runs from its `foot` slot up to its origin, 0.06 longer than the span.
+The mech's shin body runs from its origin (the ankle) up to the knee, 0.06 longer than the shin.
 
 | primitive | param |
 | --- | --- |
@@ -188,7 +195,7 @@ These seven are the whole vocabulary. Nothing in a model is a custom mesh: see
 
 A joint is one mechanism: the hardware to build, where its bone pivots, how it rests, and what it
 moves. Each joint is **one bone and one channel**; a part that needs more motion stacks joints
-(`joints`, from the parent's slot to the part's origin, each on the one before):
+(`joints`, from the parent's slot to where the part hangs, each on the one before):
 
 | kind | moves | channel | hardware | pivot |
 | --- | --- | --- | --- | --- |
@@ -328,7 +335,7 @@ motion's are, its delay unused), every channel it leaves out at 0. With `"twin":
 channels' twins take the same values, so a symmetric stance is written for one side. It is the character's
 stance: the mech's arms hanging a little bent, its knuckles half closed, its legs reaching for the
 ground (their IK weights 1). The stance is written once, here. Each clip then holds only how it
-differs. The game shows the rest pose when an action has no clip. The character editor's pose test (Rig tab) starts from it, and **Set
+differs. The game shows the rest pose when an action has no clip. The character editor's pose test (Assemble tab) starts from it, and **Set
 rest pose** saves what it shows.
 
 ```json
@@ -343,8 +350,8 @@ rest pose** saves what it shows.
 2. **Child**: the first joint of its part's stack is seated onto the parent's slot
    (reflected when the parent is mirrored), each next joint onto the one before. A joint's female
    hardware goes on the bone before it; a moving joint gets a bone at its pivot, turned by
-   the instance's `bend`, which its male hardware rides. The part's origin sits on the last joint's male face,
-   which places the instance's frame.
+   the instance's `bend`, which its male hardware rides. The part hangs on the last joint's male
+   face, its origin `length` below: that places the instance's frame.
 3. **Shapes**: one scene node each, under the last bone, carrying the shape's place and scale
    (reflected when the instance is mirrored).
 
@@ -395,11 +402,11 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
 - `assets/characters/mech.json`: the humanoid mech, exported once from the code that used to build it
   (`src/mech_kit.odin`, seed 7). Same proportions and motion. Its right limbs place the left
   limbs' parts mirrored, and the thumb and fingers share their three segment parts
-  (`finger_1`..`finger_3`). A slot is named after what is matched on it, or `next` along a chain.
+  (`finger_1`..`finger_3`). Chains hang on the origin (each link has a length); a slot is named after the branch matched on it.
 - `assets/characters/dragon.json`: mjolnir's dragon example (`examples/creative/dragon`), ported. The
   spine is a chain of ball joints (instances `segment_*`, `taper_*`, `tail`, each with
   channels, `segment_3.spine` a rotation and so on) placing a few shared parts (`segment`, `segment_limbs` with the limbs'
-  slots, `taper`), the right limbs mirror the left limbs' parts, the limbs are shoulder and hip hinges on turntables plus elbow/knee hinges, and the jaw is a
+  slots, `taper`, each a link the next hangs on the origin of), the right limbs mirror the left limbs' parts, the limbs are shoulder and hip hinges on turntables plus elbow/knee hinges, and the jaw is a
   centred hinge. Its joint hardware uses this engine's kit, so the lugs and sockets look a little
   different from the example's. Piece colours keep the example's palette hashing, with a fixed
   seed.

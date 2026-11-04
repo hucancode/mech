@@ -181,12 +181,17 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
         ch += 1
       }
     }
-    // the part's origin sits on the last joint's male half (PART_FACE on SLOT_FACE: as it is)
+    // the part hangs on the last joint's male half (PART_FACE on SLOT_FACE: as it is), its
+    // origin its length below
+    if part >= 0 && m.parts[part].length != 0 {
+      length := m.parts[part].length
+      frame.place = geometry.transform_mul(frame.place, {{0, -length, 0}, linalg.QUATERNIONF32_IDENTITY, 1})
+      mi = mirror_shift(mi, length)
+    }
     mirrors[i] = mi if mirrored else MIRROR_NONE
     append(&rig.frames, frame)
     if part < 0 do continue
     for s, k in m.parts[part].shapes {
-      for name in s.span do if _, known := part_point(m.parts[part], name); !known do log.warnf("model %s: a shape of part %s spans unknown slot %s", m.name, inst.part, name)
       at, turn, size := shape_place(m.parts[part], s)
       place := geometry.Transform{at, turn, primitive_scale(s.primitive, size)}
       if mirrored do place = mirror_shape(mirrors[i], place, s.primitive)
@@ -474,7 +479,7 @@ ik_point :: proc(rig: ^Rig, ik: RigIk) -> [3]f32 {
 // goes, so the bend never flips as a foot steps far ahead or back, and an arm hanging with its
 // elbow back, swung forward to punch, has its elbow down; it needs no placing. Straight back
 // against its rest line, the swing has no one way to go: the bend is then only turned with the model.
-// `swivel` (the IK's _swivel channel, radians) then turns the bend about that line, from the joint
+// `swivel` (the IK's .swivel channel, radians) then turns the bend about that line, from the joint
 // above the middle one to the target: an elbow flared or rolled up, a knee swung out. The middle
 // joint goes round the circle its two segments allow, the tip staying on the target.
 ik_pole :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin: geometry.Transform) -> [3]f32 {

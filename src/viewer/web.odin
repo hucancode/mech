@@ -83,6 +83,12 @@ viewer_select :: proc "contextless" (part, shape: i32, isolate: bool) {
   app.part, app.shape, app.isolate = int(part), int(shape), isolate
 }
 
+// viewer_grid shows (on) or hides the grid through the origin.
+@(export)
+viewer_grid :: proc "contextless" (on: bool) {
+  app.grid = on
+}
+
 // viewer_explode pushes the isolated part's shapes apart: 0 assembled, 1 by the part's size.
 @(export)
 viewer_explode :: proc "contextless" (amount: f32) {
@@ -92,7 +98,7 @@ viewer_explode :: proc "contextless" (amount: f32) {
 @(export)
 viewer_frame :: proc "contextless" () {
   context = ctx
-  frame_camera()
+  app.frame_next = true // once posed: the values just shown move it
 }
 
 // viewer_view looks at the character from a View: 0 free (perspective orbit), then from +x, -x,

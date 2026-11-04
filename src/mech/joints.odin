@@ -183,6 +183,14 @@ face_mirror :: proc(d: [3]f32, m: geometry.Face) -> (out: Mirror) {
   return
 }
 
+// mirror_shift is `mi` seen from a frame `length` below: a part's origin, below where it hangs.
+mirror_shift :: proc(mi: Mirror, length: f32) -> Mirror {
+  out := mi
+  up := [3]f32{0, length, 0}
+  out.offset = mi.offset + up - mi.reflect * up
+  return out
+}
+
 // twist_face is `f` turned by `angle` about its normal.
 twist_face :: proc(f: geometry.Face, angle: f32) -> geometry.Face {
   return {f.position, f.normal, linalg.mul(linalg.quaternion_angle_axis(angle, linalg.normalize(f.normal)), f.forward)}

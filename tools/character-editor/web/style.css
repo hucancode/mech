@@ -42,14 +42,18 @@ body { display: grid; grid-template: "header header header" 44px "sidebar stage 
 body[data-dock="left"] { grid-template-areas: "header header header" "sidebar stage inspector" "dock dock inspector"; }
 body[data-dock="right"] { grid-template-areas: "header header header" "sidebar stage inspector" "sidebar dock dock"; }
 body[data-dock="both"] { grid-template-areas: "header header header" "sidebar stage inspector" "dock dock dock"; }
-/* the model and assemble tabs show the character unposed: no dock */
-body[data-tab="model"], body[data-tab="assemble"] { grid-template-rows: 44px 1fr 0; }
-body[data-tab="model"] #dock, body[data-tab="model"] .grip[data-panel="dock"], body[data-tab="assemble"] #dock, body[data-tab="assemble"] .grip[data-panel="dock"] { display: none; }
-/* the assemble tab's tree runs the sidebar's full height */
+/* the model tab's dock: the part's shapes, slots and joints, a column each */
+.part-columns { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); overflow-x: auto; }
+.part-columns > .section { display: flex; flex-direction: column; min-height: 0; border-bottom: 0; border-right: 1px solid var(--line); }
+.part-columns > .section:last-child { border-right: 0; }
+.part-columns > .section > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 6px; }
+.part-columns > .section .list { flex: 1; max-height: none; }
+/* the assemble tab's tree takes the sidebar's height the IK targets leave */
 body[data-tab="assemble"] #sidebar { display: flex; flex-direction: column; overflow: hidden; }
-body[data-tab="assemble"] #sidebar > .section { flex: 1; min-height: 0; display: flex; flex-direction: column; border-bottom: 0; }
-body[data-tab="assemble"] #sidebar > .section > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; }
-body[data-tab="assemble"] #sidebar > .section .list { flex: 1; max-height: none; }
+body[data-tab="assemble"] #sidebar > .section { flex: 0 0 auto; }
+body[data-tab="assemble"] #sidebar > .section:first-child { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+body[data-tab="assemble"] #sidebar > .section:first-child > .body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 0; }
+body[data-tab="assemble"] #sidebar > .section:first-child .list { flex: 1; max-height: none; }
 body[data-inspector="hidden"] { grid-template-columns: var(--sidebar, 280px) 1fr 0; }
 body[data-inspector="hidden"] #inspector, body[data-inspector="hidden"] .grip[data-panel="inspector"] { display: none; }
 /* resize grips (js/layout.js): a thin strip over each panel's inner edge, lit while hovered or dragged */

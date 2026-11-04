@@ -33,13 +33,14 @@ amount and delay. That is what mechanical motion is: parts moving together betwe
 held is a motion with no shape, and a pose at a moment is a shape stepping into it there.
 
 ```json
-{"name": "walk", "duration": 1, "motions": [
+{"arcs": [{"name": "step", "points": [[0, 0, 0.875], [0, 0, -0.875], [0, 0.3, 0], [0, 0, 0.875]], "corners": [0, 1]}],
+ "clips": [{"name": "walk", "duration": 1, "motions": [
   {"moves": [{"by": {"root": [0, -0.06, 0]}}]},
-  {"shape": [{"v": 0.5}, {"u": 0.55, "v": -0.5}, {"u": 1, "v": 0.5}],
-   "moves": [{"delay": 0.25, "twin": "OPPOSITE", "by": {"l_leg": [0, 0, 1.75]}}]},
+  {"shape": [{}, {"u": 0.55, "v": 0.3333}, {"u": 1, "v": 1}],
+   "moves": [{"delay": 0.25, "twin": "OPPOSITE", "by": {"l_leg": "step"}}]},
   {"shape": [{"v": 1, "ease": "IN"}, {"u": 0.5, "ease": "OUT"}], "rate": 2,
    "moves": [{"delay": 0.5, "by": {"root": [0, -0.14, 0]}}]}
-]}
+]}]}
 ```
 
 A motion is `{shape, rate, moves}`:
@@ -51,7 +52,8 @@ A motion is `{shape, rate, moves}`:
   and `delay` says how many cycles late they run. Each amount is shaped as its channel
   ([modeling.md](modeling.md#rigging-channels-ik-targets)): a number for a turn, a slide or a
   weight, `[x, y, z]` for a rotation or a position; or, for a position, an arc's name
-  ([Arcs](#arcs)). `twin` moves the other side of the body too ([Twins](#twins)).
+  ([Arcs](#arcs)); or, for a pose, how much of it ([Poses](#poses)). `twin` moves the other side
+  of the body too ([Twins](#twins)).
 
 At clip progress `x` (`t / duration`: 0 at the clip's start, 1 at its end), each move adds
 
@@ -91,6 +93,30 @@ the arc runs on along their tangents). An arc's twin follows the same points, th
 mirrored. Only a clip's motions use arcs (not the rest pose). A name the animation lacks is
 logged and skipped.
 
+Between its points an arc is a cubic (Hermite). Each point's tangent is half the way from the
+point before to the one after (Catmull-Rom), so the path runs smooth through it. Two cases use
+the segment's own chord as the tangent instead:
+
+- **Ends.** An open arc's ends have no point on one side.
+- **Corners.** `"corners": [k, ..]` lists the sharp points. A segment between two corners is a
+  straight line at a steady speed: a foot on the ground, a piston's stroke, a punch driven
+  straight. Mechanical paths are lines and hard turns. Smooth arcs stay the default, so curved,
+  organic paths are still possible.
+
+A **closed** arc, one whose last point is its first, runs smooth through that point too, since its
+neighbours wrap round the seam. It turns hard there only when that point is a corner (either
+index). The strike lists corner 0: it starts and ends at rest, its ends' tangents along their
+own segments.
+
+A **gait's foot** is one closed arc (the mech's `step` and `stride`):
+
+- The points are front and back on the ground, both corners, then the top of the swing, then
+  front again.
+- The shape's one point, `{u: duty, v: 1/3}`, says when the foot leaves the ground. So the duty
+  is written once, and the stance is a straight, steady slide on the ground, which doesn't skate.
+- The stride is the ground points' distance apart and the lift is the top point's height, both
+  dragged in the view.
+
 A move can also hold an IK target's swivel beside its arc (`"r_hand.swivel": 0.4`,
 [modeling.md](modeling.md#rigging-channels-ik-targets)): it is an amount like any other, times the
 shape, so the elbow rolls up as the fist goes along the path.
@@ -101,6 +127,23 @@ target follows its arc in the model's space, so the arc is where the hand goes w
 does: draw it where the arm can reach with the body as the clip turns it. The character editor
 lists the arcs, edits the one picked in the view (a dot per point to drag), and the curve editor
 marks the shape values that put a position on each point ([editors.md](editors.md#animate)).
+
+### Poses
+
+A **pose** is a named set of channel amounts. It belongs to the animation and every clip shares
+it: `"poses": [{"name": "fist", "by": {"r_finger_a_1.knuckle": -0.68, ..}}]`.
+
+- **Using one.** A move adds a pose by naming it with a number, how much of it:
+  `"by": {"fist": 1}` adds every amount, `"fist": 0.77` a little less of each.
+- **Twins and delays.** The move's twin and delay apply to the pose's amounts as they do to its
+  own. A fist written on the right hand closes both hands with a WITH twin, or only the right
+  one without a twin.
+- **Limits.** A pose holds amounts only: no arcs and no other poses. A channel's name wins over a
+  pose's, and the clash is logged. The rest pose is the model's, so it can't add the
+  animation's poses.
+
+The mech's `fist` is nine knuckle values written once. Before poses, the same nine numbers were
+repeated in combat_idle, walk, run, attack and cast.
 
 ### Twins
 
@@ -166,11 +209,11 @@ is whatever the artist drags it into:
 | --- | --- |
 | a stance (idle) | the rest pose ([modeling.md](modeling.md#the-rest-pose)): nothing to write. Mechanical life on top: a scan in `steps`, a weight shift as a `square` on `root` |
 | a different stance (combat idle, a walk's crouch) | no shape: a held motion, its amounts how it differs from the rest pose |
-| a walk's feet | a slide and a lift, each one move on the left leg's IK target with an OPPOSITE twin: `[0, 0, stride]` slides it, `[0, lift, 0]` lifts it, the delay its touch-down. A duty over 0.5 walks, under 0.5 runs (every foot off the ground at once). A quadruped's walk is two such moves, a hind foot and the fore foot on its side a quarter cycle later (delays 0, ¼; their twins at ½, ¾); a trot, a fore and hind foot together on one move |
+| a walk's feet | one move on the left leg's IK target with an OPPOSITE twin, on a closed foot arc ([Arcs](#arcs)): front and back on the ground (corners), the top of the swing; its shape `{u: duty, v: 1/3}`, the delay its touch-down. A duty over 0.5 walks, under 0.5 runs (every foot off the ground at once). A quadruped's walk is two such moves, a hind foot and the fore foot on its side a quarter cycle later (delays 0, ¼; their twins at ½, ¾); a trot, a fore and hind foot together on one move |
 | its bob | a bounce on `root` (its y), rate 2 for a biped (once a step), lowest as each foot lands |
 | a sway, a hull against the legs | a sine or a square, one move |
 | a wave (a snake's slither, a tail's sway) | a move per joint down a chain, each turning about the chain's side axis (a snake slithers about Y), each a fraction of a cycle later than the one before: the wave travels tailward. To have each segment head as the shape says instead of the turns piling up, each move also turns the next joint back by as much (the dragon's slither) |
-| arms swinging | a square: the left shoulder one move with an OPPOSITE twin, the forearm a move a little later |
+| arms swinging | a square: the left shoulder one move with an OPPOSITE twin, the forearm a move a little later. The waist and head turning against them are moves of the same motion (one shape, no twin) |
 | a strike | a hit, its moves the hit's channels in firing order (feet, pelvis, chest, shoulder), each a little later, driving into its stop. The wind-up is a hit before it with the coil's amounts, OUT, over the clip's first part, letting go as the strike rises. The fist is an arc on the hand's IK target, its shape stepping along it last of all: wound back, cocked, driven into the impact, followed through, back. The head aims at the impact. A step into it is a one-shot shape of its own on the foot's IK target (out, held, back), with a lift for each step |
 | a head that is the root (the dragon) | turn the root and the first spine joint back by as much: the head turns alone |
 
@@ -178,7 +221,8 @@ is whatever the artist drags it into:
 
 `clip_sample(clips, clip, t, out)` starts from the rest pose (`Clips.pose`, compiled from the
 model's `pose`) and adds each motion in file order. `clips_build` compiles an `Animation`
-against a `Model`: names become channel indices, a shape's points are sorted by u. Names the
+against a `Model`: names become channel indices, poses expand into their amounts, arcs are copied
+with their corners, and a shape's points are sorted by u. Names the
 model lacks are logged and skipped. Rebuild it whenever either side changes; the editors do so
 on every edit.
 
@@ -204,7 +248,7 @@ every frame of every clip against the reference in `bin/golden`.
 
 - `assets/characters/mech.json`: `idle` (the head scanning in settling steps), `combat_idle`
   (the guard held, the weight shifting foot to foot between stops), `walk` and `run` (feet
-  sliding and lifting on IK, crouched, coming down hard on each step, the arms swinging between
+  on their IK targets' closed foot arcs (`step`, `stride`), crouched, the fists a `fist` pose, coming down hard on each step, the arms swinging between
   stops against the legs, the waist and head twisting), `attack` (the head locks on the impact
   point; the left foot steps into a lunge and a wind-up coils pelvis and waist, the right fist
   swinging back and up to cocked by the shoulder; the body drives round into its stop and the

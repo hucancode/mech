@@ -55,7 +55,7 @@ export function partUsers(m, name) {
 
 /** the instances hanging from slot `slot` of library part `part` @param {any} m @param {string} part @param {string} slot */
 export function slotUsers(m, part, slot) {
-  return (m.assembly ?? []).filter((/** @type {any} */ x) => x.parent_slot === slot && m.assembly[instanceIndex(m, x.parent)]?.part === part);
+  return (m.assembly ?? []).filter((/** @type {any} */ x) => x.parent && (x.parent_slot ?? "") === slot && m.assembly[instanceIndex(m, x.parent)]?.part === part);
 }
 
 /** the joints instance i moves by: its part's @param {any} m @param {number} i @returns {any[]} */
@@ -189,8 +189,17 @@ export const zipValue = (a, b, f) => (Array.isArray(a) ? a.map((x, k) => f(x, /*
 /** a channel's value at rest: 0, or [0, 0, 0] @param {any} c a channel (the "channels" query) @returns {Value} */
 export const zeroValue = (c) => (c?.size === 3 ? [0, 0, 0] : 0);
 
-/** the amounts among a move's values (not its arcs) @param {Record<string, any> | undefined} by @returns {Record<string, Value>} */
-export const amountsOf = (by) => Object.fromEntries(Object.entries(by ?? {}).filter(([, v]) => typeof v !== "string"));
+/**
+ * the amounts among a move's values: not its arcs, nor the poses it adds (named in `poses`, the
+ * animation's: poseNames) @param {Record<string, any> | undefined} by @param {Set<string>} [poses] @returns {Record<string, Value>}
+ */
+export const amountsOf = (by, poses) => Object.fromEntries(Object.entries(by ?? {}).filter(([n, v]) => typeof v !== "string" && !poses?.has(n)));
+
+/** the names of animation `a`'s poses (mech.Pose) @param {any} a @returns {Set<string>} */
+export const poseNames = (a) => new Set((a?.poses ?? []).map((/** @type {any} */ p) => p.name));
+
+/** the poses a move adds, by name, each how much of it @param {Record<string, any> | undefined} by @param {Set<string>} poses @returns {Record<string, number>} */
+export const posesOf = (by, poses) => Object.fromEntries(Object.entries(by ?? {}).filter(([n, v]) => typeof v === "number" && poses.has(n)));
 
 /** the arcs a move's values name, by the position they move @param {Record<string, any> | undefined} by @returns {Record<string, string>} */
 export const arcsOf = (by) => Object.fromEntries(Object.entries(by ?? {}).filter(([, v]) => typeof v === "string"));
@@ -262,9 +271,8 @@ export function renamePart(m, from, to) {
   for (const p of m.assembly ?? []) if (p.part === from) p.part = to;
 }
 
-/** slot `from` of library part `part` renamed, carried to the instances matched on it and the part's shapes spanning it @param {any} m @param {string} part @param {string} from @param {string} to */
+/** slot `from` of library part `part` renamed, carried to the instances matched on it @param {any} m @param {string} part @param {string} from @param {string} to */
 export function renameSlot(m, part, from, to) {
-  for (const s of m.parts?.[partIndex(m, part)]?.shapes ?? []) if (s.span) s.span = s.span.map((/** @type {string} */ x) => (x === from ? to : x));
   for (const x of slotUsers(m, part, from)) x.parent_slot = to;
 }
 
@@ -320,29 +328,121 @@ export function renameMaterial(m, from, to) {
 export function renameChannels(m, a, rename) {
   const renamed = (/** @type {any} */ by) => Object.fromEntries(Object.entries(by ?? {}).map(([n, v]) => [rename(n) ?? n, v]));
   if (m?.pose?.by) m.pose.by = renamed(m.pose.by);
+  for (const p of a?.poses ?? []) p.by = renamed(p.by);
   for (const c of a?.clips ?? []) for (const mo of c.motions ?? []) for (const mv of mo.moves ?? []) mv.by = renamed(mv.by);
 }
 
 /**
- * insertArcPoint adds a point to arc `points` after point `i`: `at`, else halfway to the next (on
- * past the last, along its last segment). Every later point moves one on along the shape.
- * @param {number[][]} points @param {number} i @param {number[]} [at]
+ * arcRetime keeps the moves on arc `arc` where they were along it as its points change: each
+ * motion moving a position on it has its shape's values (k / (n - 1) for point k, mech.arc_at)
+ * carried to its new points by `to` (a value in old point units, k for point k, to new ones), its
+ * new length `n` points. A motion whose shape something else also follows (an amount, another arc)
+ * is left as it is, since moving its shape would move those too; returns how many were.
+ * @param {any} a the animation @param {any} arc @param {number} n @param {(k: number) => number} to
  */
-export function insertArcPoint(points, i, at) {
-  const p = points[i];
-  const back = points[i - 1] ?? p.map((x, c) => (c === 2 ? x - 0.5 : x));
-  const q = points[i + 1] ?? p.map((x, c) => 2 * x - back[c]);
-  points.splice(i + 1, 0, at ?? p.map((x, c) => Math.round(((x + q[c]) / 2) * 1e4) / 1e4));
+function arcRetime(a, arc, n, to) {
+  const was = arc.points.length;
+  /** @type {Set<any>} */
+  const done = new Set();
+  let shared = 0;
+  for (const u of arcUsers(a, arc.name)) {
+    const mo = a.clips[u.clip].motions[u.motion];
+    if (done.has(mo)) continue;
+    done.add(mo);
+    // amounts and the poses a move adds are numbers alike
+    const alone = (mo.moves ?? []).every((/** @type {any} */ mv) => Object.keys(amountsOf(mv.by)).length === 0 && Object.values(arcsOf(mv.by)).every((x) => x === arc.name));
+    if (!alone) {
+      shared += 1;
+      continue;
+    }
+    for (const p of mo.shape ?? []) {
+      const v = Math.round((to((p.v ?? 0) * (was - 1)) / (n - 1)) * 1e4) / 1e4;
+      if (v) p.v = v;
+      else delete p.v;
+    }
+  }
+  return shared;
 }
 
 /**
- * removeArcPoint removes point `i` of arc `arc` (never below two). Returns whether it did.
- * @param {any} arc @param {number} i
+ * insertArcPoint adds a point to arc `arc` of animation `a` after point `i`: `at`, else halfway to
+ * the next (on past the last, along its last segment). The moves on it keep their timing along it
+ * (arcRetime: the segment split in two halves), and its corners stay on their points. Returns how
+ * many motions' shapes it could not retime.
+ * @param {any} a @param {any} arc @param {number} i @param {number[]} [at]
  */
-export function removeArcPoint(arc, i) {
-  if (arc.points.length <= 2) return false;
+export function insertArcPoint(a, arc, i, at) {
+  const points = arc.points;
+  const p = points[i];
+  const back = points[i - 1] ?? p.map((/** @type {number} */ x, /** @type {number} */ c) => (c === 2 ? x - 0.5 : x));
+  const q = points[i + 1] ?? p.map((/** @type {number} */ x, /** @type {number} */ c) => 2 * x - back[c]);
+  const shared = arcRetime(a, arc, points.length + 1, (k) => (k <= i ? k : k >= i + 1 ? k + 1 : i + 2 * (k - i)));
+  points.splice(i + 1, 0, at ?? p.map((/** @type {number} */ x, /** @type {number} */ c) => Math.round(((x + q[c]) / 2) * 1e4) / 1e4));
+  if (arc.corners) arc.corners = arc.corners.map((/** @type {number} */ k) => (k > i ? k + 1 : k));
+  return shared;
+}
+
+/**
+ * removeArcPoint removes point `i` of arc `arc` of animation `a` (never below two). The moves on it
+ * keep their timing along it (arcRetime: the two segments either side of it joined into one), and
+ * its corners stay on their points, its own dropped. Returns whether it removed it.
+ * @param {any} a @param {any} arc @param {number} i
+ */
+export function removeArcPoint(a, arc, i) {
+  const n = arc.points.length;
+  if (n <= 2) return false;
+  // the point's two segments, [lo, hi] (one at an end), become one
+  const lo = Math.max(i - 1, 0);
+  const hi = Math.min(i + 1, n - 1);
+  arcRetime(a, arc, n - 1, (k) => (k <= lo ? k : k >= hi ? k - 1 : lo + ((k - lo) / (hi - lo)) * (hi - 1 - lo)));
   arc.points.splice(i, 1);
+  if (arc.corners) {
+    arc.corners = arc.corners.filter((/** @type {number} */ k) => k !== i).map((/** @type {number} */ k) => (k > i ? k - 1 : k));
+    if (!arc.corners.length) delete arc.corners;
+  }
   return true;
+}
+
+/** arc `arc` with point `i` a corner or not (mech.Arc.corners) @param {any} arc @param {number} i @param {boolean} on */
+export function setArcCorner(arc, i, on) {
+  const rest = (arc.corners ?? []).filter((/** @type {number} */ k) => k !== i);
+  arc.corners = on ? [...rest, i].sort((x, y) => x - y) : rest;
+  if (!arc.corners.length) delete arc.corners;
+}
+
+// ---- poses: named sets of amounts a move adds by name (mech.Pose) ---------------------------------
+
+/** the moves adding pose `name`: {clip, motion, move, mv} @param {any} a @param {string} name */
+export function poseUsers(a, name) {
+  const out = [];
+  for (const [c, clip] of (a?.clips ?? []).entries())
+    for (const [k, mo] of (clip.motions ?? []).entries()) for (const [n, mv] of (mo.moves ?? []).entries()) if (typeof mv.by?.[name] === "number") out.push({ clip: c, motion: k, move: n, mv });
+  return out;
+}
+
+/** pose `from` renamed, carried to the moves adding it @param {any} a @param {string} from @param {string} to */
+export function renamePose(a, from, to) {
+  for (const u of poseUsers(a, from)) u.mv.by = Object.fromEntries(Object.entries(u.mv.by).map(([n, v]) => [n === from ? to : n, v]));
+  const p = a.poses?.find((/** @type {any} */ x) => x.name === from);
+  if (p) p.name = to;
+}
+
+/** pose `name` deleted, and the moves' values adding it @param {any} a @param {string} name */
+export function deletePose(a, name) {
+  for (const u of poseUsers(a, name)) delete u.mv.by[name];
+  a.poses = (a.poses ?? []).filter((/** @type {any} */ x) => x.name !== name);
+  if (!a.poses.length) delete a.poses;
+}
+
+/**
+ * poseFromMove makes move `mv`'s amounts a new pose of animation `a`, `name`, and has the move add
+ * it instead (its arcs and the poses it adds stay). @param {any} a @param {any} mv @param {string} name
+ */
+export function poseFromMove(a, mv, name) {
+  const poses = poseNames(a);
+  const amounts = amountsOf(mv.by, poses);
+  (a.poses ??= []).push({ name, by: amounts });
+  mv.by = { ...Object.fromEntries(Object.entries(mv.by ?? {}).filter(([n]) => !(n in amounts))), [name]: 1 };
 }
 
 /** the moves naming arc `name`, where: {clip, motion, move, mv, on (the position it moves)} @param {any} a @param {string} name */
@@ -405,33 +505,35 @@ export function snapSocket(socket, face, centre, inset = 0) {
   return { position: round(face.position.map((c, k) => c + (centre[k] - c) * inset)), normal, forward };
 }
 
-/** a shape's centre, from its faces (the "faces" query, spans resolved): between its +x and -x faces @param {Face[]} faces */
+/** a shape's centre, from its faces (the "faces" query, stretch resolved): between its +x and -x faces @param {Face[]} faces */
 export const faceCentre = (faces) => faces[0].position.map((c, k) => (c + faces[1].position[k]) / 2);
-
-/** the shapes of a part spanning slot `slot` @param {any} part @param {string} slot */
-export const slotSpanners = (part, slot) => (part?.shapes ?? []).filter((/** @type {any} */ s) => s.span?.includes(slot));
 
 /**
  * @typedef {{position: number[], rotation: number[], length: number}} SpanFrame
- * the frame a shape spanning two slots sits in, in its part's frame (mech.span_frame, the "span"
- * query): its rotation a matrix, and the length the span adds to the shape's size.y
+ * the frame a shape sits in, in its part's frame (mech.shape_place): a stretched one's halfway up
+ * the part's length, which it adds to the shape's size.y; else the part's own
  */
 
+/** shapeFrame is the frame shape `s` of part `part` sits in @param {any} part @param {any} s @returns {SpanFrame} */
+export function shapeFrame(part, s) {
+  const length = s?.stretch ? part?.length ?? 0 : 0;
+  return { position: [0, length / 2, 0], rotation: [1, 0, 0, 0, 1, 0, 0, 0, 1], length };
+}
+
 /**
- * respan makes shape `s`, now placed in span frame `from`, span the slots `span` (frame `to`)
- * without moving: its position, rotation and size.y are given again in the new frame. A span of
- * the origin to the origin is none.
- * @param {any} s @param {string[]} span @param {SpanFrame} from @param {SpanFrame} to
+ * restretch makes shape `s`, now placed in frame `from`, stretch (`on`) or not, in frame `to`,
+ * without moving: its position, rotation and size.y are given again in the new frame.
+ * @param {any} s @param {boolean} on @param {SpanFrame} from @param {SpanFrame} to
  */
-export function respan(s, span, from, to) {
+export function restretch(s, on, from, to) {
   const at = from.position.map((c, k) => c + apply(from.rotation, s.position ?? [0, 0, 0])[k]);
   const back = transpose(to.rotation);
   s.position = round(apply(back, at.map((c, k) => c - to.position[k])));
   s.rotation = eulerFrom(mul(back, mul(from.rotation, euler(s.rotation)))).map(r5);
   s.size = [...(s.size ?? [0, 0, 0])];
   s.size[1] = r5(s.size[1] + from.length - to.length);
-  if (span[0] || span[1]) s.span = [...span];
-  else delete s.span;
+  if (on) s.stretch = true;
+  else delete s.stretch;
   if (s.position.every((/** @type {number} */ c) => c === 0)) delete s.position;
   if (s.rotation.every((/** @type {number} */ c) => c === 0)) delete s.rotation;
 }
@@ -467,7 +569,7 @@ export function shapeOnFace(on, n, face, span, thick = 0.1) {
   const centre = face.position.map((c, k) => c + face.normal[k] * (thick / 2));
   return {
     material: on.material,
-    ...(on.span ? { span: [...on.span] } : {}),
+    ...(on.stretch ? { stretch: true } : {}),
     position: round(apply(transpose(span.rotation), centre.map((c, k) => c - span.position[k]))),
     ...(on.rotation ? { rotation: [...on.rotation] } : {}),
     size,
@@ -477,7 +579,7 @@ export function shapeOnFace(on, n, face, span, thick = 0.1) {
 /**
  * tidyShape: a shape turned by quarter turns (its rotation a signed permutation of the axes) shows
  * the turn as its size instead, its rotation cleared, where its primitive looks the same
- * (PRIMITIVE_SYMMETRY). A spanned shape keeps its y on y (the span's length adds there). Other
+ * (PRIMITIVE_SYMMETRY). A stretched shape keeps its y on y (the part's length adds there). Other
  * quarter turns snap to exact ones; any other rotation stays.
  * @param {any} s
  */
@@ -489,7 +591,7 @@ export function tidyShape(s) {
   if (from.some((c) => c === undefined) || new Set(from).size < 3) return;
   const sym = PRIMITIVE_SYMMETRY[s.primitive ?? "BOX"];
   const keepsY = from[1] === 1;
-  if (sym === "any" && (keepsY || !s.span?.some(Boolean)) || (sym === "y" && keepsY)) {
+  if (sym === "any" && (keepsY || !s.stretch) || (sym === "y" && keepsY)) {
     const size = s.size ?? [0, 0, 0];
     s.size = from.map((c) => size[/** @type {number} */ (c)]);
     delete s.rotation;
@@ -568,8 +670,9 @@ export function bottomFace(part, faces) {
 }
 
 /**
- * newInstance hangs a new part, in a new instance, from instance `parent` (-1: a root): its
- * default slot (its origin) matched with the parent part's first free slot, else with a new slot on its first shape's
+ * newInstance hangs a new part, in a new instance, from instance `parent` (-1: a root): matched
+ * on the parent part's origin when that is a link's far end (it has a length) with nothing on it,
+ * else on its first free slot, else on a new slot on its first shape's
  * bottom face (`faces`, the engine's "faces" query of that shape). Returns the instance's index.
  * @param {any} m @param {number} parent @param {Face[]} [faces]
  */
@@ -582,7 +685,10 @@ export function newInstance(m, parent, faces) {
   const inst = { name, part: part.name };
   if (parent >= 0) {
     const on = partOf(m, parent);
-    const slot = freeSlot(m, parent) || (on ? addSlot(on, name, bottomFace(on, faces)) : "");
+    // the parent's origin when it is a link's far end with nothing on it yet, else a free slot
+    const kids = m.assembly.filter((/** @type {any} */ x) => x.parent === m.assembly[parent].name);
+    const free = on?.length && !kids.some((/** @type {any} */ x) => !x.parent_slot);
+    const slot = free ? "" : freeSlot(m, parent) || (on ? addSlot(on, name, bottomFace(on, faces)) : "");
     Object.assign(inst, { parent: m.assembly[parent].name, ...(slot ? { parent_slot: slot } : {}) });
   }
   const at = parent >= 0 ? subtreeEnd(m, parent) : m.assembly.length;
@@ -604,6 +710,7 @@ export function scalePart(part, f, joints = false) {
     s.size = mul(s.size);
   }
   for (const s of part.slots ?? []) s.position = mul(s.position);
+  if (part.length) part.length = r5(part.length * f);
 }
 
 // ---- joint hardware --------------------------------------------------------------------------------

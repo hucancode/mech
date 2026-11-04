@@ -4,11 +4,12 @@
 // shape and timing are drawn in the dock's curve editor (panels/curves.js); what it moves, here:
 // its moves, each channel amounts moving together, `delay` cycles late, with their twins on the
 // other side of the body (`twin`) when they say. The animation's arcs (paths a move can put a
-// position on) are a list of their own: picked, one is edited in the view.
+// position on) are a list of their own: picked, one is edited in the view. So are its poses (named
+// sets of amounts a move adds by name, times a number: a fist).
 import { btn, CARET, h, list, num, row, section, select, text, vec3 } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { amountsOf, arcsOf, arcUsers, clone, deleteArc, insertArcPoint, removeArcPoint, renameArc, uniqueName } from "../model.js";
+import { amountsOf, arcsOf, arcUsers, clone, deleteArc, deletePose, insertArcPoint, poseFromMove, poseNames, posesOf, poseUsers, removeArcPoint, renameArc, renamePose, setArcCorner, uniqueName } from "../model.js";
 import { arcHandle, pickedArcPoint } from "../gizmo.js";
 import { motionLabel } from "../shapes.js";
 import { channelValues } from "./channelValues.js";
@@ -55,6 +56,7 @@ export function animSidebar() {
     ),
     clip && motionsSection(clip),
     arcsSection(),
+    posesSection(),
   ];
 }
 
@@ -166,10 +168,15 @@ function arcInspector(arc) {
         "points",
         [
           h("span", { class: "muted", style: { flex: "1" } }, `point ${i + 1} of ${points.length}`),
-          btn("+", () => set(() => (insertArcPoint(points, i), pick(i + 1))), { kind: "icon", title: "Add a point after this one, halfway to the next (or on past the last)" }),
-          btn("−", () => set(() => (removeArcPoint(arc, i), pick(Math.max(i - 1, 0)))), { kind: "icon", title: "Remove this point (an arc keeps two)", disabled: points.length <= 2 }),
+          btn("+", () => set(() => (insertArcPoint(editor.anim, arc, i) && editor.flash("Motions whose shape other moves follow too keep their shape: check their timing on the arc"), pick(i + 1))), { kind: "icon", title: "Add a point after this one, halfway to the next (or on past the last); the moves on the arc keep their timing" }),
+          btn("−", () => set(() => (removeArcPoint(editor.anim, arc, i), pick(Math.max(i - 1, 0)))), { kind: "icon", title: "Remove this point (an arc keeps two); the moves on the arc keep their timing", disabled: points.length <= 2 }),
         ],
-        "open, first point to last: a move's shape says how far along (0 the first point, 1 the last, k / (n - 1) point k). A loop is one whose last point is its first. Pick a point in the view to move it",
+        "open, first point to last: a move's shape says how far along (0 the first point, 1 the last, k / (n - 1) point k). A loop is one whose last point is its first: it runs smooth through it. Pick a point in the view to move it",
+      ),
+      row(
+        "corner",
+        h("input", { type: "checkbox", checked: (arc.corners ?? []).includes(i), onchange: (/** @type {Event} */ e) => set(() => setArcCorner(arc, i, /** @type {HTMLInputElement} */ (e.target).checked)) }),
+        "a sharp point: the path turns hard there, and runs straight at a steady speed to a corner next to it (a foot on the ground, a piston's stroke, a punch driven straight)",
       ),
       row("point", vec3({ value: points[i], step: 0.01, digits: 3, onchange: (v) => set(() => (points[i] = v), `${arc.name}-${i}`) }), "an offset from where the position is at rest, in model units, as its own values are"),
       row(
@@ -184,6 +191,86 @@ function arcInspector(arc) {
     ],
     { actions: [btn(icon("x"), () => editArc(arc.name), { kind: "icon", title: "Stop editing (Esc)" })] },
   );
+}
+
+/** the animation's pose named `name` @param {string} name @returns {any} */
+const poseNamed = (name) => editor.anim.poses?.find((/** @type {any} */ x) => x.name === name);
+
+/** whether `name` is free for a pose: no pose has it, and no channel (a channel's name wins) @param {string} name */
+const poseFree = (name) => !!name && !poseNamed(name) && !editor.channels().some((c) => c.name === name);
+
+/**
+ * posesSection lists the animation's poses: named sets of amounts a move adds by name, times a
+ * number (a fist, a guard), shared by every clip. Pick one to edit its amounts and name; the bin
+ * deletes it and what adds it. A pose is made from a move ("make pose" on the move).
+ */
+function posesSection() {
+  const poses = editor.anim.poses ?? [];
+  const p = poseNamed(editor.pose ?? "");
+  /** @param {() => void} change @param {string} [key] */
+  const set = (change, key) => editor.edit("anim", change, key && `pose-${key}`);
+  const remove = () => {
+    const users = poseUsers(editor.anim, p.name);
+    if (users.length && !confirm(`Delete pose ${p.name}? ${users.length} move${users.length === 1 ? "" : "s"} add${users.length === 1 ? "s" : ""} it.`)) return;
+    set(() => {
+      deletePose(editor.anim, p.name);
+      editor.pose = "";
+    });
+  };
+  return section(
+    "Poses",
+    [
+      poses.length === 0 && h("div", { class: "muted", style: { padding: "4px 0" } }, "Named sets of amounts a move adds by name, times a number: a fist, a guard. Make one from a move's amounts (make pose)."),
+      list(
+        poses,
+        (x) => [h("span", { class: "name", style: { flex: "1" } }, x.name), h("span", { class: "tag", title: "amounts; moves adding it" }, `${Object.keys(x.by ?? {}).length} ch · ${poseUsers(editor.anim, x.name).length} uses`)],
+        (i) => poses[i].name === p?.name,
+        (i) => editor.select(() => (editor.pose = editor.pose === poses[i].name ? "" : poses[i].name)),
+      ),
+      p && h("div", { style: { marginTop: "8px" } }, row("name", text({ value: p.name, onchange: (v) => v !== p.name && poseFree(v) && set(() => (renamePose(editor.anim, p.name, v), (editor.pose = v))) }), "the moves adding it are renamed with it")),
+      ...(p
+        ? channelValues(p.by, {
+            onset: (vs) => set(() => (p.by = { ...(p.by ?? {}), ...vs }), `${p.name}-${Object.keys(vs).join()}`),
+            onremove: (names) => set(() => (p.by = Object.fromEntries(Object.entries(p.by ?? {}).filter(([c]) => !names.includes(c))))),
+          })
+        : []),
+    ],
+    { actions: [btn(icon("trash"), remove, { kind: "icon", title: "Delete the pose picked, and the moves' values adding it", disabled: !p })] },
+  );
+}
+
+/**
+ * poseRows: the poses the move adds (mech.Pose, the animation's), each how much of it (✕ takes it
+ * off), "+ pose" to add one, and "make pose" to make the move's amounts a new pose it adds instead.
+ * @param {any} mv @param {(change: () => void, key?: string) => void} set
+ */
+function poseRows(mv, set) {
+  const names = poseNames(editor.anim);
+  const on = posesOf(mv.by, names);
+  const free = [...names].filter((n) => !(n in on));
+  const make = () => {
+    const name = prompt("Name the new pose (a fist, a guard):", uniqueName("pose", (n) => !poseFree(n)));
+    if (!name) return;
+    if (!poseFree(name)) return editor.flash(`${name} is taken: a pose or a channel has it`);
+    set(() => poseFromMove(editor.anim, mv, name));
+  };
+  return [
+    ...Object.entries(on).map(([name, v]) =>
+      row(
+        `${name} pose`,
+        [num({ value: v, step: 0.05, digits: 3, onchange: (x) => set(() => (mv.by[name] = Math.round(x * 1e4) / 1e4), `pose-${name}`) }), btn(icon("x", 14), () => set(() => delete mv.by[name]), { kind: "icon", title: "Stop adding the pose" })],
+        "how much of the pose's amounts the move adds (1 all of them, 0.5 half), its twin and delay applying to them",
+      ),
+    ),
+    row(
+      "",
+      [
+        free.length > 0 && select({ value: "", none: "+ pose", options: free, onchange: (n) => n && set(() => (mv.by = { ...(mv.by ?? {}), [n]: 1 })) }),
+        btn("make pose", make, { title: "Make the move's amounts a new pose, which the move then adds (reuse it in other moves)", disabled: Object.keys(amountsOf(mv.by, names)).length === 0 }),
+      ],
+      "poses: named sets of amounts (Poses, in the sidebar)",
+    ),
+  ];
 }
 
 /** a click that adds to what is picked (shift, cmd or ctrl) @param {MouseEvent} e */
@@ -370,11 +457,12 @@ function motionPanel(clip, mo, k, set) {
             "the other side of the body too, by the same amounts: WITH at the same time (both hands opening), OPPOSITE half a cycle later (the other foot, the other arm swinging back)",
           ),
           ...(open
-            ? channelValues(amountsOf(mv.by), {
+            ? channelValues(amountsOf(mv.by, poseNames(editor.anim)), {
                 onset: (vs) => set(() => (mv.by = { ...(mv.by ?? {}), ...vs }), `move${k}-${n}-${Object.keys(vs).join()}`),
                 onremove: (names) => set(() => (mv.by = Object.fromEntries(Object.entries(mv.by ?? {}).filter(([c]) => !names.includes(c))))),
               })
             : []),
+          ...(open ? poseRows(mv, set) : []),
           ...(open ? arcRows(mv, set) : []),
         );
       }),
