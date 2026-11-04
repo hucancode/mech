@@ -84,14 +84,14 @@ test_shipped_clips :: proc(t: ^testing.T) {
       for ch in ([]string{"l_leg", "r_leg"}) do for k in 0 ..< 3 do end[value_of(m, ch, k)] = 0
       end[value_of(m, "l_leg.weight")], end[value_of(m, "r_leg.weight")] = 1, 1
       rig_solve(rig, end)
-      feet := [2]int{model_instance(m, "l_foot"), model_instance(m, "r_foot")}
+      feet := [2]int{place_of(m, "l_foot"), place_of(m, "r_foot")}
       rest := [2][3]f32{rig_frame(rig, feet[0]).position, rig_frame(rig, feet[1]).position}
       for k in 0 ..= 60 {
         clip_sample(&clips, c, clip.duration * f32(k) / 60, end)
         rig_solve(rig, end)
         for f, n in feet {
           p := rig_frame(rig, f).position
-          testing.expectf(t, p.y > rest[n].y - 0.01 && abs(p.x - rest[n].x) < 0.01, "%s %s: %s at %v, rest %v", name, clip.name, m.assembly[f].name, p, rest[n])
+          testing.expectf(t, p.y > rest[n].y - 0.01 && abs(p.x - rest[n].x) < 0.01, "%s %s: %s at %v, rest %v", name, clip.name, place_name(m, model_places(m)[f]), p, rest[n])
         }
       }
     }
@@ -128,7 +128,7 @@ test_hinge_dims :: proc(t: ^testing.T) {
   for size in ([]f32{0.1, 0.3, 1}) {
     for k in 0 ..= 60 {
       reach := f32(k) * 0.05
-      d := joint_dims(Joint{kind = .HINGE, size = size, reach = reach})
+      d := joint_dims(Joint{kind = .PIN, size = size, reach = reach})
       if d.lug_d == 0 {
         testing.expectf(t, d.reach == 0 && d.shank == 0 && d.flange_t == 0 && d.pin_r > 0, "reach %v: a bare pin on the socket", reach)
         continue
@@ -139,9 +139,9 @@ test_hinge_dims :: proc(t: ^testing.T) {
       testing.expectf(t, d.pin_r < d.lug_d / 2 && d.clr < d.jaw, "reach %v: the pin sits in the lug", reach)
     }
   }
-  bare := joint_dims(Joint{kind = .HINGE, size = 0.1})
+  bare := joint_dims(Joint{kind = .PIN, size = 0.1})
   testing.expect(t, bare.lug_d == 0 && abs(bare.pin_r - 0.035) < 1e-6, "no reach: a bare pin")
-  testing.expect(t, joint_dims(Joint{kind = .HINGE, reach = 1}) == Dims{}, "size 0 builds nothing")
+  testing.expect(t, joint_dims(Joint{kind = .PIN, reach = 1}) == Dims{}, "size 0 builds nothing")
 }
 
 // A ball's stud is long enough that, at the joint's widest tilt, the male flange is above the
@@ -185,7 +185,7 @@ test_shape_stretch :: proc(t: ^testing.T) {
 // an axis with equal ends is free.
 @(test)
 test_joint_limits :: proc(t: ^testing.T) {
-  knee := Joint{kind = .HINGE, min = {-2.5, 0, 0}, max = {0.1, 0, 0}}
+  knee := Joint{kind = .PIN, min = {-2.5, 0, 0}, max = {0.1, 0, 0}}
   b: Bone
   bone_limit(&b, knee, MIRROR_NONE)
   mo := limit(b, {-3, 1, 0})
@@ -201,9 +201,9 @@ test_joint_limits :: proc(t: ^testing.T) {
 // A turntable pivots where its discs meet; with no size it pivots on the socket, as it always did.
 @(test)
 test_spin_mounts :: proc(t: ^testing.T) {
-  a, m := joint_mounts(Joint{kind = .HINGE, axis = .Y, size = 0.4})
+  a, m := joint_mounts(Joint{kind = .SPIN, size = 0.4})
   testing.expect(t, abs(a.position.y - 0.05) < 1e-6 && abs(m.position.y + 0.05) < 1e-6)
-  a, m = joint_mounts(Joint{kind = .HINGE, axis = .Y})
+  a, m = joint_mounts(Joint{kind = .SPIN})
   testing.expect(t, a.position == {} && m.position == {})
 }
 
@@ -215,7 +215,7 @@ test_channels :: proc(t: ^testing.T) {
   m := Model{}
   append(&m.iks, Ik{name = "leg", aim = true}, Ik{name = "arm"})
   append(&m.parts, Part{name = "limb"})
-  append(&m.parts[0].joints, Joint{name = "hip", kind = .BALL}, Joint{name = "knee", kind = .HINGE})
+  append(&m.parts[0].joints, Joint{name = "hip", kind = .BALL}, Joint{name = "knee", kind = .PIN})
   append(&m.assembly, Instance{name = "l_leg", part = "limb"}, Instance{name = "r_leg", part = "limb"})
   defer {
     delete(m.iks)
@@ -462,22 +462,21 @@ test_ik_aim :: proc(t: ^testing.T) {
   lib: Library
   rig, _ := rig_create(&lib, &w, nil, m, w.root)
   defer rig_destroy(rig, &w)
-  k := -1
-  for ik, n in m.iks do if ik.name == "head_aim" do k = n
-  if !testing.expect(t, k >= 0, "the mech has a head_aim IK") do return
+  c, found := model_channel(m, "head_aim")
+  if !testing.expect(t, found, "the mech has a head_aim IK") do return
   ik: RigIk
-  for x in rig.iks do if x.channel == ik_channel(m, k) do ik = x
+  for x in rig.iks do if x.channel == c.first do ik = x
   testing.expect(t, ik.aim && ik.count > 0, "head_aim aims with the neck")
   values := make([]f32, model_channels(m))
   defer delete(values)
-  head := model_instance(m, "head")
+  head := place_of(m, "head")
   look :: proc(rig: ^Rig, ik: RigIk, head: int) -> [3]f32 {
     return linalg.mul(rig_frame(rig, head).rotation, ik.look)
   }
   rig_solve(rig, values)
   testing.expectf(t, look(rig, ik, head).z > 0.99, "at rest it looks ahead: %v", look(rig, ik, head))
-  c := ik_channel(m, k)
-  values[c], values[c + 1], values[c + IK_WEIGHT] = 3, 1, 1
+  ch := c.first
+  values[ch], values[ch + 1], values[ch + IK_WEIGHT] = 3, 1, 1
   rig_solve(rig, values)
   want := linalg.normalize(ik.rest + {3, 1, 0} - rig_frame(rig, head).position)
   got := look(rig, ik, head)
@@ -526,9 +525,9 @@ test_motion_file :: proc(t: ^testing.T) {
 test_turntable_stack :: proc(t: ^testing.T) {
   m := Model{}
   part := Part{name = "thigh"}
-  append(&part.joints, Joint{name = "hip_top", kind = .HINGE, axis = .Y, min = {0, -1, 0}, max = {0, 1, 0}}, Joint{name = "hip", kind = .HINGE, size = 0.2, reach = 1, min = {-0.3, 0, 0}, max = {0.3, 0, 0}})
+  append(&part.joints, Joint{name = "hip_top", kind = .SPIN, min = {0, -1, 0}, max = {0, 1, 0}}, Joint{name = "hip", kind = .PIN, size = 0.2, reach = 1, min = {-0.3, 0, 0}, max = {0.3, 0, 0}})
   square := Part{name = "shin"}
-  append(&square.joints, Joint{name = "knee", kind = .HINGE, size = 0.2, reach = 1})
+  append(&square.joints, Joint{name = "knee", kind = .PIN, size = 0.2, reach = 1})
   append(&m.parts, part, square)
   append(&m.assembly, Instance{name = "l_thigh", part = "thigh"}, Instance{name = "l_shin", part = "shin", parent = "l_thigh"})
   defer {delete(part.joints); delete(square.joints); delete(m.parts); delete(m.assembly)}
@@ -579,16 +578,16 @@ test_turntable_stack :: proc(t: ^testing.T) {
 }
 
 // A linear actuator slides its part out along its socket's normal, a model unit a unit, held to its
-// stroke; a mirrored one slides the same way out, so twins take the same values.
+// stroke; on the reflected side of a mirrored slot it slides the same way out, so twins take the same values.
 @(test)
 test_linear :: proc(t: ^testing.T) {
   m := Model{}
   body := Part{name = "body"}
-  append(&body.slots, Slot{name = "l", position = {1, 0, 0}, normal = {1, 0, 0}, forward = {0, 0, 1}}, Slot{name = "r", position = {-1, 0, 0}, normal = {-1, 0, 0}, forward = {0, 0, 1}})
+  append(&body.slots, Slot{name = "ram", position = {1, 0, 0}, normal = {1, 0, 0}, forward = {0, 0, 1}, mirror = .X})
   ram := Part{name = "ram"}
   append(&ram.joints, Joint{name = "piston", kind = .LINEAR, size = 0.2, max = {0, 0.5, 0}})
   append(&m.parts, body, ram)
-  append(&m.assembly, Instance{name = "body", part = "body"}, Instance{name = "l_ram", part = "ram", parent = "body", parent_slot = "l"}, Instance{name = "r_ram", part = "ram", parent = "body", parent_slot = "r", mirror = "l_ram"})
+  append(&m.assembly, Instance{name = "body", part = "body"}, Instance{name = "ram", part = "ram", parent = "body", parent_slot = "ram"})
   defer {delete(body.slots); delete(ram.joints); delete(m.parts); delete(m.assembly)}
   c, ok := model_channel(&m, "l_ram.piston")
   testing.expectf(t, ok && c.kind == .SLIDE, "a slide: %v", c)
@@ -638,8 +637,9 @@ test_ik_root :: proc(t: ^testing.T) {
     if !testing.expect(t, ok) do continue
     defer model_destroy(m)
     defer animation_destroy(a)
-    root := ik_root(m, model_instance(m, w.tip))
-    testing.expectf(t, root >= 0 && m.assembly[root].name == w.root, "%s %s: reaches from %v, want %s", w.file, w.tip, m.assembly[root].name if root >= 0 else "?", w.root)
+    places := model_places(m)
+    root := ik_root(places, model_place(m, places, w.tip))
+    testing.expectf(t, root >= 0 && place_name(m, places[root]) == w.root, "%s %s: reaches from %v, want %s", w.file, w.tip, place_name(m, places[root]) if root >= 0 else "?", w.root)
   }
 }
 
@@ -739,7 +739,7 @@ test_twins :: proc(t: ^testing.T) {
   defer delete(by)
   by["l_leg"] = [3]f32{0.1, 0.2, 0.3}
   by["root"] = [3]f32{0, -0.1, 0}
-  move_resolve(m, "test", Move{delay = 0.25, twin = .OPPOSITE, by = by}, &targets, &moves)
+  move_resolve(m, .CLIP, Move{delay = 0.25, twin = .OPPOSITE, by = by}, &targets, &moves)
   testing.expect(t, len(moves) == 2 && moves[0].count == 6 && moves[1].count == 3 && moves[1].delay == 0.75)
   testing.expect(t, targets[moves[1].first].index == value_of(m, "r_leg") && targets[moves[1].first].value == -0.1)
 }
@@ -760,13 +760,17 @@ test_arc :: proc(t: ^testing.T) {
     want := linalg.lerp([3]f32{0, 1, 1}, [3]f32{1, 2, 1}, s * 3 - 1)
     testing.expectf(t, linalg.length(arc_at(pts, sharp, s) - want) < 1e-5, "between corners at %v, straight and steady: %v, want %v", s, arc_at(pts, sharp, s), want)
   }
-  // a closed arc (its last point its first) runs smooth through its seam, unless it is a corner
-  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}, {0, 0, 0}}
+  // a closed arc runs on from its last point back to its first, point k at k / n, smooth through
+  // its seam unless it is a corner, and round again past its end
+  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
+  for p, k in loop do testing.expectf(t, linalg.length(arc_at(loop, nil, f32(k) / 4, true) - p) < 1e-5, "closed: point %d at %d/4", k, k)
+  testing.expectf(t, linalg.length(arc_at(loop, nil, 1, true) - loop[0]) < 1e-5, "closed: back at its first point at 1")
+  testing.expectf(t, linalg.length(arc_at(loop, nil, 1.25, true) - loop[1]) < 1e-5, "closed: round again past 1")
   e: f32 = 1e-3
-  into, leave := (loop[4] - arc_at(loop, nil, 1 - e)) / e, (arc_at(loop, nil, e) - loop[0]) / e
+  into, leave := (loop[0] - arc_at(loop, nil, 1 - e, true)) / e, (arc_at(loop, nil, e, true) - loop[0]) / e
   testing.expectf(t, linalg.length(into - leave) < 0.05 * linalg.length(leave), "smooth through the seam: in %v, out %v", into, leave)
-  corner := []bool{true, false, false, false, false}
-  into, leave = (loop[4] - arc_at(loop, corner, 1 - e)) / e, (arc_at(loop, corner, e) - loop[0]) / e
+  corner := []bool{true, false, false, false}
+  into, leave = (loop[0] - arc_at(loop, corner, 1 - e, true)) / e, (arc_at(loop, corner, e, true) - loop[0]) / e
   testing.expectf(t, linalg.dot(linalg.normalize(into), linalg.normalize(leave)) < 0.1, "a corner at the seam turns hard: in %v, out %v", into, leave)
 
   text := read(t, "mech.json")
@@ -874,7 +878,7 @@ test_attack_strikes :: proc(t: ^testing.T) {
   eyes := value_of(m, "head_aim")
   look: RigIk
   for ik in rig.iks do if ik.channel == eyes do look = ik
-  head, fist, shoulder := model_instance(m, "head"), model_instance(m, "r_palm"), model_instance(m, "r_arm")
+  head, fist, shoulder := place_of(m, "head"), place_of(m, "r_palm"), place_of(m, "r_arm")
   held: [3]f32
   // the drive held, once its stop has stopped bouncing, until the return
   for k in 0 ..= 10 {
@@ -1001,12 +1005,15 @@ test_poses :: proc(t: ^testing.T) {
   clip_sample(&clips, 1, 0.5, values)
   for i in ([]int{rk, lk}) do testing.expectf(t, near(moved(&clips, values, i), -0.2), "times its number, on both sides with WITH: %v", moved(&clips, values, i))
   for i in ([]int{ry, ly}) do testing.expectf(t, near(moved(&clips, values, i), 0.1), "an IK target too: %v", moved(&clips, values, i))
-  // in a pose, a pose and an arc are skipped; its amounts are times the move's number; the
-  // channel `root` wins over the pose `root`
+  // in a pose, a pose and an arc are skipped; its amounts are times the move's number; a name
+  // that is both a channel and a pose (`root`) is neither, and character_check says so
   clip_sample(&clips, 2, 0.5, values)
   testing.expectf(t, near(moved(&clips, values, rk), 0), "no pose in a pose: %v", moved(&clips, values, rk))
   testing.expectf(t, near(moved(&clips, values, ly), 0), "no arc in a pose")
-  testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0.5), "pose amounts times 2, the channel root's 0.3: %v", moved(&clips, values, value_of(m, "root", 1)))
+  testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0), "root, a channel and a pose, is skipped: %v", moved(&clips, values, value_of(m, "root", 1)))
+  clashes := 0
+  for x in character_check(m, anim) do if x.severity == .ERROR && strings.contains(x.text, "root") do clashes += 1
+  testing.expectf(t, clashes > 0, "the clash of root is reported")
   testing.expectf(t, near(moved(&clips, values, value_of(m, "pelvis.spin")), 0), "the channel wins over the pose")
   // poses round-trip
   out := animation_format(anim)
@@ -1064,58 +1071,31 @@ test_motion_spread :: proc(t: ^testing.T) {
   testing.expectf(t, again.clips[0].motions[0].moves[0].spread == 0.2 && again.clips[0].motions[0].moves[1].spread == 0, "spread round-trips: %s", out)
 }
 
-// An aim whose tip is the root (the dragon's head) turns the head to face its target, the body
-// below following it less and less toward the tail; by its weight, part of the way.
+// The shipped characters keep every rule character_check knows: no ERROR. BUDGET issues (data
+// fighting the machine) are listed in the log, so their count stays visible.
 @(test)
-test_aim_damped :: proc(t: ^testing.T) {
-  text := read(t, "dragon.json")
-  defer delete(text)
-  m, a, ok := character_parse(text)
-  if !testing.expect(t, ok) do return
-  defer model_destroy(m)
-  defer animation_destroy(a)
-  w: world.World
-  world.init(&w, 4096)
-  defer world.shutdown(&w)
-  lib: Library
-  rig, _ := rig_create(&lib, &w, nil, m, w.root)
-  defer rig_destroy(rig, &w)
-  clips := clips_build(a, m)
-  defer clips_destroy(&clips)
-  c := value_of(m, "head_aim")
-  ik: RigIk
-  for x in rig.iks do if x.channel == c do ik = x
-  if !testing.expectf(t, ik.body && ik.count >= 11, "the dragon's head_aim turns its body: %v bones", ik.count) do return
-  head := model_instance(m, "head")
-  chain := rig.chains[ik.first:][:ik.count]
-  values := make([]f32, model_channels(m))
-  defer delete(values)
-  copy(values, clips.pose[:])
-  rig_solve(rig, values)
-  rest := make([]quaternion128, len(chain) + 1)
-  defer delete(rest)
-  rest[0] = rig_frame(rig, head).rotation
-  for bone, k in chain do rest[k + 1] = rig.poses[bone].rotation
-  angle :: proc(a, b: quaternion128) -> f32 {
-    return 2 * math.acos(min(1, abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w)))
+test_assets_check :: proc(t: ^testing.T) {
+  for name in ([]string{"mech", "dragon", "strider"}) {
+    text := read(t, fmt.tprint(name, ".json", sep = ""))
+    defer delete(text)
+    m, a, ok := character_parse(text)
+    if !testing.expect(t, ok) do continue
+    defer model_destroy(m)
+    defer animation_destroy(a)
+    budget := 0
+    for x in character_check(m, a) {
+      if x.severity == .ERROR do testing.expectf(t, false, "%s: %s", name, x.text)
+      else {
+        budget += 1
+        log.infof("%s: %s", name, x.text)
+      }
+    }
+    log.infof("%s: %d budget issues", name, budget)
   }
-  // off to its left and up, ahead
-  values[c], values[c + 1], values[c + 2], values[c + IK_WEIGHT] = 3, 1.5, -1, 1
-  rig_solve(rig, values)
-  h := rig_frame(rig, head)
-  want := linalg.normalize(ik.rest + {3, 1.5, -1} - h.position)
-  testing.expectf(t, linalg.dot(linalg.mul(h.rotation, ik.look), want) > 0.995, "the head faces its target: %v, want %v", linalg.mul(h.rotation, ik.look), want)
-  full := angle(rest[0], h.rotation)
-  testing.expectf(t, full > 0.3, "the head turns: %v", full)
-  last := full
-  for bone, k in chain {
-    turned := angle(rest[k + 1], rig.poses[bone].rotation)
-    testing.expectf(t, turned <= last + 1e-3, "%s turns no more than the bone before it: %v, then %v", m.assembly[rig.bones[bone].part].name, last, turned)
-    last = turned
-  }
-  testing.expectf(t, last < 0.1 * full, "the tail hardly turns: %v of the head's %v", last, full)
-  values[c + IK_WEIGHT] = 0.5
-  rig_solve(rig, values)
-  half := angle(rest[0], rig_frame(rig, head).rotation)
-  testing.expectf(t, abs(half - full / 2) < 0.1 * full, "by half its weight, half the turn: %v of %v", half, full)
+}
+
+// place_of is the place named `name` (model_place over model_places), -1 for none.
+@(private = "file")
+place_of :: proc(m: ^Model, name: string) -> int {
+  return model_place(m, model_places(m), name)
 }

@@ -10,7 +10,7 @@ import { btn, check, color, face, h, list, num, row, section, segmented, select,
 import { icon } from "../icons.js";
 import { dockSpanButtons } from "../layout.js";
 import { editor } from "../editor.js";
-import { addSlot, clone, dropPartJoint, faceCentre, FACE_NAMES, fitJoint, HINGE_AXES, isTurntable, JOINT_KINDS, jointAxes, jointKind, jointSize, jointSizeFor, newPart, partUsers, PRIMITIVES, renameMaterial, renamePart, renamePartJoint, renameSlot, restretch, setJointAxis, setJointKind, setJointRange, shapeFrame, slotUsers, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
+import { addSlot, clone, dropPartJoint, faceCentre, FACE_NAMES, fitJoint, JOINT_KINDS, MIRROR_PLANES, setMirror, jointAxes, jointKind, jointSize, jointSizeFor, newPart, partUsers, PRIMITIVES, renameMaterial, renamePart, renamePartJoint, renameSlot, restretch, setJointKind, setJointRange, shapeFrame, slotUsers, snapSocket, socketFace, tidyPart, turn90, uniqueName } from "../model.js";
 
 /** @param {number[] | undefined} c */
 export const swatch = (c) => `rgb(${(c ?? [0, 0, 0]).map((x) => Math.round(x * 255)).join(",")})`;
@@ -200,6 +200,11 @@ function shapeSection(part) {
       row(shape.primitive === "WEDGE" ? "taper" : "top radius", slider({ value: shape.param, min: 0, max: 1, onchange: (v) => setShape((s) => (s.param = v), "param") })),
     row("material", select({ value: shape.material, options: names, onchange: (v) => setAll((s) => (s.material = v)) })),
     row(
+      "mirror",
+      select({ value: shape.mirror ?? "NONE", options: MIRROR_PLANES, onchange: (v) => setAll((s) => setMirror(s, v)) }),
+      "drawn twice: as written, and reflected across that plane of the part (x = 0, …): model one half of a symmetric part",
+    ),
+    row(
       "stretch",
       check({
         value: spanned,
@@ -302,6 +307,11 @@ function slotSection(part) {
   const edit = (change, key) => editor.edit("model", change, key);
   return section("Slot", [
     row("name", text({ value: slot.name, onchange: (v) => edit(() => (renameSlot(m, part.name, slot.name, v), (slot.name = v))) }), "renames carry to the instances matched on it"),
+    row(
+      "mirror",
+      select({ value: slot.mirror ?? "NONE", options: MIRROR_PLANES, onchange: (v) => edit(() => setMirror(slot, v)) }),
+      "two slots: as written, and reflected across that plane of the part (the body's middle). What hangs from it is placed on both sides, l_ as written and r_ reflected, its channels twins",
+    ),
     ...(snapRow(part, slot) ?? []),
     ...face({ value: slot, onchange: (f) => edit(() => Object.assign(slot, f), "slot") }),
   ]);
@@ -312,8 +322,8 @@ function slotSection(part) {
  * the one before. Each is named (its channel, `<instance>.<joint>`, moves it), has a kind (a spin
  * servo, a hinge, a ball, a linear actuator), its range and its hardware; a turntable is a spin
  * before or after a hinge, whose plate on it is round. They live on the part, so every instance of
- * it shares them; they are straight here, and each instance sets them at rest (twist, bend: the
- * Assemble tab). None: the part bolts on rigid.
+ * it shares them; they are straight here, each instance turns them on their sockets (twist: the
+ * Assemble tab), and the rest pose says how they stand (the pose test). None: the part bolts on rigid.
  * @param {any} part
  */
 function jointsList(part) {
@@ -323,9 +333,9 @@ function jointsList(part) {
   const edit = (change) => editor.edit("model", change);
   const taken = (/** @type {string} */ n) => joints.some((/** @type {any} */ j) => j.name === n);
   const add = () => {
-    const size = fitFor(part, "HINGE");
+    const size = fitFor(part, "PIN");
     edit(() => {
-      (part.joints ??= []).push(setJointKind({ name: uniqueName("hinge", taken) }, "HINGE", size));
+      (part.joints ??= []).push(setJointKind({ name: uniqueName("pin", taken) }, "PIN", size));
       editor.joint = part.joints.length - 1;
       editor.inspect = "part";
     });
@@ -337,7 +347,7 @@ function jointsList(part) {
     (j, i) => [
       h("span", { class: "tag" }, `${i + 1}`),
       h("span", { class: "name", style: { flex: "1" } }, j.name),
-      h("span", { class: "tag" }, `${isTurntable(j) ? "turntable" : jointKind(j).toLowerCase()} ${jointAxes(j).join("·").toLowerCase()}`),
+      h("span", { class: "tag" }, `${jointKind(j).toLowerCase()} ${jointAxes(j).join("·").toLowerCase()}`),
     ],
     (i) => i === k,
     (i) => editor.select(() => ((editor.joint = i === k ? -1 : i), (editor.inspect = "part"))),
@@ -388,17 +398,14 @@ function jointSection(part) {
   const edit = (change, key) => editor.edit("model", change, key);
   const size = jointSize(j);
   const kind = jointKind(j);
-  const pin = kind === "HINGE" && !isTurntable(j);
+  const pin = kind === "PIN";
   // the engine says when a hinge is too close for lugs (a bare pin)
   const bare = pin ? editor.viewer?.query({ q: "dofs", joint: j })?.bare : false;
   return section(
     "Joint",
     [
       row("name", text({ value: j.name, onchange: (v) => editor.edit("both", () => (renamePartJoint(m, editor.anim, part.name, j.name, v), (j.name = v))) }), "renames carry to its channels in the rest pose and the open animation"),
-      row("kind", [
-        select({ value: kind, options: JOINT_KINDS, onchange: (v) => edit(() => setJointKind(j, v, size || fitFor(part, v))) }),
-        kind === "HINGE" && select({ value: j.axis ?? "X", options: HINGE_AXES, onchange: (v) => edit(() => setJointAxis(j, v)) }),
-      ]),
+      row("kind", select({ value: kind, options: JOINT_KINDS, onchange: (v) => edit(() => setJointKind(j, v, size || fitFor(part, v))) }), "PIN a forked hinge about x, SPIN a turntable about y, LINEAR a piston along y, BALL a ball and socket"),
       ...rangeRows(j, edit),
       row(
         "size",
@@ -409,7 +416,7 @@ function jointSection(part) {
             if (to) edit(() => (j.size = to));
           }, { title: "Size it to the face it sits on, as a clevis is sized by its link" }),
         ],
-        `about ${pin ? "the lugs' diameter" : { BALL: "the ball's diameter", HINGE: "the discs' diameter", LINEAR: "the barrel's diameter" }[kind]}; the hardware scales with it (0: none, the joint pivoting on its slot)`,
+        `about ${pin ? "the lugs' diameter" : { BALL: "the ball's diameter", SPIN: "the discs' diameter", LINEAR: "the barrel's diameter" }[kind]}; the hardware scales with it (0: none, the joint pivoting on its slot)`,
       ),
       pin &&
         size > 0 &&
@@ -425,7 +432,7 @@ function jointSection(part) {
 
 /**
  * rangeRows edit a joint's stops, one row per axis it moves about (along): from its rest, degrees
- * (a linear actuator's, model units out); equal ends leave it free. Drives and IK stay inside them.
+ * (a linear actuator's, model units out). Every joint has them but a turntable, which may spin free (equal ends). Drives and IK stay inside them.
  * @param {any} j @param {(change: () => void, key?: string) => void} edit
  */
 function rangeRows(j, edit) {
@@ -434,7 +441,7 @@ function rangeRows(j, edit) {
     const k = "XYZ".indexOf(a);
     const end = (/** @type {number} */ e) =>
       num({ value: (e ? j.max : j.min)?.[k] ?? 0, deg: !slides, step: slides ? 0.05 : 5, onchange: (v) => edit(() => setJointRange(j, k, e, v), `range-${k}-${e}`) });
-    return row(slides ? "stroke" : `range ${a.toLowerCase()}`, [end(0), end(1)], slides ? "how far it slides out, from rest, in model units; equal ends: free" : `its stops about ${a}, from rest, in degrees; equal ends: free`);
+    return row(slides ? "stroke" : `range ${a.toLowerCase()}`, [end(0), end(1)], slides ? "how far it slides out, from rest, in model units" : `its stops about ${a}, from rest, in degrees${jointKind(j) === "SPIN" ? "; equal ends: it spins free" : ""}`);
   });
 }
 

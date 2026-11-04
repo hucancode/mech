@@ -5,7 +5,7 @@ import "core:math/linalg"
 import "../mjolnir/geometry"
 
 // Joint hardware, after mjolnir's Atlas example (examples/creative/atlas): forked hinges with lugs
-// and a pin, ball and socket joints, and turntables (a hinge about y). Every joint adds a bone at its pivot,
+// and a pin (PIN), ball and socket joints (BALL), and turntables (SPIN). Every joint adds a bone at its pivot,
 // and its hardware as pieces: the female half on the parent's bone, the male half on its own.
 // Hardware is painted in the model's `hardware` materials.
 
@@ -64,11 +64,9 @@ BALL_TILT :: 70 * math.RAD_PER_DEG // as far as a ball tilts before its stud mee
 @(private)
 joint_dims :: proc(j: Joint) -> (d: Dims) {
   switch j.kind {
-  case .HINGE:
-    if joint_turntable(j) {
-      d.flange_w, d.flange_t = 1, 0.25
-      break
-    }
+  case .SPIN:
+    d.flange_w, d.flange_t = 1, 0.25
+  case .PIN:
     plate := min(0.55, 0.4 * j.reach)
     lug := min(LUG_D, 2 * (j.reach - plate - GAP))
     if lug < LUG_MIN {
@@ -97,19 +95,14 @@ joint_dims :: proc(j: Joint) -> (d: Dims) {
   return
 }
 
-// joint_turntable: a hinge turning about its socket's normal (y), built as two discs
-joint_turntable :: proc(j: Joint) -> bool {
-  return j.kind == .HINGE && j.axis == .Y
-}
-
 // joint_has_plates: whether a pin hinge builds base plates, which are round next to a turntable
 joint_has_plates :: proc(j: Joint) -> bool {
-  return j.kind == .HINGE && !joint_turntable(j) && joint_dims(j).flange_t > 0
+  return j.kind == .PIN && joint_dims(j).flange_t > 0
 }
 
 // joint_bare: a pin hinge with hardware whose reach is too short for lugs, built as a bare pin
 joint_bare :: proc(j: Joint) -> bool {
-  return j.kind == .HINGE && !joint_turntable(j) && j.size > 0 && joint_dims(j).lug_d == 0
+  return j.kind == .PIN && j.size > 0 && joint_dims(j).lug_d == 0
 }
 
 // ball_tilt: how far a ball joint's range tilts its stud from upright (about x and z together), up to
@@ -140,9 +133,10 @@ joint_mounts :: proc(j: Joint) -> (a, b: geometry.Face) {
   switch j.kind {
   case .BALL:
     return {{0, -(d.ball_r * 0.55 + d.flange_t), 0}, NEG_Y, Z}, {{0, d.ball_r + d.stud_len + d.flange_t, 0}, Y, Z}
-  case .HINGE:
+  case .SPIN:
     // a turntable: two discs meeting on the pivot
-    if joint_turntable(j) do return {{0, d.flange_t / 2, 0}, Y, X}, {{0, -d.flange_t / 2, 0}, NEG_Y, X}
+    return {{0, d.flange_t / 2, 0}, Y, X}, {{0, -d.flange_t / 2, 0}, NEG_Y, X}
+  case .PIN:
     return {{0, d.reach, 0}, Y, X}, {{0, -d.reach, 0}, NEG_Y, X}
   case .LINEAR:
     // the barrel's mouth is the pivot, the barrel back toward the parent; the part on the rod's end
@@ -162,13 +156,12 @@ Mirror :: struct {
 MIRROR_NONE :: Mirror{reflect = {1, 0, 0, 0, 1, 0, 0, 0, 1}}
 
 // joint_mirror: a joint bolted onto a reflected slot (mirror_face) is the joint reflected across
-// its female face's forward d, as its bone holds it; a turn about d keeps its sign, the others
-// turn over. The part's frame sits on that reflected joint the same way
-// (PART_FACE), so its shapes and slots are reflected across the same plane, seen from the part.
-// `bend` is the instance's (InstanceJoint).
-joint_mirror :: proc(j: Joint, bend: f32) -> Mirror {
+// its female face's forward d; a turn about d keeps its sign, the others turn over. The part's
+// frame sits on that reflected joint the same way (PART_FACE), so its shapes and slots are
+// reflected across the same plane, seen from the part.
+joint_mirror :: proc(j: Joint) -> Mirror {
   a, m := joint_mounts(j)
-  return face_mirror(linalg.normalize(linalg.quaternion_mul_vector3(linalg.quaternion_inverse(joint_rest(j, bend)), a.forward)), m)
+  return face_mirror(a.forward, m)
 }
 
 // face_mirror reflects across direction `d` what sits (with PART_FACE) on face `m`: joint_mirror's,
@@ -211,14 +204,15 @@ mirror_shape :: proc(mi: Mirror, place: geometry.Transform, p: Primitive) -> geo
   return {mi.reflect * place.position + mi.offset, linalg.normalize(linalg.quaternion_from_matrix3(q)), scale}
 }
 
-// joint_axes are the axes of its frame a joint moves on, in channel order: a hinge's axis (x, a
-// pin, or y, a turntable; a twisted socket points either any way), a linear actuator's y (out along
-// the socket's normal), a ball's x, y, z.
+// joint_axes are the axes of its frame a joint moves on, in channel order: a pin's x, a
+// turntable's y (a twisted socket points either any way), a linear actuator's y (out along the
+// socket's normal), a ball's x, y, z.
 joint_axes :: proc(j: Joint) -> (axes: [3]Axis, count: int) {
   switch j.kind {
-  case .HINGE:
-    a := Axis.Y if j.axis == .Y else .X
-    return {a, a, a}, 1
+  case .PIN:
+    return {.X, .X, .X}, 1
+  case .SPIN:
+    return {.Y, .Y, .Y}, 1
   case .LINEAR:
     return {.Y, .Y, .Y}, 1
   case .BALL:
@@ -237,25 +231,15 @@ joint_turns :: proc(j: Joint) -> (turns: bit_set[Axis]) {
   return
 }
 
-// joint_rest turns a joint's bone at rest: `bend` (the instance's, InstanceJoint) about its first
-// axis; a linear actuator's not at all.
-joint_rest :: proc(j: Joint, bend: f32) -> quaternion128 {
-  if j.kind == .LINEAR do return linalg.QUATERNIONF32_IDENTITY
-  axes, _ := joint_axes(j)
-  axis: [3]f32
-  axis[int(axes[0])] = 1
-  return linalg.quaternion_angle_axis(bend, axis)
-}
-
 // joint_build bolts joint `j` onto `socket` of `parent` and returns the frame its male half bolts
-// the next joint or the part on (with PART_FACE). It gets a bone at its pivot, turned by `bend` at
-// rest (joint_rest); IK turns it about its axes (joint_turns). `round`: a pin hinge's top and
+// the next joint or the part on (with PART_FACE). It gets a bone at its pivot, which its channel
+// and IK turn about its axes (joint_turns). `round`: a pin hinge's top and
 // bottom plates turn on a turntable next to it in the stack, so are round.
 @(private)
-joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint, bend: f32, round: [2]bool) -> Frame {
+joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint, round: [2]bool) -> Frame {
   a, m := joint_mounts(j)
   female := Frame{parent.bone, geometry.transform_mul(parent.place, geometry.seat(socket, a))}
-  male := Frame{add_bone(b, female.bone, female.place.position, female.place.rotation * joint_rest(j, bend), joint_turns(j)), geometry.TRANSFORM_IDENTITY}
+  male := Frame{add_bone(b, female.bone, female.place.position, female.place.rotation, joint_turns(j)), geometry.TRANSFORM_IDENTITY}
   d := joint_dims(j)
   d.round_top, d.round_bottom = round[0], round[1]
   switch j.kind {
@@ -263,13 +247,11 @@ joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint,
     // the barrel from the mouth back to the parent; the rod from the part's end back into it
     cylinder(b, female, .FEMALE, d.barrel_r, d.barrel_len)
     cylinder(b, male, .METAL, d.rod_r, d.barrel_len - d.rod_r, {0, -d.rod_r, 0})
-  case .HINGE:
-    if joint_turntable(j) {
-      // on the pivot (+y toward the parent): the female disc on the parent's side, the male on the joint's
-      cylinder(b, female, .FEMALE, d.flange_w / 2, d.flange_t / 2)
-      cylinder(b, male, .MALE, d.flange_w / 2, d.flange_t / 2, {0, -d.flange_t / 2, 0})
-      break
-    }
+  case .SPIN:
+    // on the pivot (+y toward the parent): the female disc on the parent's side, the male on the joint's
+    cylinder(b, female, .FEMALE, d.flange_w / 2, d.flange_t / 2)
+    cylinder(b, male, .MALE, d.flange_w / 2, d.flange_t / 2, {0, -d.flange_t / 2, 0})
+  case .PIN:
     hinge_female(b, female, d)
     hinge_male(b, male, d)
   case .BALL:

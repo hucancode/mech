@@ -5,8 +5,7 @@
 import { btn, CARET, h, section } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { apply, fromQuat, transpose } from "../math3.js";
-import { clone, instanceIndex, mirrorName, mirrorRoot, mirrorSubtree, newInstance, partOf, reparent, subtreeEnd, treeOrder, uniqueName } from "../model.js";
+import { clone, instanceIndex, newInstance, partOf, placedNames, reparent, subtreeEnd, treeOrder, uniqueName } from "../model.js";
 import { openKit } from "../kit.js";
 
 /** names of the folded parts; kept across redraws, not saved */
@@ -35,23 +34,6 @@ export function partTree(title) {
       editor.part = newInstance(m, parent, faces);
       editor.inspect = "part";
     });
-  };
-  const root = editor.part >= 0 ? mirrorRoot(m, editor.part) : -1;
-  const mirror = () => {
-    const i = root;
-    const other = mirrorName(parts[i].name);
-    const there = other ? instanceIndex(m, other) : -1;
-    if (there >= 0 && !confirm(`Replace ${other} and the ${subtreeEnd(m, there) - there - 1} instances under it with a mirror of ${parts[i].name}?`)) return;
-    // the model's x in the parent's frame at rest: the plane the other side's slot is reflected across
-    const parent = parts[instanceIndex(m, parts[i].parent)]?.name;
-    const rest = parent ? editor.ask({ q: "parts", rest: true, parts: [parent] })?.[parent] : undefined;
-    if (parent && !rest) return editor.flash(`Could not mirror ${parts[i].name}: the viewer has no model`);
-    const lateral = rest ? apply(transpose(fromQuat(rest.rotation)), [1, 0, 0]) : [1, 0, 0];
-    editor.edit("model", () => {
-      editor.part = mirrorSubtree(m, i, lateral);
-      editor.inspect = "part";
-    });
-    editor.flash(`Mirrored ${parts[i].name} to ${m.assembly[editor.part].name}`);
   };
   const duplicate = () =>
     editor.edit("model", () => {
@@ -95,6 +77,13 @@ export function partTree(title) {
     for (let p = instanceIndex(m, parts[editor.part]?.parent), n = 0; p >= 0 && n < 64; p = instanceIndex(m, parts[p].parent), n++) folded.delete(parts[p].name);
   }
   const order = treeOrder(m);
+  // the instances hung from a mirrored slot (or from one that is): placed on both sides
+  const places = editor.ask({ q: "places" }) ?? [];
+  /** both sides' names, when instance i is placed on each side of the body @param {number} i */
+  const sides = (i) => {
+    const names = placedNames(places, m, i);
+    return names.length > 1 ? names.join(", ") : "";
+  };
   /** how many parts hang below the row at k in `order` @param {number} k */
   const below = (k) => {
     let n = 0;
@@ -129,6 +118,7 @@ export function partTree(title) {
       Array.from({ length: depth }, () => h("span", { class: "guide" })),
       caret,
       h("span", { class: "name" }, p.name),
+      sides(i) && h("span", { class: "tag", title: `on both sides of the body: ${sides(i)}` }, "l · r"),
       shut && h("span", { class: "tag" }, `+${n}`),
     );
     if (shut) k += n;
@@ -143,11 +133,6 @@ export function partTree(title) {
     actions: [
       btn(icon("child"), () => add(true), { kind: "icon", title: "Add a new part under the selection, matched with its part's first free slot", disabled: editor.part < 0 }),
       btn(icon("plus"), () => add(false), { kind: "icon", title: "Add a new part as a root" }),
-      btn(icon("mirror"), mirror, {
-        kind: "icon",
-        title: root >= 0 ? `Mirror ${parts[root].name} and what hangs from it to the other side: the same parts, mirrored (replaces ${mirrorName(parts[root].name)})` : "Mirror to the other side: select an instance named l_… or r_… (left/right)",
-        disabled: root < 0,
-      }),
       btn(icon("kit"), () => openKit(), { kind: "icon", title: "Add from a kit: any instance of any character, with what hangs from it and the parts they place" }),
       btn(icon("copy"), duplicate, { kind: "icon", title: "Duplicate the selected instance (not what hangs from it)", disabled: editor.part < 0 }),
       btn(icon("trash"), remove, { kind: "icon", title: "Delete the selected instance and what hangs from it (the parts stay in the library)", disabled: editor.part < 0 || parts.length <= 1 }),

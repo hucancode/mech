@@ -50,14 +50,16 @@ To put a character in the game, export it and copy the file into `assets/charact
   arrow keys (shift for 10×), or drag the x/y/z label (shift for fine, alt for coarse). A size's
   🔗 lock changes all three in proportion.
 - Angles are shown and typed in **degrees**: shape rotations, joints' ranges, the values of turns
-  and rotations (a joint's, an IK target's swivel, the root's turn), and instances' joint twists
-  and bends. Files keep radians.
+  and rotations (a joint's, an IK target's swivel, the root's turn), and instances' joint twists.
+  Files keep radians.
 - Values go by channel, shaped as it is ([modeling.md](modeling.md#rigging-channels-ik-targets)):
   a turn, a slide or a weight is a slider, a rotation or a position an x/y/z row.
 - Exports are written by the engine's own writer, so copying one over an asset only diffs where
   you changed something.
-- Warnings from the engine (a motion naming a channel the model lacks, an instance matched with a
-  slot its parent's part lacks, a value shaped otherwise than its channel, an arc the animation lacks, and so on) collect under ⚠ in the header.
+- What the engine finds wrong (`mech.character_check`: a motion naming a channel the model lacks,
+  an instance matched with a slot its parent's part lacks, a value shaped otherwise than its
+  channel, an arc the animation lacks, a joint without stops, and so on), and its BUDGET issues (a
+  clip fighting the machine), collect under ⚠ in the header.
 
 A model is a **library of parts** and an **assembly** placing them ([modeling.md](modeling.md)).
 The Model tab makes parts, their slots and their joints; the Assemble tab hangs parts on
@@ -69,9 +71,8 @@ The selected part shows **alone**, unposed, hanging by its own joints and standi
 instance does in the character (a torso upright on its waist, a shin hanging from its knee), with
 its frame drawn as RGB axes and only the selected shape outlined. The viewer draws no shadows. The **explode** slider at the top right of the
 view pushes its shapes apart, each out from the part's middle (double-click it to put them back);
-the handles hide while exploded. The **⇋** button beside it previews the part mirrored, as a
-`mirror` instance (the right side) shows it; model the left side, and the handles hide while
-previewing. Nothing about the view is saved.
+the handles hide while exploded. Mirrored shapes and slots show on both sides of their plane, as
+the engine draws them. Nothing about the view is saved.
 
 - **Parts** (the sidebar): the library. Each row says how often the assembly places the part (`unused` when
   never). **+** adds a small box, ⧉ duplicates, ✕ deletes a part nothing places.
@@ -87,25 +88,29 @@ previewing. Nothing about the view is saved.
     bigger or smaller, select its shapes (Cmd-A selects them all) and drag the size tool's middle
     box: they scale together about their middle. A joint stack is listed from the parent's
     side, each joint on the one before; the inspector edits the picked one: its **name** (unique in the part;
-    its channel, `<instance>.<joint>`, is named by it), its **kind** (hinge, linear or ball) and a
-    hinge's **axis** (X a pin, Y a turntable; a new joint is a pin sized to the first shape with
-    room for lugs, and switching kind or axis keeps the size and drops a pin's reach), its **range** on each axis it moves
-    (its stops, from rest; equal ends leave it free; drives and IK stay inside; a linear's is its
-    **stroke**, in model units), **size** (the hardware
+    its channel, `<instance>.<joint>`, is named by it), its **kind** (PIN, SPIN a turntable, LINEAR
+    or BALL; a new joint is a pin sized to the first shape with room for lugs, and switching kind
+    keeps the size and drops a pin's reach), its **range** on each axis it moves (its stops, from
+    the part straight; every joint has them, and a new one or a new kind starts with some; only a
+    turntable may spin free, equal ends; drives and IK stay inside; a linear's is its **stroke**,
+    in model units), **size** (the hardware
     scales with it; 0 builds none; **fit** sizes it to the face of the part's shapes where it
     sits, as a clevis is sized by its link, and a new joint or kind starts fitted), and for a
     hinge its **reach** (how far out from the slot it pivots, times the size; too little for lugs
     and it is a bare pin on the slot, like the knuckles, which the hint says). A **turntable** is a
-    hinge about Y stacked before the pin (turning it on its socket) or after it (turning the part
+    SPIN stacked before the pin (turning it on its socket) or after it (turning the part
     after the pin); the pin's plate next to it shows round. The engine measures every other piece of hardware from these, so they always fit
     together: a ball's neck, for one, is as long as its range needs ([modeling.md](modeling.md#joints)).
     Joints live on the part, so every instance of the part shares them.
   - its **slots**: the origin first (the default slot, listed with what hangs on it), then the
     named faces its branches are matched on (a chain needs none).
-    Select one to rename it (carried to the instances matched on it), **snap** it to one of the
-    six faces of a shape (**inset** moves the next snap in toward the shape's centre), or type
-    its position, normal and forward. A slot something is matched on can't be deleted.
-  - its **shapes**: primitive, taper or top radius, material, **stretch**, position, **turn**
+    Select one to rename it (carried to the instances matched on it), **mirror** it across a
+    plane of the part (none, X, Y, Z: two slots, the second reflected; what hangs from it is placed
+    on both sides of the body, `l_` and `r_`), **snap** it to one of the six faces of a shape
+    (**inset** moves the next snap in toward the shape's centre), or type its position, normal and
+    forward. A slot something is matched on can't be deleted.
+  - its **shapes**: primitive, taper or top radius, material, **mirror** (none, X, Y, Z: drawn again
+    reflected across that plane of the part, so a symmetric part is modelled one half), **stretch**, position, **turn**
     (a quarter turn about the part's X, Y or Z; a box, a sphere or an upright cylinder shows it
     as its size instead of a rotation), rotation (degrees; shown when there is one) and size (the
     full extent; round shapes show a diameter and a height). **tidy** does that for every shape
@@ -128,8 +133,8 @@ previewing. Nothing about the view is saved.
   (alt: both ways from its centre); the middle box sizes it all (drag right or up), and every
   selected shape with it, about their middle. Shift snaps
   to 0.01.
-- **slots** (T): a ring on each slot (click to select it), a dashed one on the origin and a
-  square where the part hangs, its length above, and a dot on each face of the shapes that faces
+- **slots** (T): a ring on each slot (click to select it), a mirrored slot's other side dashed and
+  joined to it, a dashed ring on the origin and a square where the part hangs, its length above, and a dot on each face of the shapes that faces
   you: click one to put the selected slot there, or a new slot when none is selected.
 - **joints** (J): at each pivot of the joints the part hangs by, a ring per axis it turns about,
   its range as a thick arc and where it is now as a spoke; a linear's, an arrow out along its
@@ -137,23 +142,19 @@ previewing. Nothing about the view is saved.
   slides), held in its range.
 
 Trying joints with J is never saved; ↺ by "joints" puts them back at rest, and choosing another
-part does too. A part's joints show straight here: how they sit at rest is each instance's (Assemble).
+part does too. A part's joints show straight here: how they stand at rest is the rest pose's
+(Assemble, the pose test).
 
 ## Assemble
 
 - **Character settings** show in the inspector when nothing is selected (Esc clears the
   selection): name, stand-on-the-ground, and the materials joint hardware is painted in.
-- **Assembly**: the tree of instances (the inspector shows the part each places, its slots, and
-  whether it is mirrored).
+- **Assembly**: the tree of instances (the inspector shows the part each places and its slots). An
+  instance placed on both sides of the body (hung from a mirrored slot, or below one) is tagged
+  **l · r**; it is written once, and selecting it outlines both sides.
   - **+ child** makes a new part and hangs it on the selection's origin when that is a link's far
     end (it has a length) with nothing on it, else on its first free slot (a new slot on the
     bottom of its first shape when all are taken); **+ root** adds a free-standing one.
-  - **⇋ mirror** copies the selected limb (from the topmost `l_`/`r_` instance, or
-    `left`/`right`) to the other side of the body, replacing what is there. The copies place the
-    **same parts**, mirrored, so editing a left hand edits both. They get the other side's names,
-    and their joints' channels are the other side's (`r_forearm.elbow`), with the same numbers:
-    the engine turns over the ones a reflection needs. IK targets come along. The limb is matched with the other side's slot of the
-    parent's part (`l_shoulder` to `r_shoulder`), which is made, reflected, when the part has none.
   - **kit** adds any instance of any character (this one, those saved here and those in
     assets/), with what hangs from it, under the selection: the parts they place, their joints,
     materials and IK targets come along, all can be scaled on the way in, and it is matched with the selection's slot of the
@@ -164,11 +165,10 @@ part does too. A part's joints show straight here: how they sit at rest is each 
     free one), or onto "make root". The tree stays parents first.
 - **The selected instance**: name (renaming carries to its children, its channels and IK targets),
   **part** (from the library, or a new one), **parent**, **matched with** (a slot of the parent's part, or its origin),
-  **mirror of** (its twin on the other side of the body: it shows the twin's part reflected, and
-  twin moves in clips move both; a mirror copy sets it), and how it sets its part's joints at rest: per joint, a **twist** (turning it on
-  its socket first, about the socket's normal) and a **bend** (turning its first axis), in degrees,
-  each with 0 / 90 / 180 / −90 buttons. The joint's range is from there. A mirror copy keeps them.
-  Each joint also shows its **channel** and what kind it is (a turn, a rotation, a slide).
+  **sides** (when it is placed on both: `l_arm · r_arm`), and how it mounts its part's joints: per
+  joint, a **twist** (turning it on its socket, about the socket's normal), in degrees, with 0 /
+  90 / 180 / −90 buttons. How a joint stands at rest is the rest pose's. Each joint also shows its
+  **channel** (one per side) and what kind it is (a turn, a rotation, a slide).
 
 ### Rigging
 
@@ -191,8 +191,9 @@ The **pose test** in the dock has a row per channel (the engine's list, its cont
 starting from the rest pose, to try the rig and check clearances: a joint's slider runs over its range, a position or
 a rotation is one x/y/z row. It moves the view only, until **Set rest
 pose** saves what it shows as the model's rest pose: the stance every clip starts from and adds
-onto ([modeling.md](modeling.md#the-rest-pose)), one side for both when the two sides match (a
-twin pose; the engine's `twins` query says which channel is whose twin). ↺ goes back to the rest
+onto ([modeling.md](modeling.md#the-rest-pose)). The rest pose is symmetric, so it keeps one
+side of each pair, the left (the engine's `twins` query says which channel is whose twin), and
+says so when the two sides differed: asymmetry is a clip's. ↺ goes back to the rest
 pose.
 
 **Handles in the view** (Assemble and Animate): a diamond on the model's root, a dot on each IK
@@ -237,7 +238,8 @@ at a moment is a shape stepping into it there.
   is edited: its **name** (renamed through the moves naming it), **shown on** (the position it is
   drawn on when no move of the motion shown uses it), its **points** (the one picked in the view,
   else the last: typed in, **+** adds one after it, **−** removes it), **corner** (the picked
-  point is sharp: the path turns hard there and runs straight to a corner next to it),
+  point is sharp: the path turns hard there and runs straight to a corner next to it), **closed**
+  (on from its last point back to its first, a loop; the moves on it keep each point where it was),
   **used by** (each move
   naming it: click to go there) and **+ assign to the picked move** (puts a position of the
   picked move on it).

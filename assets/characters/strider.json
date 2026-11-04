@@ -12,32 +12,37 @@
     ],
     "hardware": {"female": "dark", "male": "trim", "metal": "metal"},
     "iks": [
-      {"name": "l_leg", "tip": "l_foot"},
-      {"name": "r_leg", "tip": "r_foot"},
+      {"name": "leg", "tip": "foot"},
       {"name": "head_aim", "tip": "sensor", "aim": true}
     ],
     "pose": {
-      "twin": "WITH",
-      "by": {
-        "l_arm.shoulder": -0.08,
-        "l_arm.shoulder_top": 0.2,
-        "l_cannon.elbow": 0.7,
-        "l_leg": [0, 0, 0.014],
-        "l_leg.weight": 1,
-        "root": [0, -0.12, 0],
-        "sensor.neck": [0.05, 0, 0]
-      }
+      "l_arm.shoulder": 1.4908,
+      "l_arm.shoulder_top": 0.2,
+      "l_cannon.elbow": 0.7,
+      "l_foot.toe": 0.3,
+      "l_hock.ankle": -1,
+      "l_leg": [0, 0, 0.014],
+      "l_leg.weight": 1,
+      "l_shin.knee": 1.25,
+      "l_thigh.hip": 1.5708,
+      "root": [0, -0.12, 0],
+      "sensor.neck": [0.05, 0, 0]
     },
     "parts": [
       {
         "name": "pelvis",
         "joints": [
-          {"name": "spin", "axis": "Y"}
+          {"name": "spin", "kind": "SPIN"}
         ],
         "slots": [
           {"name": "hull", "normal": [0, 1, 0], "forward": [0, 0, 1]},
-          {"name": "l_thigh", "position": [0.62, -0.3, 0], "normal": [1, 0, 0], "forward": [0, 0, -1]},
-          {"name": "r_thigh", "position": [-0.62, -0.3, 0], "normal": [-1, 0, 0], "forward": [0, 0, 1]}
+          {
+            "name": "thigh",
+            "position": [0.62, -0.3, 0],
+            "normal": [1, 0, 0],
+            "forward": [0, 0, -1],
+            "mirror": "X"
+          }
         ],
         "shapes": [
           {"primitive": "CYLINDER", "material": "dark", "position": [0, -0.08, 0], "size": [0.8, 0.16, 0.8]},
@@ -47,26 +52,31 @@
             "material": "trim",
             "position": [0.5, -0.3, 0],
             "rotation": [0, 0, 1.5707964],
-            "size": [0.42, 0.16, 0.42]
-          },
-          {
-            "primitive": "CYLINDER",
-            "material": "trim",
-            "position": [-0.5, -0.3, 0],
-            "rotation": [0, 0, 1.5707964],
-            "size": [0.42, 0.16, 0.42]
+            "size": [0.42, 0.16, 0.42],
+            "mirror": "X"
           }
         ]
       },
       {
         "name": "hull",
         "joints": [
-          {"name": "waist", "kind": "BALL", "size": 0.42}
+          {
+            "name": "waist",
+            "kind": "BALL",
+            "size": 0.42,
+            "min": [-0.4, -0.45, -0.15],
+            "max": [0.45, 0.55, 0.15]
+          }
         ],
         "slots": [
           {"name": "sensor", "position": [0.35, -1.42, 0], "normal": [0, -1, 0], "forward": [1, 0, 0]},
-          {"name": "l_arm", "position": [0, -0.95, 1.22], "normal": [0, 0, 1], "forward": [-1, 0, 0]},
-          {"name": "r_arm", "position": [0, -0.95, -1.22], "normal": [0, 0, -1], "forward": [1, 0, 0]},
+          {
+            "name": "arm",
+            "position": [0, -0.95, 1.22],
+            "normal": [0, 0, 1],
+            "forward": [-1, 0, 0],
+            "mirror": "Z"
+          },
           {"name": "rack", "position": [-0.4, -1.42, 0], "normal": [0, -1, 0], "forward": [0, 0, 1]}
         ],
         "shapes": [
@@ -82,28 +92,27 @@
           },
           {"material": "trim", "position": [0.2, -1.42, 0], "size": [0.9, 0.04, 1.9]},
           {"material": "dark", "position": [0, -0.36, 0], "size": [1.3, 0.14, 1.8]},
-          {"material": "trim", "position": [0.72, -0.62, 0.68], "size": [0.06, 0.36, 0.4]},
-          {"material": "trim", "position": [0.72, -0.62, -0.68], "size": [0.06, 0.36, 0.4]},
+          {"material": "trim", "position": [0.72, -0.62, 0.68], "size": [0.06, 0.36, 0.4], "mirror": "Z"},
           {
             "primitive": "CYLINDER",
             "material": "dark",
             "position": [0, -0.95, 1.1],
             "rotation": [1.5707964, 0, 0],
-            "size": [0.6, 0.14, 0.6]
-          },
-          {
-            "primitive": "CYLINDER",
-            "material": "dark",
-            "position": [0, -0.95, -1.1],
-            "rotation": [1.5707964, 0, 0],
-            "size": [0.6, 0.14, 0.6]
+            "size": [0.6, 0.14, 0.6],
+            "mirror": "Z"
           }
         ]
       },
       {
         "name": "sensor",
         "joints": [
-          {"name": "neck", "kind": "BALL", "size": 0.22}
+          {
+            "name": "neck",
+            "kind": "BALL",
+            "size": 0.22,
+            "min": [-0.35, -0.55, -0.15],
+            "max": [0.2, 0.55, 0.15]
+          }
         ],
         "shapes": [
           {"material": "shell", "position": [0, -0.17, 0], "size": [0.55, 0.26, 0.7]},
@@ -132,33 +141,63 @@
         ],
         "shapes": [
           {"material": "shell", "position": [0, -0.32, 0], "size": [0.95, 0.6, 0.45]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [-0.3, -0.62, -0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [-0.3, -0.62, 0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [0, -0.62, -0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [0, -0.62, 0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [0.3, -0.62, -0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "eye", "position": [0.3, -0.62, 0.12], "size": [0.14, 0.065, 0.14]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [-0.3, -0.62, -0.12], "size": [0.2, 0.06, 0.2]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [-0.3, -0.62, 0.12], "size": [0.2, 0.06, 0.2]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [0, -0.62, -0.12], "size": [0.2, 0.06, 0.2]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [0, -0.62, 0.12], "size": [0.2, 0.06, 0.2]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [0.3, -0.62, -0.12], "size": [0.2, 0.06, 0.2]},
-          {"primitive": "CYLINDER", "material": "dark", "position": [0.3, -0.62, 0.12], "size": [0.2, 0.06, 0.2]}
+          {
+            "primitive": "CYLINDER",
+            "material": "eye",
+            "position": [-0.3, -0.62, -0.12],
+            "size": [0.14, 0.065, 0.14],
+            "mirror": "Z"
+          },
+          {
+            "primitive": "CYLINDER",
+            "material": "eye",
+            "position": [0, -0.62, -0.12],
+            "size": [0.14, 0.065, 0.14],
+            "mirror": "Z"
+          },
+          {
+            "primitive": "CYLINDER",
+            "material": "eye",
+            "position": [0.3, -0.62, -0.12],
+            "size": [0.14, 0.065, 0.14],
+            "mirror": "Z"
+          },
+          {
+            "primitive": "CYLINDER",
+            "material": "dark",
+            "position": [-0.3, -0.62, -0.12],
+            "size": [0.2, 0.06, 0.2],
+            "mirror": "Z"
+          },
+          {
+            "primitive": "CYLINDER",
+            "material": "dark",
+            "position": [0, -0.62, -0.12],
+            "size": [0.2, 0.06, 0.2],
+            "mirror": "Z"
+          },
+          {
+            "primitive": "CYLINDER",
+            "material": "dark",
+            "position": [0.3, -0.62, -0.12],
+            "size": [0.2, 0.06, 0.2],
+            "mirror": "Z"
+          }
         ]
       },
       {
         "name": "arm",
         "length": 0.62,
         "joints": [
-          {"name": "shoulder_top", "axis": "Y", "min": [0, -1.4, 0], "max": [0, 2.6, 0]},
+          {"name": "shoulder_top", "kind": "SPIN", "min": [0, -1.4, 0], "max": [0, 2.6, 0]},
           {
             "name": "shoulder",
             "size": 0.3,
             "reach": 1.27272,
-            "min": [-0.7, 0, 0],
-            "max": [0.9, 0, 0]
+            "min": [0.8708, 0, 0],
+            "max": [2.4708, 0, 0]
           },
-          {"name": "shoulder_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "shoulder_bottom", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "shapes": [
           {"material": "shell", "position": [0, 0.74, 0], "size": [0.62, 0.5, 0.62]},
@@ -182,7 +221,7 @@
             "min": [-0.1, 0, 0],
             "max": [2.4, 0, 0]
           },
-          {"name": "elbow_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "elbow_bottom", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "shapes": [
           {"material": "shell", "position": [0, -0.3, 0], "size": [0.42, 0.6, 0.42]},
@@ -196,15 +235,15 @@
         "name": "thigh",
         "length": 0.68,
         "joints": [
-          {"name": "hip_top", "axis": "Y", "min": [0, -1.2, 0], "max": [0, 1.2, 0]},
+          {"name": "hip_top", "kind": "SPIN", "min": [0, -1.2, 0], "max": [0, 1.2, 0]},
           {
             "name": "hip",
             "size": 0.26,
             "reach": 1.4,
-            "min": [-0.35, 0, 0],
-            "max": [0.35, 0, 0]
+            "min": [1.2208, 0, 0],
+            "max": [1.9208, 0, 0]
           },
-          {"name": "hip_bottom", "axis": "Y", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
+          {"name": "hip_bottom", "kind": "SPIN", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
         ],
         "shapes": [
           {"material": "shell", "stretch": true, "size": [0.5, 0, 0.46]},
@@ -220,8 +259,8 @@
             "name": "knee",
             "size": 0.46,
             "reach": 0.5,
-            "min": [-0.8, 0, 0],
-            "max": [1.2, 0, 0]
+            "min": [0.45, 0, 0],
+            "max": [2.45, 0, 0]
           }
         ],
         "shapes": [
@@ -239,8 +278,8 @@
             "name": "ankle",
             "size": 0.38,
             "reach": 0.5,
-            "min": [-1.2, 0, 0],
-            "max": [0.8, 0, 0]
+            "min": [-2.2, 0, 0],
+            "max": [-0.2, 0, 0]
           }
         ],
         "shapes": [
@@ -255,8 +294,8 @@
             "name": "toe",
             "size": 0.38,
             "reach": 0.4,
-            "min": [-0.6, 0, 0],
-            "max": [0.6, 0, 0]
+            "min": [-0.3, 0, 0],
+            "max": [0.9, 0, 0]
           }
         ],
         "shapes": [
@@ -287,114 +326,34 @@
       {"name": "hull", "part": "hull", "parent": "pelvis", "parent_slot": "hull"},
       {"name": "sensor", "part": "sensor", "parent": "hull", "parent_slot": "sensor"},
       {"name": "rack", "part": "rack", "parent": "hull", "parent_slot": "rack"},
+      {"name": "arm", "part": "arm", "parent": "hull", "parent_slot": "arm"},
       {
-        "name": "l_arm",
-        "part": "arm",
-        "parent": "hull",
-        "parent_slot": "l_arm",
-        "joints": [
-          {"name": "shoulder", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "l_cannon",
+        "name": "cannon",
         "part": "cannon",
-        "parent": "l_arm",
+        "parent": "arm",
         "joints": [
           {"name": "elbow", "twist": -1.5707963}
         ]
       },
       {
-        "name": "l_thigh",
+        "name": "thigh",
         "part": "thigh",
         "parent": "pelvis",
-        "parent_slot": "l_thigh",
+        "parent_slot": "thigh",
         "joints": [
-          {"name": "hip", "bend": 1.5707964},
           {"name": "hip_top", "twist": 0.55}
         ]
       },
       {
-        "name": "l_shin",
+        "name": "shin",
         "part": "shin",
-        "parent": "l_thigh",
+        "parent": "thigh",
         "joints": [
-          {"name": "knee", "twist": -1.5707963, "bend": 1.25}
+          {"name": "knee", "twist": -1.5707963}
         ]
       },
-      {
-        "name": "l_hock",
-        "part": "hock",
-        "parent": "l_shin",
-        "joints": [
-          {"name": "ankle", "bend": -1}
-        ]
-      },
-      {
-        "name": "l_foot",
-        "part": "foot",
-        "parent": "l_hock",
-        "joints": [
-          {"name": "toe", "bend": 0.3}
-        ]
-      },
-      {
-        "name": "r_arm",
-        "part": "arm",
-        "parent": "hull",
-        "parent_slot": "r_arm",
-        "mirror": "l_arm",
-        "joints": [
-          {"name": "shoulder", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "r_cannon",
-        "part": "cannon",
-        "parent": "r_arm",
-        "mirror": "l_cannon",
-        "joints": [
-          {"name": "elbow", "twist": -1.5707963}
-        ]
-      },
-      {
-        "name": "r_thigh",
-        "part": "thigh",
-        "parent": "pelvis",
-        "parent_slot": "r_thigh",
-        "mirror": "l_thigh",
-        "joints": [
-          {"name": "hip", "bend": 1.5707964},
-          {"name": "hip_top", "twist": 0.55}
-        ]
-      },
-      {
-        "name": "r_shin",
-        "part": "shin",
-        "parent": "r_thigh",
-        "mirror": "l_shin",
-        "joints": [
-          {"name": "knee", "twist": -1.5707963, "bend": 1.25}
-        ]
-      },
-      {
-        "name": "r_hock",
-        "part": "hock",
-        "parent": "r_shin",
-        "mirror": "l_hock",
-        "joints": [
-          {"name": "ankle", "bend": -1}
-        ]
-      },
-      {
-        "name": "r_foot",
-        "part": "foot",
-        "parent": "r_hock",
-        "mirror": "l_foot",
-        "joints": [
-          {"name": "toe", "bend": 0.3}
-        ]
-      }
+      {"name": "hock", "part": "hock", "parent": "shin"},
+      {"name": "foot", "part": "foot", "parent": "hock"}
     ]
   },
   "animation": {
@@ -404,20 +363,20 @@
         "points": [
           [0, 0, 0.65],
           [0, 0, -0.65],
-          [0, 0.45, 0],
-          [0, 0, 0.65]
+          [0, 0.45, 0]
         ],
-        "corners": [0, 1]
+        "corners": [0, 1],
+        "closed": true
       },
       {
         "name": "stride",
         "points": [
           [0, 0, 1.04],
           [0, 0, -1.04],
-          [0, 0.6, 0],
-          [0, 0, 1.04]
+          [0, 0.6, 0]
         ],
-        "corners": [0, 1]
+        "corners": [0, 1],
+        "closed": true
       }
     ],
     "clips": [

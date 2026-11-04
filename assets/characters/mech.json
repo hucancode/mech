@@ -12,36 +12,38 @@
     ],
     "hardware": {"female": "dark", "male": "trim", "metal": "metal"},
     "iks": [
-      {"name": "l_leg", "tip": "l_foot"},
-      {"name": "r_leg", "tip": "r_foot"},
+      {"name": "leg", "tip": "foot"},
       {"name": "head_aim", "tip": "head", "aim": true}
     ],
     "pose": {
-      "twin": "WITH",
-      "by": {
-        "l_arm.shoulder": -0.1745,
-        "l_arm.shoulder_top": 0.0698,
-        "l_finger_a_1.knuckle": -0.3665,
-        "l_finger_a_2.knuckle": 0.1963,
-        "l_finger_b_1.knuckle": -0.3665,
-        "l_finger_b_2.knuckle": 0.1963,
-        "l_forearm.elbow": 0.2618,
-        "l_leg.weight": 1,
-        "l_palm.cross": 0.1745,
-        "l_thumb_1.knuckle": -0.3665,
-        "l_thumb_2.knuckle": 0.1963
-      }
+      "l_arm.shoulder": 1.3963,
+      "l_arm.shoulder_top": 0.0698,
+      "l_finger_a_1.knuckle": -0.3665,
+      "l_finger_a_2.knuckle": 0.1963,
+      "l_finger_b_1.knuckle": -0.3665,
+      "l_finger_b_2.knuckle": 0.1963,
+      "l_forearm.elbow": 0.2618,
+      "l_leg.weight": 1,
+      "l_palm.cross": 0.1745,
+      "l_thigh.hip": 1.5708,
+      "l_thumb_1.knuckle": -0.3665,
+      "l_thumb_2.knuckle": 0.1963
     },
     "parts": [
       {
         "name": "pelvis",
         "joints": [
-          {"name": "spin", "axis": "Y"}
+          {"name": "spin", "kind": "SPIN"}
         ],
         "slots": [
           {"name": "torso", "normal": [0, 1, 0], "forward": [0, 0, 1]},
-          {"name": "l_thigh", "position": [0.20006, -0.2525, 0], "normal": [1, 0, 0], "forward": [0, 0, -1]},
-          {"name": "r_thigh", "position": [-0.20006, -0.2525, 0], "normal": [-1, 0, 0], "forward": [0, 0, 1]}
+          {
+            "name": "thigh",
+            "position": [0.20006, -0.2525, 0],
+            "normal": [1, 0, 0],
+            "forward": [0, 0, -1],
+            "mirror": "X"
+          }
         ],
         "shapes": [
           {"primitive": "CYLINDER", "material": "dark", "position": [0, -0.07, 0], "size": [0.66686, 0.14, 0.66686]},
@@ -58,11 +60,22 @@
         "name": "torso",
         "length": 1.10536,
         "joints": [
-          {"name": "waist", "kind": "BALL", "size": 0.34}
+          {
+            "name": "waist",
+            "kind": "BALL",
+            "size": 0.34,
+            "min": [-0.3, -0.45, -0.15],
+            "max": [0.4, 0.55, 0.15]
+          }
         ],
         "slots": [
-          {"name": "l_arm", "position": [0, 0.4, 0.55696], "normal": [0, 0, 1], "forward": [-1, 0, 0]},
-          {"name": "r_arm", "position": [0, 0.4, -0.55696], "normal": [0, 0, -1], "forward": [1, 0, 0]}
+          {
+            "name": "arm",
+            "position": [0, 0.4, 0.55696],
+            "normal": [0, 0, 1],
+            "forward": [-1, 0, 0],
+            "mirror": "Z"
+          }
         ],
         "shapes": [
           {"material": "dark", "position": [0, 1.04036, 0], "rotation": [3.14159, 1.5708, 0], "size": [0.61265, 0.19, 0.51714]},
@@ -72,14 +85,8 @@
             "material": "shell",
             "position": [0, 0.55768, 0.2122],
             "rotation": [0, 0, -3.14159],
-            "size": [0.68951, 0.91336, 0.68951]
-          },
-          {
-            "primitive": "HALF_CYLINDER",
-            "material": "shell",
-            "position": [0, 0.55768, -0.2122],
-            "rotation": [-3.14159, 0, 0],
-            "size": [0.68951, 0.91336, 0.68951]
+            "size": [0.68951, 0.91336, 0.68951],
+            "mirror": "Z"
           },
           {"material": "trim", "position": [0.35476, 0.50276, 0], "rotation": [3.14159, 1.5708, 0], "size": [0.36074, 0.65906, 0.06]},
           {
@@ -95,15 +102,8 @@
             "material": "trim",
             "position": [0, 0.4, 0.48696],
             "rotation": [1.57079, 1.5708, 0],
-            "size": [0.59651, 0.14, 0.59651]
-          },
-          {
-            "primitive": "CONE",
-            "param": 0.765,
-            "material": "trim",
-            "position": [0, 0.4, -0.48696],
-            "rotation": [-1.57079, 1.5708, 0],
-            "size": [0.59651, 0.14, 0.59651]
+            "size": [0.59651, 0.14, 0.59651],
+            "mirror": "Z"
           }
         ]
       },
@@ -152,14 +152,8 @@
             "material": "trim",
             "position": [0, -0.32684, 0.31684],
             "rotation": [-1.57079, 1.5708, 0],
-            "size": [0.18, 0.06, 0.18]
-          },
-          {
-            "primitive": "CYLINDER",
-            "material": "trim",
-            "position": [0, -0.32684, -0.31684],
-            "rotation": [1.57079, 1.5708, 0],
-            "size": [0.18, 0.06, 0.18]
+            "size": [0.18, 0.06, 0.18],
+            "mirror": "Z"
           }
         ]
       },
@@ -167,15 +161,15 @@
         "name": "arm",
         "length": 0.25216,
         "joints": [
-          {"name": "shoulder_top", "axis": "Y", "min": [0, -1.22173, 0], "max": [0, 2.61799, 0]},
+          {"name": "shoulder_top", "kind": "SPIN", "min": [0, -1.22173, 0], "max": [0, 2.61799, 0]},
           {
             "name": "shoulder",
             "size": 0.22,
             "reach": 1.27272,
-            "min": [-0.69813, 0, 0],
-            "max": [0.69813, 0, 0]
+            "min": [0.87267, 0, 0],
+            "max": [2.26893, 0, 0]
           },
-          {"name": "shoulder_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "shoulder_bottom", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "shapes": [
           {
@@ -194,7 +188,7 @@
         "length": 0.18961,
         "joints": [
           {"name": "elbow", "size": 0.26, "reach": 1.07692, "max": [2.61799, 0, 0]},
-          {"name": "elbow_bottom", "axis": "Y", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
+          {"name": "elbow_bottom", "kind": "SPIN", "min": [0, -0.5236, 0], "max": [0, 0.5236, 0]}
         ],
         "shapes": [
           {"material": "shell", "stretch": true, "position": [0, -1e-05, 0], "size": [0.28526, 0, 0.25673]}
@@ -217,7 +211,7 @@
             "min": [-0.7854, 0, 0],
             "max": [0.7854, 0, 0]
           },
-          {"name": "cross_bottom", "axis": "Y", "min": [0, -1.5708, 0], "max": [0, 1.5708, 0]}
+          {"name": "cross_bottom", "kind": "SPIN", "min": [0, -1.5708, 0], "max": [0, 1.5708, 0]}
         ],
         "slots": [
           {"name": "thumb_1", "position": [0.17, -0.18, 0], "normal": [0, -1, 0], "forward": [0, 0, -1]},
@@ -261,15 +255,15 @@
         "name": "thigh",
         "length": 0.51615,
         "joints": [
-          {"name": "hip_top", "axis": "Y", "min": [0, -1.65806, 0], "max": [0, 1.65806, 0]},
+          {"name": "hip_top", "kind": "SPIN", "min": [0, -1.65806, 0], "max": [0, 1.65806, 0]},
           {
             "name": "hip",
             "size": 0.2,
             "reach": 1.4,
-            "min": [-0.34907, 0, 0],
-            "max": [0.34907, 0, 0]
+            "min": [1.22173, 0, 0],
+            "max": [1.91987, 0, 0]
           },
-          {"name": "hip_bottom", "axis": "Y", "min": [0, -0.7854, 0], "max": [0, 0.7854, 0]}
+          {"name": "hip_bottom", "kind": "SPIN", "min": [0, -0.7854, 0], "max": [0, 0.7854, 0]}
         ],
         "shapes": [
           {
@@ -301,7 +295,13 @@
       {
         "name": "foot",
         "joints": [
-          {"name": "ankle", "size": 0.27, "reach": 1.03703}
+          {
+            "name": "ankle",
+            "size": 0.27,
+            "reach": 1.03703,
+            "min": [-0.5, 0, 0],
+            "max": [1.25, 0, 0]
+          }
         ],
         "shapes": [
           {"material": "shell", "position": [0, -0.12, 0], "rotation": [-3.14159, 0, -3.14159], "size": [0.32, 0.2, 0.24]},
@@ -330,133 +330,42 @@
       {"name": "pelvis", "part": "pelvis"},
       {"name": "torso", "part": "torso", "parent": "pelvis", "parent_slot": "torso"},
       {"name": "head", "part": "head", "parent": "torso"},
+      {"name": "arm", "part": "arm", "parent": "torso", "parent_slot": "arm"},
       {
-        "name": "l_arm",
-        "part": "arm",
-        "parent": "torso",
-        "parent_slot": "l_arm",
-        "joints": [
-          {"name": "shoulder", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "l_forearm",
+        "name": "forearm",
         "part": "forearm",
-        "parent": "l_arm",
+        "parent": "arm",
         "joints": [
           {"name": "elbow", "twist": -1.5707963}
         ]
       },
       {
-        "name": "l_palm",
+        "name": "palm",
         "part": "palm",
-        "parent": "l_forearm",
+        "parent": "forearm",
         "joints": [
           {"name": "cross", "twist": 1.5707963}
         ]
       },
-      {"name": "l_thumb_1", "part": "finger_1", "parent": "l_palm", "parent_slot": "thumb_1"},
-      {"name": "l_thumb_2", "part": "finger_2", "parent": "l_thumb_1"},
-      {"name": "l_thumb_3", "part": "finger_3", "parent": "l_thumb_2"},
-      {"name": "l_finger_a_1", "part": "finger_1", "parent": "l_palm", "parent_slot": "finger_a_1"},
-      {"name": "l_finger_a_2", "part": "finger_2", "parent": "l_finger_a_1"},
-      {"name": "l_finger_a_3", "part": "finger_3", "parent": "l_finger_a_2"},
-      {"name": "l_finger_b_1", "part": "finger_1", "parent": "l_palm", "parent_slot": "finger_b_1"},
-      {"name": "l_finger_b_2", "part": "finger_2", "parent": "l_finger_b_1"},
-      {"name": "l_finger_b_3", "part": "finger_3", "parent": "l_finger_b_2"},
+      {"name": "thumb_1", "part": "finger_1", "parent": "palm", "parent_slot": "thumb_1"},
+      {"name": "thumb_2", "part": "finger_2", "parent": "thumb_1"},
+      {"name": "thumb_3", "part": "finger_3", "parent": "thumb_2"},
+      {"name": "finger_a_1", "part": "finger_1", "parent": "palm", "parent_slot": "finger_a_1"},
+      {"name": "finger_a_2", "part": "finger_2", "parent": "finger_a_1"},
+      {"name": "finger_a_3", "part": "finger_3", "parent": "finger_a_2"},
+      {"name": "finger_b_1", "part": "finger_1", "parent": "palm", "parent_slot": "finger_b_1"},
+      {"name": "finger_b_2", "part": "finger_2", "parent": "finger_b_1"},
+      {"name": "finger_b_3", "part": "finger_3", "parent": "finger_b_2"},
+      {"name": "thigh", "part": "thigh", "parent": "pelvis", "parent_slot": "thigh"},
       {
-        "name": "l_thigh",
-        "part": "thigh",
-        "parent": "pelvis",
-        "parent_slot": "l_thigh",
-        "joints": [
-          {"name": "hip", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "l_shin",
+        "name": "shin",
         "part": "shin",
-        "parent": "l_thigh",
+        "parent": "thigh",
         "joints": [
           {"name": "knee", "twist": -1.5707963}
         ]
       },
-      {"name": "l_foot", "part": "foot", "parent": "l_shin"},
-      {
-        "name": "r_arm",
-        "part": "arm",
-        "parent": "torso",
-        "parent_slot": "r_arm",
-        "mirror": "l_arm",
-        "joints": [
-          {"name": "shoulder", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "r_forearm",
-        "part": "forearm",
-        "parent": "r_arm",
-        "mirror": "l_forearm",
-        "joints": [
-          {"name": "elbow", "twist": -1.5707963}
-        ]
-      },
-      {
-        "name": "r_palm",
-        "part": "palm",
-        "parent": "r_forearm",
-        "mirror": "l_palm",
-        "joints": [
-          {"name": "cross", "twist": 1.5707963}
-        ]
-      },
-      {
-        "name": "r_thumb_1",
-        "part": "finger_1",
-        "parent": "r_palm",
-        "parent_slot": "thumb_1",
-        "mirror": "l_thumb_1"
-      },
-      {"name": "r_thumb_2", "part": "finger_2", "parent": "r_thumb_1", "mirror": "l_thumb_2"},
-      {"name": "r_thumb_3", "part": "finger_3", "parent": "r_thumb_2", "mirror": "l_thumb_3"},
-      {
-        "name": "r_finger_a_1",
-        "part": "finger_1",
-        "parent": "r_palm",
-        "parent_slot": "finger_a_1",
-        "mirror": "l_finger_a_1"
-      },
-      {"name": "r_finger_a_2", "part": "finger_2", "parent": "r_finger_a_1", "mirror": "l_finger_a_2"},
-      {"name": "r_finger_a_3", "part": "finger_3", "parent": "r_finger_a_2", "mirror": "l_finger_a_3"},
-      {
-        "name": "r_finger_b_1",
-        "part": "finger_1",
-        "parent": "r_palm",
-        "parent_slot": "finger_b_1",
-        "mirror": "l_finger_b_1"
-      },
-      {"name": "r_finger_b_2", "part": "finger_2", "parent": "r_finger_b_1", "mirror": "l_finger_b_2"},
-      {"name": "r_finger_b_3", "part": "finger_3", "parent": "r_finger_b_2", "mirror": "l_finger_b_3"},
-      {
-        "name": "r_thigh",
-        "part": "thigh",
-        "parent": "pelvis",
-        "parent_slot": "r_thigh",
-        "mirror": "l_thigh",
-        "joints": [
-          {"name": "hip", "bend": 1.5707964}
-        ]
-      },
-      {
-        "name": "r_shin",
-        "part": "shin",
-        "parent": "r_thigh",
-        "mirror": "l_shin",
-        "joints": [
-          {"name": "knee", "twist": -1.5707963}
-        ]
-      },
-      {"name": "r_foot", "part": "foot", "parent": "r_shin", "mirror": "l_foot"}
+      {"name": "foot", "part": "foot", "parent": "shin"}
     ]
   },
   "animation": {
@@ -466,20 +375,20 @@
         "points": [
           [0, 0, 0.875],
           [0, 0, -0.875],
-          [0, 0.3, 0],
-          [0, 0, 0.875]
+          [0, 0.3, 0]
         ],
-        "corners": [0, 1]
+        "corners": [0, 1],
+        "closed": true
       },
       {
         "name": "stride",
         "points": [
           [0, 0, 1.1],
           [0, 0, -1.1],
-          [0, 0.6, 0],
-          [0, 0, 1.1]
+          [0, 0.6, 0]
         ],
-        "corners": [0, 1]
+        "corners": [0, 1],
+        "closed": true
       }
     ],
     "poses": [

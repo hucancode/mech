@@ -41,7 +41,7 @@ App :: struct {
   playing:    bool,
   speed:      f32,
   loops:      bool,
-  part:       int, // the selection to outline, -1 for none
+  part:       int, // the selection to outline: an instance of the assembly (both its sides), -1 for none
   shape:      int,
   isolate:    bool, // show only the selected part (its shapes and joint hardware), without the floor
   explode:    f32, // while isolating: 0 assembled, 1 the shapes pushed out by the part's size
@@ -279,7 +279,7 @@ set_values :: proc(text: []u8) -> bool {
   resize(&app.values, mech.model_channels(m))
   copy(app.values[:], app.asset.clips.pose[:])
   targets := make([dynamic]mech.Target, context.temp_allocator)
-  mech.targets_resolve(m, "values", values, &targets)
+  mech.targets_resolve(m, .REST, values, &targets)
   for t in targets do app.values[t.index] = t.value
   app.show = .VALUES
   apply_show()
@@ -335,11 +335,25 @@ isolating :: proc() -> bool {
   return app.isolate && app.part >= 0
 }
 
+// selected_place is where the selected instance (app.part, of the assembly) is placed, its left
+// side when it is on both (mech.model_places); -1 for none.
+selected_place :: proc() -> int {
+  if app.part < 0 || !app.has_mech do return -1
+  for p, i in character.mech_rig(&app.mech).places do if p.inst == app.part do return i
+  return -1
+}
+
+// selected reports whether piece `p` is the selected instance's, on either side of the body.
+@(private = "file")
+selected :: proc(p: mech.Piece) -> bool {
+  return character.mech_rig(&app.mech).places[p.part].inst == app.part
+}
+
 // isolated reports whether piece `p` shows while isolating: the selected part's shapes and the
-// hardware of the joints it hangs by.
+// hardware of the joints it hangs by, as written (its left side, when it is on both).
 @(private = "file")
 isolated :: proc(p: mech.Piece) -> bool {
-  return p.part == app.part
+  return p.part == selected_place()
 }
 
 // exploded reports whether piece `p` moves out while exploding: the selected part's shapes; its
@@ -433,15 +447,15 @@ outline :: proc() {
   rig := character.mech_rig(&app.mech)
   s := app.asset.model.scale
   for p, i in rig.pieces {
-    if p.part != app.part || p.shape < 0 do continue
-    if app.isolate && p.shape != app.shape do continue
+    if !selected(p) || p.shape < 0 do continue
+    if app.isolate && (p.shape != app.shape || !isolated(p)) do continue
     x := piece_shown(rig, i)
     half := mech.primitive_corners(p.primitive)[7] * x.scale * s
     selected := p.shape == app.shape
     render.debug_cube(&app.renderer, x.position * s, x.rotation, half, {1, 1, 1, 1} if selected else {1, 0.8, 0.1, 1}, bypass_depth = selected)
   }
-  if app.part < len(rig.frames) {
-    f := mech.rig_frame(rig, app.part)
+  if at := selected_place(); at >= 0 {
+    f := mech.rig_frame(rig, at)
     render.debug_axes(&app.renderer, f.position * s, f.rotation, 0.15, bypass_depth = true)
   }
 }
@@ -455,8 +469,8 @@ draw_grid :: proc() {
   rig := character.mech_rig(&app.mech)
   centre: [3]f32
   extent, step: f32 = 4, 0.5
-  if isolating() && app.part < len(rig.frames) {
-    centre = mech.rig_frame(rig, app.part).position * app.asset.model.scale
+  if at := selected_place(); isolating() && at >= 0 {
+    centre = mech.rig_frame(rig, at).position * app.asset.model.scale
     extent, step = 1.5, 0.1
   } else do centre.y = 0.002 // just over the floor
   n := int(math.round(extent / step))
@@ -472,8 +486,8 @@ draw_grid :: proc() {
 }
 
 // pick is the nearest piece under the cursor (CSS pixels from the canvas corner), of those
-// shown: its part, and its shape (-1 for joint hardware); -1, -1 when nothing is there. Pieces
-// are hit as their boxes.
+// shown: its instance (of the assembly, either side of the body), and its shape (-1 for joint
+// hardware); -1, -1 when nothing is there. Pieces are hit as their boxes.
 pick :: proc(cursor: [2]f32) -> (part, shape: int) {
   part, shape = -1, -1
   if !app.has_mech do return
@@ -501,7 +515,7 @@ pick :: proc(cursor: [2]f32) -> (part, shape: int) {
     }
     if near <= far && near < best {
       best = near
-      part, shape = p.part, p.shape
+      part, shape = rig.places[p.part].inst, p.shape
     }
   }
   return

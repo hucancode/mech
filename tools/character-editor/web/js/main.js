@@ -247,10 +247,6 @@ function viewportTools() {
         onchange: (mode) => (setMode(mode), viewportTools()),
       }),
       explodeSlider(),
-      btn(icon("mirror"), () => (editor.setMirrored(!editor.mirrored), viewportTools()), {
-        on: editor.mirrored,
-        title: editor.mirrored ? "Back to the part as modelled (the left side)" : "Preview the part mirrored, as the right side shows it (gizmos hide)",
-      }),
     ]),
     (editor.tab === "assemble" || editor.tab === "animation") &&
       segmented({

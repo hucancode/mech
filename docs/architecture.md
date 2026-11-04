@@ -33,7 +33,7 @@ calls exports between frames (`src/viewer/web.odin`):
 | `viewer_set_animation(text)` | parse an animation and recompile the clips (after every edit) |
 | `viewer_set_values({name: value})` | hold explicit channel values (a number or `[x, y, z]`, as the channel is shaped), the rest at the rest pose (the pose test) |
 | `viewer_play(clip, time, playing, speed, loops)` | show a clip |
-| `viewer_select(part, shape, isolate)` | outline a part's shapes and draw its frame; `isolate` hides the rest |
+| `viewer_select(part, shape, isolate)` | outline an instance's shapes (by its index in the assembly: both sides of the body) and draw its frame; `isolate` hides the rest, showing the side as written |
 | `viewer_explode(amount)` | push the isolated part's shapes apart (0 to 1) |
 | `viewer_frame()` | frame the camera on the character |
 | `viewer_view(view)` | look from a side, framed and orthographic: 1 +x, 2 -x, 3 +y, 4 -y, 5 +z, 6 -z; 0 the free perspective orbit (turning the view goes back to it) |
@@ -56,11 +56,13 @@ to know something the engine computes.
 | `{"q":"state"}` | the clock, every channel's values as shown (`values`), warnings since last asked |
 | `{"q":"sample","clip":"walk","channels":[..],"n":60}` | channels' values over a clip (or at `"times"`) |
 | `{"q":"pose","clip":"attack","time":0.4}` | every channel at one moment, `values` |
-| `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions); `rest`: every value 0 |
+| `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions), by placed name (`l_arm`) and by an instance's own name (`arm`: its left side); `rest`: the rest pose |
+| `{"q":"places"}` | what the model places (`mech.model_places`): `[{name, inst, side}]`, an instance once (NONE) or on each side of the body (L, R) |
 | `{"q":"trajectory","clip":"walk","part":"l_foot","n":60}` | an instance's path over a clip (foot slide, motion paths) |
 | `{"q":"motion","clip":"walk","motion":1,"n":120}` | a motion as the engine reads it: its shape over one cycle, and each move's channels, delay, what it adds over the clip, the arcs it puts positions on, and a spread move's later links |
 | `{"q":"arc","arc":"step","on":"l_leg"}` | an arc as it would put a position, in metres (editing an arc no shown motion uses) |
 | `{"q":"channels"}` | every channel: name, kind (HINGE, SLIDE, BALL, POSITION, WEIGHT), size, range |
+| `{"q":"pick","x":..,"y":..}` | the piece under a point: its instance (index in the assembly, either side) and shape |
 | `{"q":"bounds","clip":..,"time":..}` | the box around the posed character |
 | `{"q":"camera"}` | the main camera's rotation and the view it is in (the view gizmo) |
 | `{"q":"info"}` | parts, bones, pieces, shared meshes and materials, clips |
@@ -71,6 +73,11 @@ From the browser console: `editor.viewer.query({q: "trajectory", clip: "walk", p
 
 - New engine behaviour goes in `src/mech` or `src/character`. The game and the editor get it
   together.
+- What is wrong with a character is said in one place, `mech.character_check`
+  (`src/mech/check.odin`): ERRORs (data the engine can't use) and BUDGET issues (a clip fighting
+  the machine). The rest of the engine skips what it can't use quietly. `asset_compile` logs the
+  issues, so the editor shows them under ⚠; `test_assets_check` keeps the shipped characters free
+  of ERRORs.
 - The browser side holds data and UI only: `web/js/model.js` has tree and name helpers, nothing
   the engine computes. The curve editor draws what the `motion` query samples.
 - JS dependencies: none. The page is plain ES modules with JSDoc types, and the server uses Node's

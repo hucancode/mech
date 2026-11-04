@@ -1,5 +1,6 @@
 package character
 
+import "core:log"
 import "../mech"
 import "../mjolnir/render"
 import "../mjolnir/world"
@@ -49,8 +50,13 @@ asset_from_data :: proc(model_text, anim_text: []u8) -> (a: MechAsset, ok: bool)
   return a, true
 }
 
-// asset_compile rebuilds the clips after the model or animation changed.
+// asset_compile rebuilds the clips after the model or animation changed, and logs what
+// mech.character_check finds wrong with them (the editor shows warnings and errors).
 asset_compile :: proc(a: ^MechAsset) {
+  for x in mech.character_check(a.model, a.anim) {
+    if x.severity == .ERROR do log.errorf("%s: %s", a.model.name, x.text)
+    else do log.warnf("%s: %s", a.model.name, x.text)
+  }
   mech.clips_destroy(&a.clips)
   a.clips = mech.clips_build(a.anim, a.model)
   for name, act in ACTION_CLIPS do a.actions[act] = mech.clips_find(&a.clips, name)

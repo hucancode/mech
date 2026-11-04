@@ -32,7 +32,8 @@ edits models ([editors.md](editors.md)).
 | file | holds |
 | --- | --- |
 | `src/mech/character.odin` | character files: one model and its animation |
-| `src/mech/model.odin` | the model format, parse/format, name lookups, euler angles |
+| `src/mech/model.odin` | the model format, parse/format, name lookups, places (both sides of the body), euler angles |
+| `src/mech/check.odin` | `character_check`: everything wrong with a character, in one place |
 | `src/mech/files.odin` | loading and saving character files (not on wasm) |
 | `src/mech/joints.odin` | joints: the bones and hardware pieces each kind adds, one path for all |
 | `src/mech/rig.odin` | building a rig, drives, IK, posing |
@@ -75,9 +76,9 @@ Top level:
 | `materials` | `{name, color, metallic, roughness, emissive}` |
 | `hardware` | the materials joint hardware uses: `{female, male, metal}` |
 | `iks` | IK targets: `{name, tip, aim}` |
-| `pose` | the rest pose clips start from: a move, `{twin, by}` ([below](#the-rest-pose)) |
+| `pose` | the rest pose clips start from: `{channel: value}`, symmetric ([below](#the-rest-pose)) |
 | `parts` | the library: `{name, length, joints, slots, shapes}` |
-| `assembly` | the tree placing parts: `{name, part, parent, parent_slot, mirror, joints}`, parents first |
+| `assembly` | the tree placing parts: `{name, part, parent, parent_slot, joints}`, parents first |
 
 The loader fills omitted fields with zero, and the writer leaves zero fields out. So a shape
 without `"primitive"` is a `BOX`, and one without `"rotation"` is unrotated.
@@ -89,14 +90,14 @@ without `"primitive"` is a `BOX`, and one without `"rotation"` is unrotated.
   {
     "name": "shin",
     "length": 0.58051,
-    "joints": [{"name": "knee", "kind": "HINGE", "size": 0.29, "reach": 0.96551, "min": [-2.61799, 0, 0]}],
+    "joints": [{"name": "knee", "size": 0.29, "reach": 0.96551, "min": [-2.61799, 0, 0], "max": [0.05, 0, 0]}],
     "shapes": [{"primitive": "CYLINDER", "material": "shell", "stretch": true, "position": [0, 0.01, 0], "size": [0.31559, 0.06, 0.31559]}]
   }
 ],
 "assembly": [
-  {"name": "l_shin", "part": "shin", "parent": "l_thigh", "joints": [{"name": "knee", "twist": -1.5707963}]},
-  {"name": "r_shin", "part": "shin", "parent": "r_thigh", "mirror": "l_shin", "joints": [{"name": "knee", "twist": -1.5707963}]},
-  {"name": "l_foot", "part": "foot", "parent": "l_shin"}
+  {"name": "thigh", "part": "thigh", "parent": "pelvis", "parent_slot": "thigh"},
+  {"name": "shin", "part": "shin", "parent": "thigh", "joints": [{"name": "knee", "twist": -1.5707963}]},
+  {"name": "foot", "part": "foot", "parent": "shin"}
 ]
 ```
 
@@ -104,7 +105,7 @@ A **part** is a rigid piece, placed as often as the assembly likes:
 - **length**: how far above its origin it hangs. Model a link with its origin at its far end, so
   the next link hangs on the origin (the shin's foot) and its length lives in one number.
 - **slots**: named faces in the part's frame, facing out of it, where its branches are matched
-  (the torso's arms, the palm's fingers); a chain needs none.
+  (the torso's arms, the palm's fingers); a chain needs none. A slot can `mirror` (below).
 - **joints**: what the part moves by, from its parent's slot to where it hangs.
 - **shapes**: its primitives.
 
@@ -113,12 +114,13 @@ A part's joints are a **stack**, listed from the parent's side: each joint is
 before it (the first onto the parent's slot). The names are unique in the part: channels name a
 joint by them. No joints bolts the part on rigid. Joints belong to the part, so
 every instance of it shares them: there is no separate joint library, the part is what is reused.
-A part's joints are **straight**: how they sit at rest (turned on their sockets, bent) is each
-instance's (`joints`, below), so modelling a part never sets a stance. Most parts need one joint:
+A part's joints are **straight**: how they are mounted (turned on their sockets) is each
+instance's (`joints`, below), and how they stand at rest is the rest pose's
+([below](#the-rest-pose)), so modelling a part never sets a stance. Most parts need one joint:
 the mech's shoulder is its `arm` part's stack `shoulder_top` (a turntable turning it on its socket),
-`shoulder` (a hinge its instances bend 90°) and `shoulder_bottom` (twisting the arm after the pin)
-(Joints, below). Its wrist is a stack: `wrist`, then `cross`, a hinge its instances twist 90°
-across the first, then `cross_bottom`, a turntable twisting the hand.
+`shoulder` (a pin the rest pose turns 80°, the arm hanging down) and `shoulder_bottom` (twisting
+the arm after the pin) (Joints, below). Its wrist is a stack: `wrist`, then `cross`, a pin its
+instances twist 90° across the first, then `cross_bottom`, a turntable twisting the hand.
 
 An **instance** places a part in the tree, hanging it from a slot of its parent's. Its **name**, which channels and
 children refer to it by, is its part's when left empty (name them when a part is placed twice).
@@ -129,40 +131,50 @@ children refer to it by, is its part's when left empty (name them when a part is
   above its origin) onto the last joint's male half. A part hangs one way only: to hang one the
   other way, make it its own part. The origin faces -y with +x forward; a link turned on it (a
   knee's pin across the hip's) twists its first joint (`joints`, below).
-- **mirror**: the instance this one is the other side of, its **twin** (`mech.model_twin`). The
-  part shows reflected, so one part serves both sides (below), and a clip's twin moves move both
-  ([animation.md](animation.md#twins)).
-- **joints**: how this instance sets its part's joints at rest, `[{name, twist, bend}]` by joint
-  name (radians; one it leaves out is straight). `twist` first turns the joint's socket about its
-  normal; `bend` turns the joint's bone about its first axis. The joint's range is from there.
-  So one part can stand in several stances: the strider's `thigh` part is the mech's hip, its
-  instances twisting it 0.55 rad on its socket so the leg starts back.
+- **joints**: how this instance mounts its part's joints, `[{name, twist}]` by joint name
+  (radians; one it leaves out sits as the part has it). `twist` turns the joint's socket about
+  its normal: a knee's pin across the hip's, a wrist's second hinge across the first, the
+  strider's `hip_top` turned 0.55 rad so its leg starts back. That is all an instance says about a
+  joint: how it stands at rest is the rest pose's.
 
 ```json
-{"name": "l_arm", "part": "arm", "parent": "torso", "parent_slot": "l_arm", "joints": [{"name": "shoulder", "bend": 1.5707964}]}
+{"name": "arm", "part": "arm", "parent": "torso", "parent_slot": "arm"}
 ```
 
-**Mirroring.** A mirrored instance's joints bolt onto its parent's slot reflected, which reflects
-each joint across its female face's forward, carried through its bones; each next joint, and the
-part's slot, sits on the reflected one the same way. `mech.joint_mirror` works out the matching
-reflection: the part's shapes and slots show through it (so its children follow), and a drive on
-an axis the reflection turns over goes the other way (a turn about any axis but the
-reflection's). So an instance mirrored from its twin, under a parent whose slot
-is reflected across the body, is the exact mirror image, drives and all, with the same numbers.
-That is what makes twins (`mech.channel_twin`): a joint's channel's twin is the same joint's on the
-twin instance, with the same values; an IK target's is the target reaching with the tip's twin,
-its x mirrored (the model's space reflects across x = 0), and its swivel (a reflected turn turns
-the other way). The root's channels, and joints on the middle of
-the body, have none.
-Shapes are reflected across a plane of their own that the primitive is symmetric about, so none
-needs a negative scale: their x, but for a quarter cylinder (its arc runs from +x to +z) the
-plane between x and z. So you model the left side only: the right side is the same parts,
-mirrored, and the Model tab can preview a part that way.
+**Mirroring.** A part is modelled one side only. A shape or a slot can `mirror`: a plane of the
+part's frame (`X`, `Y` or `Z`: where that axis is 0; omitted, none).
+
+- A **mirrored shape** is drawn twice: as written, and reflected across the plane
+  (`mech.mirror_shape`). Each copy is reflected again across a plane of its own that the
+  primitive is symmetric about, so none needs a negative scale: its x, but for a quarter cylinder
+  (its arc runs from +x to +z) the plane between x and z. Both copies are the one shape.
+- A **mirrored slot** is two slots: as written, and reflected. What hangs from it, and everything
+  below that, is **placed on both sides of the body** (`mech.model_places`): a `Place` is an
+  instance on a side, `NONE` (placed once), `L` (as written) or `R` (reflected). A sided place is
+  named with its side, `l_<name>` and `r_<name>` (`mech.place_name`), and so are its channels. So
+  the mech's torso has one `arm` slot (mirrored across its z) and one `arm` instance, placed as
+  `l_arm` and `r_arm`; channels and clips name `l_arm.shoulder` and `r_arm.shoulder`. An IK
+  target whose tip is sided is placed once per side too: `leg`, reaching with `foot`, is `l_leg`
+  and `r_leg`.
+
+The reflected side's joints bolt onto the reflected slot, which reflects each joint across its
+female face's forward, carried through its bones; each next joint, and the part's slots, sit on
+the reflected one the same way. `mech.joint_mirror` works out the matching reflection: the part's
+shapes and slots show through it (so its children follow), and a drive on an axis the reflection
+turns over goes the other way (a turn about any axis but the reflection's). So the two sides are
+exact mirror images, drives and all, with the same numbers. That is what makes twins
+(`mech.channel_twin`): a joint's channel's twin is the same joint's on the instance's other side,
+with the same values; a sided IK target's is the other side's, its x mirrored (the model's space
+reflects across x = 0), and its swivel (a reflected turn turns the other way). The root's
+channels, and what is placed once, have none. `character_check` reports a mirrored slot lying on
+its own plane (its two sides would be one) and a mirrored slot below one that already is (a pair of
+pairs).
 
 ### Shapes
 
-`{primitive, param, material, stretch, position, rotation, size}`: a primitive centred at
-`position` in the part's frame, turned by `rotation`, with `size` its full extent on each axis.
+`{primitive, param, material, stretch, position, rotation, size, mirror}`: a primitive centred at
+`position` in the part's frame, turned by `rotation`, with `size` its full extent on each axis;
+with `mirror`, drawn again reflected across that plane of the part (Mirroring, above).
 For round shapes, x and z are the diameter and y is the height (along the shape's own y).
 
 **Links.** A limb part is a link: its `length` is the distance from where it hangs to its
@@ -199,34 +211,30 @@ moves. Each joint is **one bone and one channel**; a part that needs more motion
 
 | kind | moves | channel | hardware | pivot |
 | --- | --- | --- | --- | --- |
-| kind | moves | channel | hardware | pivot |
-| --- | --- | --- | --- | --- |
-| `HINGE` (the default, left out of files), `axis` `X` (the default) | turns about x: a pin | a hinge | two female lugs with a pin, a solid male lug, base plates | a reach from the socket |
-| `HINGE`, `"axis": "Y"` | turns about y (the socket's normal): a turntable, a spin servo | a hinge | two discs | where the discs meet |
+| `PIN` (the default, left out of files) | turns about x: a forked hinge | a hinge | two female lugs with a pin, a solid male lug, base plates | a reach from the socket |
+| `SPIN` | turns about y (the socket's normal): a turntable, a spin servo | a hinge | two discs | where the discs meet |
 | `LINEAR` | slides out along -y (away from the socket): a linear actuator, a piston | a slide | a barrel and a rod | the barrel's mouth |
 | `BALL` | turns about x, y, z | a ball | a socket on a flange, a ball on a stud | inside the ball |
 
-A part with no joints is bolted on rigid. A hinge turns about x or y; for any other direction,
-`twist` its socket (below).
+A part with no joints is bolted on rigid. Each kind moves on its own axes: there is no axis to
+choose. For a pin about another direction, `twist` its socket (the instance's `joints`).
 
-A **turntable** is a hinge about y stacked before a pin (turning it on its socket: a shoulder
+A **turntable** (`SPIN`) is stacked before a pin (turning it on its socket: a shoulder
 swinging the arm forward) or after it (turning the part after the pin: a forearm's twist). A pin's
 base plate next to a turntable is drawn round, the turntable it turns on; alone, its plates are
 square. A turntable with no size builds no discs and pivots right on its socket, so the round
 plate is all there is to see: the mech's shoulders and hips are `<joint>_top` turntables, a pin,
 and `_bottom` turntables.
 
-An instance's `bend` turns the joint's bone at rest about its first axis (a hinge's axis, a ball's
-x; radians): the mech's shoulders and hips are hinges its arm and leg instances bend 90°,
-so the limb hangs down from a slot facing sideways. Its `twist` turns the joint on its socket
-first (a wrist's second hinge across the first).
-
-`min` and `max` are a joint's **stops**, from its rest (after the instance's `bend`), on each axis
-of its frame it moves (`mech.joint_axes`): a hinge's axis, a ball's x, y, z (radians), a linear
-actuator's y (model units out). The rig holds every drive and IK inside them, as a real joint's stops do, so IK
-can't bend a knee backwards. Equal ends (both omitted) are free. A mirrored instance's range turns
-over with its drives. The mech's knee might be `"min": [-2.6, 0, 0], "max": [0.05, 0, 0]`; a piston
-`"max": [0, 0.5, 0]`.
+`min` and `max` are a joint's **stops**, measured from the part straight, on each axis of its
+frame it moves (`mech.joint_axes`): a pin's x, a turntable's y, a ball's x, y, z (radians), a
+linear actuator's y (model units out). The rig holds every drive and IK inside them, as a real
+joint's stops do, so IK can't bend a knee backwards. **Every joint has them**: `character_check`
+reports an axis it moves on without `min < max`, and stops on an axis it doesn't move on. Only a
+turntable may spin free (equal ends). A reflected side's range turns over with its drives. The
+mech's knee is `"min": [-2.6, 0, 0], "max": [0.05, 0, 0]`; a piston `"max": [0, 0.5, 0]`; the
+mech's shoulder pin, which the rest pose holds at 80° so the arm hangs from a slot facing
+sideways, `"min": [0.87, 0, 0], "max": [2.27, 0, 0]`.
 
 `size` scales the hardware; 0 (omitted) builds none and has no reach: the joint pivots on its
 slot (the mech's pelvis turns on a bare turntable). Every piece of hardware is **measured from the
@@ -235,9 +243,9 @@ any values build working hardware and nothing else needs tuning:
 
 | kind | values | what is derived |
 | --- | --- | --- |
-| `HINGE` about x | `reach` | The pivot sits `reach × size` out from the slot. The base plate takes part of that, up to 0.55 × size, and the lugs the rest: they shrink, down to 0.3 × size across, so their barrels always clear the plate, and the pin always sits inside them. With too little reach for that (below about 0.33), the hinge is a **bare pin** pivoting on the slot itself: the mech's knuckles have no reach. The female half is two lugs, the male one solid lug between them. |
-| `BALL` | (its range) | The ball is `size` across, in a socket on a flange. Its stud is as long as the joint's range needs for the male flange to clear the socket at its widest tilt (x and z together, up to 70°, the most the socket's rim allows; a free axis tilts that far). Widening the range lengthens the neck. |
-| `HINGE` about y | none | Two discs, `size` across, meeting on the pivot. |
+| `PIN` | `reach` | The pivot sits `reach × size` out from the slot. The base plate takes part of that, up to 0.55 × size, and the lugs the rest: they shrink, down to 0.3 × size across, so their barrels always clear the plate, and the pin always sits inside them. With too little reach for that (below about 0.33), the hinge is a **bare pin** pivoting on the slot itself: the mech's knuckles have no reach. The female half is two lugs, the male one solid lug between them. |
+| `BALL` | (its range) | The ball is `size` across, in a socket on a flange. Its stud is as long as the joint's range needs for the male flange to clear the socket at its widest tilt (x and z together, up to 70°, the most the socket's rim allows). Widening the range lengthens the neck. |
+| `SPIN` | none | Two discs, `size` across, meeting on the pivot. |
 | `LINEAR` | (its stroke) | A barrel `size` across, as long as the stroke needs (and half a size more), its mouth the pivot; a rod half as wide slides out of it, the part on its end. |
 
 The editors ask the engine what a joint moves about (the viewer's `dofs` query: `bare`, `plates`,
@@ -253,7 +261,7 @@ A pose is every **channel**'s values, and clips' motions name channels
 
 | kind | values | units | what |
 | --- | --- | --- | --- |
-| `HINGE` | 1 | radians | a hinge's turn, an IK target's swivel (its bend turned about the limb) |
+| `HINGE` | 1 | radians | a pin's or a turntable's turn, an IK target's swivel (its bend turned about the limb) |
 | `SLIDE` | 1 | model units | a linear actuator's slide out |
 | `BALL` | 3 | euler radians | a ball's turns, the root's turn |
 | `POSITION` | 3 | model units | an IK target, the root's place: the only kind an arc moves |
@@ -261,14 +269,15 @@ A pose is every **channel**'s values, and clips' motions name channels
 
 A value is written as its channel is shaped: a number, or `[x, y, z]` (`"l_forearm.elbow": 0.26`,
 `"l_arm.shoulder": [0, 0, 0.3]`, `"root": [0, -0.35, 0]`); one shaped otherwise is logged and
-skipped. Nothing needs declaring to animate a joint: **every instance's joint is a channel**,
-`<instance>.<joint>`. Its value is how far it turns (slides) from rest, held in the joint's range;
-a mirrored instance turns the mirrored way, so twins take the same values. The editor's sliders
+skipped (`character_check` says so). Nothing needs declaring to animate a joint: **every placed
+instance's joint is a channel**, `<place>.<joint>` (`l_arm.shoulder` on a side). Its value is how
+far it turns (slides) from the part straight, held in the joint's range; the reflected side turns
+the mirrored way, so twins take the same values. The editor's sliders
 run over the joint's `min`/`max`. Renaming an instance or a joint renames its channels wherever
-they are named: the rest pose and the open animation.
+they are named, on both sides: the rest pose and the open animation.
 
-The channels, in order (`mech.model_channel_table`): each IK target's, the root's, then the
-joints'. Several joints moving together (a hand closing nine knuckles, the tips after the bases)
+The channels, in order (`mech.model_channel_table`): each placed IK target's, the root's, then the
+joints', place by place (an instance's two sides next to each other, left then right). Several joints moving together (a hand closing nine knuckles, the tips after the bases)
 are a motion's move, its channels with delays ([animation.md](animation.md#motions)), not a
 channel of their own.
 
@@ -277,8 +286,9 @@ channel of their own.
 the model's space, keep the feet planted while it does.
 
 An **IK target** (`iks`, `{name, tip, aim}`) reaches instance `tip`'s frame for a point by
-turning every joint of its chain, each about the axes it turns. The chain is found from the
-assembly (`mech.ik_root`): up from the tip to just below the nearest branch, an instance holding
+turning every joint of its chain, each about the axes it turns. A tip on the sides of the body
+places the target once per side (`mech.model_ik_places`): the mech's one `leg`, reaching with
+`foot`, is `l_leg` and `r_leg`. The chain is found from the places (`mech.ik_root`): up from the tip to just below the nearest branch, an instance holding
 several children (a pelvis, a torso). A leg reaches from its thigh, an arm from its upper arm. The
 tip reaches with its **end** (`mech.ik_end`): as far along its last link, at rest, as its
 pieces and those hanging from it go, on that line: a foot's sole, not the ankle at its base. The
@@ -301,7 +311,7 @@ in space (its reach is full of holes), so a target for it ends in poses it can't
 
 Every chain bends toward a **pole**, which the rig works out (`mech.ik_pole`), so there is none to
 place. Its middle joint (the pivot nearest halfway along it: a knee, an elbow) bends the way it is
-bent at rest (a strider's zigzag), or, for a chain straight at rest, the side its stops let it
+bent in the stance (the rest pose's joints: a strider's zigzag), or, for a chain straight at rest, the side its stops let it
 (forward for a human knee, back for a reverse-jointed one). The pole sits off the middle of the
 line from the joint above the middle one to the target, that way, by the chain's length, turned
 with the model and swung as the limb swings (the shortest turn from the chain's line at rest to
@@ -326,56 +336,57 @@ With `"aim": true` a target is looked at, not reached: its chain, the tip's own 
 aiming. Its point is then an offset from a point ahead of the tip at rest (as far ahead as the
 tip is high). The mech's `head_aim` turns its head by the neck; the strider's turns its sensor.
 
-An aim's turn is shared along its chain, the tip taking the most. Where the tip hangs from a parent,
-the chain runs up from it, as above (the neck). Where the tip **is** the root (the dragon's head,
-whose body hangs from it), the chain runs down instead: the body below it (`mech.ik_body`: from
-the tip, each time the child with the most below it, the spine rather than a jaw or a limb, to the
-tail). The turn that has the head face the target, times the weight, turns the root, and each
-joint down the body turns back so its link keeps only its share of that turn: 1 less how far
-along the body it is (pivot to pivot, from the head, of the body's length). The head faces the
-target, the neck follows nearly as much, and the tail hardly moves. The dragon's `head_aim` aims
-this way.
+An aim's turn is shared along its chain, the tip taking the most; the chain runs up from the tip,
+as above (the neck). A tip that is the root has no chain to aim with, which `character_check`
+reports.
 
 ### The rest pose
 
-The model's `pose` is the pose every clip starts from and adds onto: a move (`{twin, by}`, as a
-motion's are, its delay unused), every channel it leaves out at 0. With `"twin": "WITH"` its
-channels' twins take the same values, so a symmetric stance is written for one side. It is the character's
-stance: the mech's arms hanging a little bent, its knuckles half closed, its legs reaching for the
-ground (their IK weights 1). The stance is written once, here. Each clip then holds only how it
-differs. The game shows the rest pose when an action has no clip. The character editor's pose test (Assemble tab) starts from it, and **Set
-rest pose** saves what it shows.
+The model's `pose` is the pose every clip starts from and adds onto: channel amounts by name,
+every channel it leaves out at 0. It is **symmetric**: each amount moves its channel's twin too,
+as a WITH move does, so one side is written; writing a channel and its twin both is an error
+(`character_check`). Asymmetry is a clip's (the combat idle's guard). It is the character's
+**stance**, and the only place a joint's stance lives: the mech's arms hanging from their
+sideways slots, a little bent, its knuckles half closed, its legs reaching for the ground (their
+IK weights 1); the strider's zigzag. The stance is written once, here. Each clip then holds only
+how it differs. The game shows the rest pose when an action has no clip. The character editor's
+pose test (Assemble tab) starts from it, and **Set rest pose** saves what it shows (the left side
+of each pair; it says so when the sides differed).
 
 ```json
-"pose": {"twin": "WITH", "by": {"l_finger_a_1.knuckle": -0.3665, "l_forearm.elbow": 0.2618, "l_leg.weight": 1}}
+"pose": {"l_arm.shoulder": 1.3963, "l_finger_a_1.knuckle": -0.3665, "l_forearm.elbow": 0.2618, "l_leg.weight": 1}
 ```
+
+What the rig measures "at rest" (an IK target's tip, its pole's bend, a foot standing, the
+ground) it measures on the stance: the rest pose with its IK targets let go and the root at the
+origin.
 
 ## How a rig is built and posed
 
-`rig_create` walks the assembly in order:
+`rig_create` walks the places in order (`mech.model_places`, `Rig.places`: an instance once, or
+on each side of the body):
 
 1. **Root**: an anchor bone at the origin, at rest, stands in for the parent; then as a child.
-2. **Child**: the first joint of its part's stack is seated onto the parent's slot
-   (reflected when the parent is mirrored), each next joint onto the one before. A joint's female
-   hardware goes on the bone before it; a moving joint gets a bone at its pivot, turned by
-   the instance's `bend`, which its male hardware rides. The part hangs on the last joint's male
-   face, its origin `length` below: that places the instance's frame.
-3. **Shapes**: one scene node each, under the last bone, carrying the shape's place and scale
-   (reflected when the instance is mirrored).
+2. **Child**: the first joint of its part's stack is seated onto the parent's slot (on the
+   reflected side, the slot reflected: across its own mirror plane, or with the parent), each next
+   joint onto the one before. A joint's female hardware goes on the bone before it; a moving joint
+   gets a bone at its pivot, which its male hardware rides. The part hangs on the last joint's
+   male face, its origin `length` below: that places its frame.
+3. **Shapes**: one scene node each (two for a mirrored shape), under the last bone, carrying the
+   shape's place and scale (reflected on the reflected side).
 
 Bones are flat children of the rig's `frame` node, which the model's `scale` scales. Pieces are
 children of their bone, so posing writes **one transform per bone and none per piece**. The mech
 has 48 bones (one per moving joint, and the root's anchor) and 212 pieces.
 
 After building, the rig finds each IK target's chain and, when `ground` is set, the lowest corner
-of any piece at rest.
+of any piece in the stance (the rest pose's joints).
 
 `rig_pose(values)` then:
 1. sets each bone's motion from its joint's channel: turns about its axes, or a slide
 2. solves each bone from its parent (a root's anchor from the root's channels): `parent ∘ offset ∘
    rest ∘ Rx·Ry·Rz`, then a linear actuator's slide along its -y
-3. aims each aim whose tip is the root (it turns the root, so it goes first), then reaches with
-   each other IK target whose weight is above 0, solving again after each
+3. aims or reaches with each IK target whose weight is above 0, solving again after each
 4. writes the bone transforms
 
 `rig_solve` does steps 1 to 3 without touching the scene, so tools can ask where things would
@@ -409,23 +420,27 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
 ## The assets
 
 - `assets/characters/mech.json`: the humanoid mech, exported once from the code that used to build it
-  (`src/mech_kit.odin`, seed 7). Same proportions and motion. Its right limbs place the left
-  limbs' parts mirrored, and the thumb and fingers share their three segment parts
+  (`src/mech_kit.odin`, seed 7). Same proportions and motion. Its torso's `arm` slot mirrors
+  across its z and its pelvis's `thigh` slot across its x, so each limb is written once (18
+  instances, 33 placed), and the thumb and fingers share their three segment parts
   (`finger_1`..`finger_3`). Chains hang on the origin (each link has a length); a slot is named after the branch matched on it.
 - `assets/characters/dragon.json`: mjolnir's dragon example (`examples/creative/dragon`), ported. The
   spine is a chain of ball joints (instances `segment_*`, `taper_*`, `tail`, each with
   channels, `segment_3.spine` a rotation and so on) placing a few shared parts (`segment`, `segment_limbs` with the limbs'
-  slots, `taper`, each a link the next hangs on the origin of), the right limbs mirror the left limbs' parts, the limbs are shoulder and hip hinges on turntables plus elbow/knee hinges, and the jaw is a
-  centred hinge. Its joint hardware uses this engine's kit, so the lugs and sockets look a little
+  slot, `taper`, each a link the next hangs on the origin of), the limbs hang from `segment_limbs`'s
+  `limb` slot, mirrored across its z, the limbs are shoulder and hip pins on turntables plus
+  elbow/knee pins, and the jaw is a centred pin. Its rest pose folds the limbs, so it stands on the
+  ground; the head is the root, with no aim. Its joint hardware uses this engine's kit, so the lugs and sockets look a little
   different from the example's. Piece colours keep the example's palette hashing, with a fixed
   seed.
 - `assets/characters/strider.json`: a heavy reverse-jointed walker, built on the same engine
   with a different body. A wide hull on a ball waist, a visor `sensor` on a neck, a missile
   `rack` hinged on its back (`rack_pitch`), and arms that end in guns: the `cannon` part is the
   forearm, no hand. Each leg is four links, `thigh` (the mech's hip), `shin` (`knee`),
-  `hock` (`ankle`) and a broad, solid `foot` (`toe`); their instances' hinge `bend`s give the rest pose its
-  zigzag (thigh back, shin forward, hock back, foot level), so the knees point backwards at
-  every channel 0 and their ranges keep them there. Right limbs mirror the left limbs' parts.
+  `hock` (`ankle`) and a broad, solid `foot` (`toe`); the rest pose's pin turns give its stance
+  the zigzag (thigh back, shin forward, hock back, foot level), so the knees point backwards and
+  their ranges keep them there. The hull's `arm` and the pelvis's `thigh` slots mirror, so each
+  limb is written once.
 
 ## Not supported yet
 
@@ -433,6 +448,6 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   colours. A model file is one fixed mech. Variation would need parameters in the file, with
   shapes sized from them.
 - Free (unconstrained) bones, which the dragon example used to steer its spine along a spline.
-  Its spine is ball joints here, waiting for the dragon's motion to be authored in this engine.
+  Its spine is ball joints here, waved by spread moves (its `slither`).
 - Renaming an instance, a joint, an IK target or an arc in the character editor updates the rest pose and the open animation, but not other
   character files that use the old name.

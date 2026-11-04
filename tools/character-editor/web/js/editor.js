@@ -55,7 +55,6 @@ class Editor {
     // joints' channels are named as the engine has them
     setDofsSource((j) => this.viewer?.query({ q: "dofs", joint: j }) ?? null);
     this.explode = 0; // the part's shapes pushed apart, 0 to 1
-    this.mirrored = false; // preview the part as a mirrored instance shows it (the right side)
     this.grid = localStorage.getItem("grid") !== "off"; // the grid in the view, through the origin
     /** @type {"hidden" | "point" | "label"} IK targets and poles in the view (assemble and animate tabs), kept in this browser */
     this.ikShow = /** @type {any} */ (localStorage.getItem("ikShow")) || "point";
@@ -261,7 +260,7 @@ class Editor {
   }
 
   // alone is the model the model tab shows: the selected library part, placed once at the origin,
-  // hanging by its joints; mirrored, as the other side shows it, when previewing that. It shows in model units
+  // hanging by its joints (its mirrored shapes and slots there twice, as the engine draws them). It shows in model units
   // (ALONE_SCALE), not scaled to the character's size.
   // Each joint it hangs by is a channel of its own (jointChannel), which the joints' try sliders
   // and the joint tool set (this.tries), so a joint can be tried before it is rigged.
@@ -274,8 +273,7 @@ class Editor {
       materials: m.materials,
       hardware: m.hardware,
       parts: part ? [part] : [],
-      // mirroring names a twin; alone, it names its own part (no twin there): reflected only
-      assembly: part ? [{ name: part.name, part: part.name, ...(this.mirrored ? { mirror: part.name } : {}) }] : [],
+      assembly: part ? [{ name: part.name, part: part.name }] : [],
     };
   }
 
@@ -298,12 +296,12 @@ class Editor {
 
   /**
    * standAlone: the root's turn (euler) that stands the part alone, as the viewer holds it, the
-   * way the first instance of it (mirrored ones, previewing the mirror) stands in the character
+   * way the first instance of it stands in the character (its left side, when it is on both)
    */
   standAlone() {
     const part = this.model.parts?.[this.def];
     const all = (this.model.assembly ?? []).filter((/** @type {any} */ x) => x.part === part?.name);
-    const inst = all.find((/** @type {any} */ x) => !!x.mirror === this.mirrored) ?? all[0];
+    const inst = all[0];
     const want = inst && this.stands[inst.name];
     const now = part && this.restTurns()[part.name];
     return want && now ? eulerFrom(mul(want, transpose(now))) : [0, 0, 0];
@@ -375,14 +373,6 @@ class Editor {
     this.grid = on;
     localStorage.setItem("grid", on ? "on" : "off");
     this.viewer?.grid(on);
-  }
-
-  /** setMirrored previews the model tab's part as the other side (true) or as modelled @param {boolean} on */
-  setMirrored(on) {
-    this.mirrored = on;
-    this.pendingModel = true;
-    this.sync();
-    this.emit("select");
   }
 
   /** pickPart shows library part i alone (the model tab) @param {number} i */

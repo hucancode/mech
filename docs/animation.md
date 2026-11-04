@@ -25,8 +25,8 @@ rest pose. Tools can also play any clip or hold explicit values (`mech_play_clip
 
 | layer | concepts |
 | --- | --- |
-| model ([modeling.md](modeling.md)) | **Part** (shapes, slots, joints, length) · **Joint** (HINGE, LINEAR, BALL, its stops) · **Instance** (parent, slot, mirror, rest twist and bend) · **Ik** (`tip`, `aim`) · the **rest pose** (a move) |
-| channels | `<instance>.<joint>` · `root`, `root.turn` · `<ik>`, `<ik>.swivel`, `<ik>.weight` |
+| model ([modeling.md](modeling.md)) | **Part** (shapes, slots, joints, length; a shape or slot can mirror) · **Joint** (PIN, SPIN, LINEAR, BALL, its stops) · **Instance** (parent, slot, twist; placed on both sides from a mirrored slot) · **Ik** (`tip`, `aim`) · the **rest pose** (a symmetric map) |
+| channels | `<place>.<joint>` (`l_arm.shoulder`) · `root`, `root.turn` · `<ik>`, `<ik>.swivel`, `<ik>.weight` |
 | animation | **Clip** → **Motion** `{shape, rate, moves}` → **Move** `{delay, spread, twin, by}` · named **Poses** (amounts) · named **Arcs** (a path for a position) · five **Eases** |
 
 That is all. A chain is not an object: it is a move's own channels, in the model's order. There
@@ -44,7 +44,7 @@ amount and delay. That is what mechanical motion is: parts moving together betwe
 held is a motion with no shape, and a pose at a moment is a shape stepping into it there.
 
 ```json
-{"arcs": [{"name": "step", "points": [[0, 0, 0.875], [0, 0, -0.875], [0, 0.3, 0], [0, 0, 0.875]], "corners": [0, 1]}],
+{"arcs": [{"name": "step", "points": [[0, 0, 0.875], [0, 0, -0.875], [0, 0.3, 0]], "corners": [0, 1], "closed": true}],
  "clips": [{"name": "walk", "duration": 1, "motions": [
   {"moves": [{"by": {"root": [0, -0.06, 0]}}]},
   {"shape": [{}, {"u": 0.55, "v": 0.3333}, {"u": 1, "v": 1}],
@@ -110,16 +110,17 @@ where it is at rest (an IK target's tip, the model's origin), in the model's spa
 the position on the arc where its motion's shape says, instead of adding amounts:
 
 ```
-out[position] += arc(shape(rate * x - delay))      0 the first point, 1 the last, k / (n - 1) point k
+out[position] += arc(shape(rate * x - delay))      0 the first point, 1 the end, k / segments point k
 ```
 
-An arc is **open**: it runs from its first point to its last. A one-shot whose shape goes 0, 1, 0
-runs out along it and back the same way; a loop is an arc whose last point is its first. So the
+An arc is **open** (the default): it runs from its first point to its last, `n - 1` segments. A
+one-shot whose shape goes 0, 1, 0 runs out along it and back the same way. A **`closed`** arc runs
+on from its last point back to its first, `n` segments, each point written once: a loop. So the
 shape times the path: it holds on a point at `k / (n - 1)`, eases between points as it eases
 between values, and a SETTLE past a point overshoots along the path, not off it (past the ends,
-the arc runs on along their tangents). An arc's twin follows the same points, the other side's x
+an open arc runs on along their tangents; a closed one goes round again). An arc's twin follows the same points, the other side's x
 mirrored. Only a clip's motions use arcs (not the rest pose). A name the animation lacks is
-logged and skipped.
+skipped (`character_check` reports it).
 
 Between its points an arc is a cubic (Hermite). Each point's tangent is half the way from the
 point before to the one after (Catmull-Rom), so the path runs smooth through it. Two cases use
@@ -131,14 +132,13 @@ the segment's own chord as the tangent instead:
   straight. Mechanical paths are lines and hard turns. Smooth arcs stay the default, so curved,
   organic paths are still possible.
 
-A **closed** arc, one whose last point is its first, runs smooth through that point too, since its
-neighbours wrap round the seam. It turns hard there only when that point is a corner (either
-index). A gait's foot lists corners 0 and 1, so it turns hard where it touches down and lifts.
+A closed arc runs smooth through its seam too, since its neighbours wrap round it. It turns hard
+there only when its first point is a corner. A gait's foot lists corners 0 and 1, so it turns hard
+where it touches down and lifts.
 
 A **gait's foot** is one closed arc (the mech's `step` and `stride`):
 
-- The points are front and back on the ground, both corners, then the top of the swing, then
-  front again.
+- The points are front and back on the ground, both corners, then the top of the swing.
 - The shape's one point, `{u: duty, v: 1/3}`, says when the foot leaves the ground. So the duty
   is written once, and the stance is a straight, steady slide on the ground, which doesn't skate.
 - The stride is the ground points' distance apart and the lift is the top point's height, both
@@ -164,8 +164,8 @@ it: `"poses": [{"name": "fist", "by": {"r_finger_a_1.knuckle": -0.68, ..}}]`.
 - **Twins and delays.** The move's twin and delay apply to the pose's amounts as they do to its
   own. A fist written on the right hand closes both hands with a WITH twin, or only the right
   one without a twin.
-- **Limits.** A pose holds amounts only: no arcs and no other poses. A channel's name wins over a
-  pose's, and the clash is logged. The rest pose is the model's, so it can't add the
+- **Limits.** A pose holds amounts only: no arcs and no other poses. A pose can't share a channel's
+  name: the clash is an error, and neither is added. The rest pose is the model's, so it can't add the
   animation's poses.
 
 The mech's `fist` is nine knuckle values written once. Before poses, the same nine numbers were
@@ -173,9 +173,10 @@ repeated in combat_idle, walk, run, attack and cast.
 
 ### Twins
 
-Most of a mech moves in pairs: two feet, two arms, two hands. A move's `twin` moves each of its
-channels' twins too, by the same amounts (`mech.channel_twin`: the same joint on the instance's
-mirror, the other side's IK target with x mirrored (and its swivel turned over);
+Most of a mech moves in pairs: two feet, two arms, two hands, each written once and placed on
+both sides of the body from a mirrored slot. A move's `twin` moves each of its channels' twins
+too, by the same amounts (`mech.channel_twin`: the same joint on the instance's other side, the
+other side's IK target with x mirrored (and its swivel turned over);
 [modeling.md](modeling.md#parts-and-the-assembly)):
 
 | twin | the other side | for |
@@ -186,8 +187,8 @@ mirror, the other side's IK target with x mirrored (and its swivel turned over);
 
 Channels with no twin (the root's, a waist's) move once, as written. So a walk writes the left
 side only. An arm swing is a `square` with an OPPOSITE twin: half a cycle on, a square is its own
-negative, so the right arm swings back as the left swings forward. The rest pose is a move too,
-usually WITH. `clips_build` resolves a twin move into two (`mech.move_resolve`), so sampling costs
+negative, so the right arm swings back as the left swings forward. The rest pose moves as a WITH
+move does. `clips_build` resolves a twin move into two (`mech.move_resolve`), so sampling costs
 the same as writing both sides out.
 
 **The shape** repeats every cycle: the last point eases into the first a cycle on. A one-shot (a
@@ -241,16 +242,25 @@ is whatever the artist drags it into:
 | a wave (a snake's slither, a tail's sway) | one move over the chain's joints with a spread, each turning about the chain's side axis (a snake slithers about Y): the wave travels tailward, a wavelength along the chain for `spread: 1`. To have each segment head as the shape says instead of the turns piling up, a second spread move turns the next joint back by as much (the dragon's slither) |
 | arms swinging | a square: the shoulder and forearm one move with an OPPOSITE twin and a small spread (the forearm a little later). The waist and head turning against them are one more move of the same motion with a spread, no twin |
 | a strike | two hits: the coil (OUT into its stop, held) and the drive (into a SETTLE stop, held, back), each firing its chain as moves a little later in turn: pelvis, waist, then the arm as one move with a spread (shoulder, elbow, wrist), then the fist. The arm is FK: its joints' turns, not a hand chasing a path. The head aims at the impact. A step into it is a one-shot shape of its own on the foot's IK target (out, held, back), with a lift for each step |
-| a head that is the root (the dragon) | aim it: its `head_aim` turns the head to face its target, the body following less and less toward the tail ([modeling.md](modeling.md#rigging-channels-ik-targets)) |
 
 ## How a clip is sampled
 
 `clip_sample(clips, clip, t, out)` starts from the rest pose (`Clips.pose`, compiled from the
 model's `pose`) and adds each motion in file order. `clips_build` compiles an `Animation`
 against a `Model`: names become channel indices, poses expand into their amounts, arcs are copied
-with their corners, and a shape's points are sorted by u. Names the
-model lacks are logged and skipped. Rebuild it whenever either side changes; the editors do so
-on every edit.
+with their corners, and a shape's points are sorted by u. What a name and value of a `by` mean is
+decided in one place (`mech.by_resolve`: an amount, a pose, an arc, or bad); what is bad is
+skipped quietly, and `character_check` reports why. Rebuild it whenever either side changes; the
+editors do so on every edit.
+
+## Checking a character
+
+`character_check(model, anim)` (`src/mech/check.odin`) lists everything wrong with a character,
+the one place that does: names that resolve to nothing or twice, values shaped unlike their
+channel, joints without stops, a mirrored slot on its own plane, a rest pose writing both sides.
+Those are **ERROR**s. **BUDGET** issues are data the engine can use but which is fighting the
+machine (Style, below). `asset_compile` logs them all, so the game logs them and the character
+editor shows them; `test_assets_check` holds the shipped characters to no ERROR.
 
 ## Playing clips
 
@@ -270,10 +280,12 @@ arm → fist, each link firing in turn.
 - **When a clip grows, change the approach, not the amount of data.** A shape of more than about
   six points, a channel in more than two motions, or an IK target needing a hand-drawn path to
   reach means the motion is fighting the machine: use FK, a pose or a spread instead.
+  `character_check` reports the first two as BUDGET issues (`SHAPE_BUDGET`, `MOTION_BUDGET`); the
+  editor shows them beside the errors.
 
 ## The assets
 
-Each character's stance is its rest pose (the model's `pose`, one side written, WITH). Its clips
+Each character's stance is its rest pose (the model's `pose`, one side written, symmetric). Its clips
 hold how they differ from it, then their motions; pairs are twin moves. They were checked on the rig (`test_shipped_clips`: loops end where they
 start, planted feet stay on the ground and don't slide sideways). `test_golden_poses` compares
 every frame of every clip against the reference in `bin/golden`.
@@ -292,8 +304,7 @@ every frame of every clip against the reference in `bin/golden`.
   `walk` and `run` counter-swing pelvis, hull and cannons, `attack` is a cannon ram with a step
   and a root lunge, `cast` braces and tips the rack, then three launches kick the rack and root
   back (three moves of the same amounts, a quarter cycle apart).
-- `assets/characters/dragon.json`: the head is the root, aimed by `head_aim` (its body following,
-  damped toward the tail). `idle` (the head scanning, the tail
+- `assets/characters/dragon.json`: the head is the root. `idle` (the head scanning, the tail
   ticking side to side), `combat_idle` (reared: head up, the neck sloping down to the body on
   the ground, forelimbs raised, the jaw snapping in steps, swaying between stops), `slither`
   (limbs folded back, a square wave down the spine's z turns, a wavelength along it: two spread

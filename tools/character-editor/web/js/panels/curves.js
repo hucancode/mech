@@ -16,7 +16,7 @@ import { btn, h, select } from "../dom.js";
 import { dockSpanButtons } from "../layout.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { EASES } from "../model.js";
+import { arcSpan, EASES } from "../model.js";
 import { shapeName, SHAPES } from "../shapes.js";
 
 const TOP = 26; // the titles and the ruler
@@ -146,7 +146,7 @@ export class Curves {
         if (!arc || arc.points.length < 2) continue;
         seen.add(v);
         arc.points.forEach((/** @type {any} */ _, /** @type {number} */ k) => {
-          const u = round(k / (arc.points.length - 1));
+          const u = round(k / arcSpan(arc));
           at.set(u, [...(at.get(u) ?? []), `${v} ${k + 1}`]);
         });
       }

@@ -50,7 +50,6 @@ export function insertKit(m, src, i, parent, scale = 1) {
   for (const p of block) {
     p.name = names.get(p.name);
     if (p !== root) p.parent = names.get(p.parent) ?? p.parent;
-    if (p.mirror) p.mirror = names.get(p.mirror) ?? p.mirror;
     if (p.part && !parts.has(p.part))
       parts.set(
         p.part,

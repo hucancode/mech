@@ -1,7 +1,6 @@
 package mech
 
 import "core:fmt"
-import "core:log"
 import "core:math"
 import "core:math/linalg"
 import "core:slice"
@@ -29,7 +28,7 @@ Bone :: struct {
   lo, hi: [3]f32,
   stroke: [2]f32, // a linear actuator's: how far it slides out, its min and max (equal: free)
   part:   int, // the instance whose joint it is
-  joint:  int, // which of its instance's joints (instance_joints); -1: a root's anchor
+  joint:  int, // which of its place's joints (place_joints); -1: a root's anchor
   node:   world.NodeHandle,
 }
 
@@ -64,13 +63,11 @@ RigDrive :: struct {
 // its stops let it bend at rest, in the model's space, `line` the way from the joint above the
 // middle one to the tip at rest, and `length` the chain's, root to tip.
 // An aiming one (`aim`) turns its whole chain so the tip's `look` (a direction in its frame: ahead
-// at rest) points at the target, `rest` then being a point ahead of the tip. Its tip a root (`body`:
-// the dragon's head), its chain is the body below it (ik_body), each bone taking its share of the
-// turn (Rig.shares): the tip all of it, less and less down to the tail.
+// at rest) points at the target, `rest` then being a point ahead of the tip.
 RigIk :: struct {
   first, count, turning, tip: int,
   channel:                    int,
-  aim, holds, body:           bool,
+  aim, holds:                 bool,
   mid:                        int,
   rest, bend, look, line:     [3]f32,
   point:                      [3]f32,
@@ -82,7 +79,8 @@ Rig :: struct {
   frame:   world.NodeHandle,
   bones:   [dynamic]Bone,
   pieces:  [dynamic]Piece,
-  frames:  [dynamic]Frame, // per instance: where its part's shapes and slots sit
+  places:  [dynamic]Place, // what the model places (model_places): bones, pieces and frames are of these
+  frames:  [dynamic]Frame, // per place: where its part's shapes and slots sit
   poses:   [dynamic]geometry.Transform, // per bone, in the frame node's space, from the last pose
   motion:  [dynamic][3]f32, // per bone, its turns from rest about x, y, z (euler), IK included
   slide:   [dynamic]f32, // per bone, how far it slid out (a linear actuator's), model units
@@ -90,8 +88,6 @@ Rig :: struct {
   drives:  [dynamic]RigDrive,
   iks:     [dynamic]RigIk,
   chains:  [dynamic]int,
-  shares:  [dynamic]f32, // per chain bone, of a body aim's: how much of the head's turn it takes
-  turn:    quaternion128, // the origin's turn by a body aim, from the last pose
   lift:    f32,
 }
 
@@ -103,7 +99,7 @@ Builder :: struct {
   r:         ^render.Renderer,
   lib:       ^Library,
   hardware:  [Role]render.MaterialHandle,
-  part:      int, // the instance being built
+  part:      int, // the place being built
   joint:     int, // the joint of it being built, -1 for none
   materials: []render.MaterialHandle,
 }
@@ -114,7 +110,6 @@ Builder :: struct {
 rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Model, parent: world.NodeHandle) -> (rig: ^Rig, ok: bool) {
   rig = new(Rig)
   rig.model = m
-  rig.turn = linalg.QUATERNIONF32_IDENTITY
   rig.frame = world.spawn(w, scale = m.scale, parent = parent)
   b := Builder{rig = rig, w = w, r = r, lib = lib}
   b.materials = make([]render.MaterialHandle, max(1, len(m.materials)), context.temp_allocator)
@@ -131,37 +126,39 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
     .METAL  = paint(&b, m.hardware.metal),
   }
 
-  // per instance, its last joint's mirror: how its part's shapes and slots show
-  mirrors := make([]Mirror, len(m.assembly), context.temp_allocator)
+  places := model_places(m)
+  append(&rig.places, ..places)
+  // per place, its last joint's mirror: how its part's shapes and slots show
+  mirrors := make([]Mirror, len(places), context.temp_allocator)
   resize(&rig.values, model_channels(m))
   // each joint's channel, its values moving its bone, in the order of the pose
-  ch := joint_channel(m, 0)
-  for inst, i in m.assembly {
+  ch := root_channel(m) + ROOT_VALUES
+  for place, i in places {
+    inst := m.assembly[place.inst]
     b.part, b.joint = i, -1
-    parent := model_instance(m, inst.parent) if inst.parent != "" else -1
-    if parent >= i {
-      log.warnf("model %s: %s comes before its parent %s; placed at the root", m.name, inst.name, inst.parent)
-      parent = -1
-    }
+    // what character_check reports is skipped: an unknown parent places it at the root, an unknown
+    // part or slot is none
+    parent := place.parent
     part := model_part(m, inst.part)
-    if part < 0 && inst.part != "" do log.warnf("model %s: %s places unknown part %s", m.name, inst.name, inst.part)
     // the parent's slot, as the parent shows it; a root matches the model origin, on an anchor bone
     frame := rig.frames[parent] if parent >= 0 else Frame{add_bone(&b, -1, {}, linalg.QUATERNIONF32_IDENTITY, {}), geometry.TRANSFORM_IDENTITY}
     socket := SLOT_FACE
-    if inst.parent_slot != "" {
-      pp := model_part(m, m.assembly[parent].part) if parent >= 0 else -1
+    if inst.parent_slot != "" && parent >= 0 {
+      pp := model_part(m, m.assembly[places[parent].inst].part)
       if k := part_slot(m, pp, inst.parent_slot); k >= 0 do socket = slot_face(m.parts[pp].slots[k])
-      else do log.warnf("model %s: %s matches unknown slot %s of %s", m.name, inst.name, inst.parent_slot, inst.parent)
     }
-    if parent >= 0 && m.assembly[parent].mirror != "" do socket = mirror_face(mirrors[parent], socket)
+    switch {
+    case parent >= 0 && places[parent].side == .R:
+      // on a reflected side: its parent's slots are reflected with it
+      socket = mirror_face(mirrors[parent], socket)
+    case place.side == .R:
+      // the reflected side of a mirrored slot, across its plane of the parent's frame
+      pp := model_part(m, m.assembly[places[parent].inst].part)
+      socket = mirror_face(plane_mirror(m.parts[pp].slots[part_slot(m, pp, inst.parent_slot)].mirror), socket)
+    }
     // its part's joints; none bolts the part straight onto the socket, rigid
-    mirrored := inst.mirror != ""
-    stack := instance_joints(m, i)
-    for x in inst.joints {
-      known := false
-      for j in stack do known ||= j.name == x.name
-      if !known do log.warnf("model %s: %s sets joint %s at rest, which part %s lacks", m.name, inst.name, x.name, inst.part)
-    }
+    mirrored := place.side == .R
+    stack := place_joints(m, place)
     mi := MIRROR_NONE
     if len(stack) == 0 {
       frame = {frame.bone, geometry.transform_mul(frame.place, geometry.seat(socket, PART_FACE))}
@@ -169,15 +166,14 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
     }
     for j, k in stack {
       b.joint = k
-      // how the instance sets it at rest: its twist turns its socket (reflected, the other way),
-      // its bend its first axis
-      twist, bend := instance_rest(inst, j.name)
+      // how the instance mounts it: its twist turns its socket (reflected, the other way)
+      twist := instance_twist(inst, j.name)
       if k > 0 do socket = mirror_face(mi, SLOT_FACE) if mirrored else SLOT_FACE
       socket = twist_face(socket, -twist if mirrored else twist)
       // a pin hinge's base plates are round where a turntable next to it in the stack turns them
-      round := [2]bool{k > 0 && joint_turntable(stack[k - 1]), k + 1 < len(stack) && joint_turntable(stack[k + 1])}
-      frame = joint_build(&b, frame, socket, j, bend, round)
-      if mirrored do mi = joint_mirror(j, bend)
+      round := [2]bool{k > 0 && stack[k - 1].kind == .SPIN, k + 1 < len(stack) && stack[k + 1].kind == .SPIN}
+      frame = joint_build(&b, frame, socket, j, round)
+      if mirrored do mi = joint_mirror(j)
       // its stops, on the bone it moves, and its channel's values driving it
       bone_limit(&rig.bones[frame.bone], j, mi)
       axes, count := joint_axes(j)
@@ -198,16 +194,23 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
     if part < 0 do continue
     for s, k in m.parts[part].shapes {
       at, turn, size := shape_place(m.parts[part], s)
-      place := geometry.Transform{at, turn, primitive_scale(s.primitive, size)}
-      if mirrored do place = mirror_shape(mirrors[i], place, s.primitive)
-      add_piece(&b, frame.bone, geometry.transform_mul(frame.place, place), s.primitive, s.param, paint(&b, s.material), k)
+      // as written, and a mirrored shape again across its plane
+      for copy in 0 ..= (0 if s.mirror == .NONE else 1) {
+        place := geometry.Transform{at, turn, primitive_scale(s.primitive, size)}
+        if copy == 1 do place = mirror_shape(plane_mirror(s.mirror), place, s.primitive)
+        if mirrored do place = mirror_shape(mirrors[i], place, s.primitive)
+        add_piece(&b, frame.bone, geometry.transform_mul(frame.place, place), s.primitive, s.param, paint(&b, s.material), k)
+      }
     }
   }
 
-  for _, k in m.iks do ik_add(rig, k)
+  for k, n in model_ik_places(m, places) do ik_add(rig, k, n)
 
-  // the lowest point at rest, and where each IK's tip and pole are then
-  rest := make([]f32, model_channels(m), context.temp_allocator)
+  // the lowest point at rest, and where each IK's tip and pole are then: the stance, the rest
+  // pose's joints (Model.pose), its IK targets let go and the root at the origin
+  rest := model_pose(m, context.temp_allocator)
+  for k in 0 ..< ik_count(m) do rest[ik_channel(m, k) + IK_WEIGHT] = 0
+  for &v in rest[root_channel(m):][:ROOT_VALUES] do v = 0
   rig_solve(rig, rest)
   for &ik in rig.iks do ik_rest(rig, &ik)
   if m.ground {
@@ -232,6 +235,7 @@ rig_destroy :: proc(rig: ^Rig, w: ^world.World) {
   world.node_destroy(w, rig.frame)
   delete(rig.bones)
   delete(rig.pieces)
+  delete(rig.places)
   delete(rig.frames)
   delete(rig.poses)
   delete(rig.values)
@@ -240,7 +244,6 @@ rig_destroy :: proc(rig: ^Rig, w: ^world.World) {
   delete(rig.slide)
   delete(rig.iks)
   delete(rig.chains)
-  delete(rig.shares)
   free(rig)
 }
 
@@ -269,22 +272,12 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     rig.motion[i] = limit(b, rig.motion[i])
     if b.stroke[0] != b.stroke[1] do rig.slide[i] = clamp(rig.slide[i], b.stroke[0], b.stroke[1])
   }
-  rig.turn = linalg.QUATERNIONF32_IDENTITY
   origin := rig_origin(rig)
   solve(rig, origin)
-  // a body aim first: it turns the origin, which every other IK reaches from
-  for ik in rig.iks {
-    c := s[ik.channel:]
-    if weight := clamp(c[IK_WEIGHT], 0, 1); ik.body && weight > 0 {
-      aim_body(rig, ik, ik.rest + {c[0], c[1], c[2]}, weight, origin)
-      origin = rig_origin(rig)
-      solve(rig, origin)
-    }
-  }
   for ik in rig.iks {
     c := s[ik.channel:]
     weight := clamp(c[IK_WEIGHT], 0, 1)
-    if weight <= 0 || ik.body do continue
+    if weight <= 0 do continue
     if ik.aim do aim(rig, ik, ik.rest + {c[0], c[1], c[2]}, weight, origin)
     else {
       target := ik.rest + {c[0], c[1], c[2]}
@@ -315,7 +308,7 @@ rig_bounds :: proc(rig: ^Rig) -> (lo, hi: [3]f32) {
   return lo * rig.model.scale, hi * rig.model.scale
 }
 
-// rig_moves is which of a pose's values (model_channels) move instance `inst`: the drives on the
+// rig_moves is which of a pose's values (model_channels) move place `inst` (Rig.places): the drives on the
 // bones its frame rides on (its own joints' and every parent's), the
 // channels of every IK whose chain has one of them, and the root's channels.
 rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []bool {
@@ -327,8 +320,7 @@ rig_moves :: proc(rig: ^Rig, inst: int, allocator := context.allocator) -> []boo
   for ik in rig.iks {
     moves := false
     for c in rig.chains[ik.first:][:ik.count] do moves ||= above[c]
-    // a body aim turns the origin, so everything
-    if moves || ik.body do for &o in out[ik.channel:][:IK_VALUES] do o = true
+    if moves do for &o in out[ik.channel:][:IK_VALUES] do o = true
   }
   for &o in out[root_channel(m):][:ROOT_VALUES] do o = true
   return out
@@ -349,17 +341,16 @@ rig_frame :: proc(rig: ^Rig, i: int) -> geometry.Transform {
   return geometry.transform_mul(rig.poses[f.bone], f.place)
 }
 
-// rig_origin is where the last pose put the model's origin: the root's channels, lifted, and
-// turned by a body aim (Rig.turn).
+// rig_origin is where the last pose put the model's origin: the root's channels, lifted.
 rig_origin :: proc(rig: ^Rig) -> geometry.Transform {
   root := rig.values[root_channel(rig.model):][:ROOT_VALUES]
-  return {{root[0], root[1] + rig.lift, root[2]}, linalg.normalize(rig.turn * euler({root[3], root[4], root[5]})), 1}
+  return {{root[0], root[1] + rig.lift, root[2]}, euler({root[3], root[4], root[5]}), 1}
 }
 
-// instance_base is the bone instance `i`'s joints hang from: its parent's frame's, or a root's anchor.
+// instance_base is the bone place `i`'s joints hang from: its parent's frame's, or a root's anchor.
 @(private = "file")
 instance_base :: proc(rig: ^Rig, i: int) -> int {
-  if parent := model_instance(rig.model, rig.model.assembly[i].parent); parent >= 0 && parent < i do return rig.frames[parent].bone
+  if parent := rig.places[i].parent; parent >= 0 do return rig.frames[parent].bone
   for b, k in rig.bones do if b.part == i && b.joint < 0 do return k
   return -1
 }
@@ -385,28 +376,16 @@ pose_bone :: proc(rig: ^Rig, i: int, origin: geometry.Transform) {
   rig.poses[i] = {position, linalg.normalize(rotation), 1}
 }
 
-// ik_add finds IK target `k`'s chain: the bones from the tip's last joint up to its root's first
-// (ik_root).
+// ik_add finds placed IK target `k`'s chain (the `n`th, model_ik_places): the bones from the tip's
+// last joint up to its root's first (ik_root).
 @(private = "file")
-ik_add :: proc(rig: ^Rig, k: int) {
+ik_add :: proc(rig: ^Rig, k: IkPlace, n: int) {
   m := rig.model
-  ik := m.iks[k]
-  tip := model_instance(m, ik.tip)
-  if tip < 0 {
-    log.warnf("model %s: ik %s reaches with unknown instance %s", m.name, ik.name, ik.tip)
-    return
-  }
-  root := ik_root(m, tip)
-  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, k), aim = ik.aim}
-  // an aim from a root (the dragon's head): the body below it turns with it
-  if ik.aim && model_instance(m, m.assembly[tip].parent) < 0 {
-    out.body = true
-    for inst in ik_body(m, tip, context.temp_allocator) do for b, n in rig.bones do if b.part == inst && b.joint >= 0 do append(&rig.chains, n)
-    out.count = len(rig.chains) - out.first
-    out.turning = out.count
-    append(&rig.iks, out)
-    return
-  }
+  ik := m.iks[k.ik]
+  tip := k.tip
+  if tip < 0 do return
+  root := ik_root(rig.places[:], tip)
+  out := RigIk{first = len(rig.chains), tip = tip, channel = ik_channel(m, n), aim = ik.aim}
   base := instance_base(rig, root)
   for bone := rig.frames[tip].bone; bone >= 0; bone = rig.bones[bone].parent {
     if bone == base {
@@ -421,7 +400,6 @@ ik_add :: proc(rig: ^Rig, k: int) {
     append(&rig.chains, bone)
   }
   resize(&rig.chains, out.first)
-  log.warnf("model %s: ik %s: no chain above %s", m.name, ik.name, ik.tip)
 }
 
 // ik_rest finds, from the rest pose (rig.poses, unlifted), where IK target ik's tip is, its chain's
@@ -438,7 +416,6 @@ ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
     ik.look = linalg.mul(linalg.quaternion_inverse(x.rotation), [3]f32{0, 0, 1})
     ik.rest += {0, 0, max(x.position.y, 1)}
     ik.mid = -1
-    if ik.body do body_shares(rig, ik^, x.position)
     return
   }
   ik.mid = chain_middle(rig, ik^, rig_origin(rig))
@@ -483,7 +460,7 @@ ik_end :: proc(rig: ^Rig, ik: RigIk) -> [3]f32 {
   far: f32 = 0
   for p, i in rig.pieces {
     below := false
-    for j := p.part; j >= 0; j = model_instance(m, m.assembly[j].parent) {
+    for j := p.part; j >= 0; j = rig.places[j].parent {
       if j == ik.tip do below = true
       if below do break
     }
@@ -597,62 +574,6 @@ reach_passes :: proc(rig: ^Rig, ik: RigIk, chain: []int, target, pole: [3]f32, k
       }
     }
   }
-}
-
-// body_shares gives body aim ik's chain bones their shares of the head's turn, from the rest pose:
-// 1 less how far along the body (from `head`, pivot to pivot) each one is, of the whole body's
-// length (one link past the last pivot): the neck the most, the tail the least.
-@(private = "file")
-body_shares :: proc(rig: ^Rig, ik: RigIk, head: [3]f32) {
-  resize(&rig.shares, len(rig.chains))
-  chain := rig.chains[ik.first:][:ik.count]
-  if len(chain) == 0 do return
-  along := make([]f32, len(chain), context.temp_allocator)
-  at := head
-  for bone, k in chain {
-    p := rig.poses[bone].position
-    along[k] = (along[k - 1] if k > 0 else 0) + linalg.length(p - at)
-    at = p
-  }
-  last := along[len(chain) - 1]
-  whole := last + (last - along[len(chain) - 2] if len(chain) > 1 else last)
-  for k in 0 ..< len(chain) do rig.shares[ik.first + k] = 1 - along[k] / whole if whole > 0 else 0
-}
-
-// turn_part is `t` of turn `q` (about its axis, t times its angle; t may be negative).
-@(private = "file")
-turn_part :: proc(q: quaternion128, t: f32) -> quaternion128 {
-  q := q
-  if q.w < 0 do q = -q
-  w := clamp(q.w, -1, 1)
-  s := math.sqrt(1 - w * w)
-  if s < 1e-6 do return linalg.QUATERNIONF32_IDENTITY
-  return linalg.quaternion_angle_axis(2 * math.acos(w) * t, [3]f32{q.x, q.y, q.z} / s)
-}
-
-// aim_body is an aim whose tip is the root (RigIk.body): the shortest turn that has the tip look at
-// `target`, times `weight`, turns the origin (Rig.turn), and each bone of the body below it turns
-// back so it is turned only by its share (Rig.shares) in the model's space: the head faces the
-// target, the body following less and less toward the tail. Each bone keeps to its axes and stops.
-@(private = "file")
-aim_body :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, weight: f32, origin: geometry.Transform) {
-  x := rig_frame(rig, ik.tip)
-  from, to := linalg.mul(x.rotation, ik.look), linalg.normalize0(target - x.position)
-  if to == 0 || linalg.dot(from, to) < -0.999 do return
-  d := turn_part(linalg.quaternion_between_two_vector3(from, to), weight)
-  prev: f32 = 1
-  for bone, k in rig.chains[ik.first:][:ik.count] {
-    b := rig.bones[bone]
-    share := rig.shares[ik.first + k]
-    // as posed without the aim: its parent's turn, then its rest; its parent turns by `prev` of d
-    frame := (rig.poses[b.parent].rotation if b.parent >= 0 else origin.rotation) * b.rest
-    back := linalg.quaternion_inverse(frame) * turn_part(d, share - prev) * frame
-    mo := euler_from(back * euler(rig.motion[bone]))
-    for axis in Axis do if axis not_in b.turns do mo[axis] = 0
-    rig.motion[bone] = limit(b, mo)
-    prev = share
-  }
-  rig.turn = d
 }
 
 // aim turns the chain's bones, tip first, so the tip's look points at `target`, each about the

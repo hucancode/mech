@@ -118,8 +118,7 @@ function draw() {
   const m = editor.model;
   const part = m.parts?.[editor.def];
   if (editor.viewer && (editor.tab === "assemble" || editor.tab === "animation")) return drawHandles();
-  // previewing the mirror shows the part as it is not written: nothing to drag
-  if (editor.tab !== "model" || !part || !editor.viewer || editor.explode > 0 || editor.mirrored) return;
+  if (editor.tab !== "model" || !part || !editor.viewer || editor.explode > 0) return;
   // the model tab shows the part alone, in model units (editor.alone)
   const s = ALONE_SCALE;
   if (gizmo.mode === "slot") return drawSlots(part, s);
@@ -358,11 +357,19 @@ function drawSlots(part, s) {
     if (!sp) return;
     const lit = i === editor.slot;
     const ring = el("circle", { cx: sp[0], cy: sp[1], r: 9, fill: "transparent", stroke: lit ? "#6cb6ff" : "#e5b45b", "stroke-width": lit ? 2.5 : 2, class: "hit" });
-    el("title", {}, ring).textContent = `slot ${x.name}`;
+    el("title", {}, ring).textContent = `slot ${x.name}${x.mirror ? ` (mirrored across ${x.mirror.toLowerCase()} = 0)` : ""}`;
     ring.addEventListener("pointerdown", (e) => {
       e.stopPropagation();
       editor.select(() => (editor.slot = lit ? -1 : i));
     });
+    // a mirrored slot's other side (mech.Slot.mirror), reflected across its plane: dashed, as the
+    // engine makes it; it moves with the slot as written
+    if (!x.mirror) return;
+    const k = "XYZ".indexOf(x.mirror);
+    const [rp] = project([world((x.position ?? [0, 0, 0]).map((/** @type {number} */ c, /** @type {number} */ n) => (n === k ? -c : c)))]);
+    if (!rp) return;
+    el("line", { x1: sp[0], y1: sp[1], x2: rp[0], y2: rp[1], stroke: "#e5b45b", "stroke-width": 1, "stroke-dasharray": "2 4", opacity: 0.5 });
+    el("title", {}, el("circle", { cx: rp[0], cy: rp[1], r: 9, fill: "transparent", stroke: lit ? "#6cb6ff" : "#e5b45b", "stroke-width": 1.5, "stroke-dasharray": "3 3" })).textContent = `slot ${x.name}, its other side: reflected across ${x.mirror.toLowerCase()} = 0`;
   });
 }
 

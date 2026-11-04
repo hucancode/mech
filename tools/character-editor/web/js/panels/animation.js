@@ -9,7 +9,7 @@
 import { btn, CARET, h, list, num, row, section, select, text, vec3 } from "../dom.js";
 import { icon } from "../icons.js";
 import { editor } from "../editor.js";
-import { amountsOf, arcsOf, arcUsers, clone, deleteArc, deletePose, insertArcPoint, poseFromMove, poseNames, posesOf, poseUsers, removeArcPoint, renameArc, renamePose, setArcCorner, uniqueName } from "../model.js";
+import { amountsOf, arcsOf, arcUsers, clone, deleteArc, deletePose, insertArcPoint, poseFromMove, poseNames, posesOf, poseUsers, removeArcPoint, renameArc, renamePose, setArcClosed, setArcCorner, uniqueName } from "../model.js";
 import { arcHandle, pickedArcPoint } from "../gizmo.js";
 import { motionLabel } from "../shapes.js";
 import { channelValues } from "./channelValues.js";
@@ -171,7 +171,12 @@ function arcInspector(arc) {
           btn("+", () => set(() => (insertArcPoint(editor.anim, arc, i) && editor.flash("Motions whose shape other moves follow too keep their shape: check their timing on the arc"), pick(i + 1))), { kind: "icon", title: "Add a point after this one, halfway to the next (or on past the last); the moves on the arc keep their timing" }),
           btn("−", () => set(() => (removeArcPoint(editor.anim, arc, i), pick(Math.max(i - 1, 0)))), { kind: "icon", title: "Remove this point (an arc keeps two); the moves on the arc keep their timing", disabled: points.length <= 2 }),
         ],
-        "open, first point to last: a move's shape says how far along (0 the first point, 1 the last, k / (n - 1) point k). A loop is one whose last point is its first: it runs smooth through it. Pick a point in the view to move it",
+        "a move's shape says how far along (0 the first point, 1 the end, k / segments point k). Pick a point in the view to move it",
+      ),
+      row(
+        "closed",
+        h("input", { type: "checkbox", checked: !!arc.closed, onchange: (/** @type {Event} */ e) => set(() => setArcClosed(editor.anim, arc, /** @type {HTMLInputElement} */ (e.target).checked)) }),
+        "on from its last point back to its first, smooth through it unless it is a corner (a foot's loop); open, it ends at its last point",
       ),
       row(
         "corner",
