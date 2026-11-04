@@ -370,6 +370,12 @@ export class Curves {
         g.fillText(`${lanesData.length} moves, overlaid: ${name(lanesData[0])} (bright) to ${name(lanesData[lanesData.length - 1])} (faint)`, b.l0 + 6, y0 + 12);
         return;
       }
+      // a spread move's later links, fainter as they come later
+      (l.links ?? []).forEach((/** @type {any} */ x, /** @type {number} */ n, /** @type {any[]} */ all) => {
+        g.globalAlpha = 0.5 - (0.35 * n) / Math.max(1, all.length - 1);
+        this.plot(g, x.values, (i) => this.xt((this.duration * i) / (x.values.length - 1)), y, lit ? text : accent, 1);
+      });
+      g.globalAlpha = 1;
       // a twin move's twins (the other side), faint, under it
       if (l.twin) {
         g.globalAlpha = 0.4;
@@ -379,7 +385,7 @@ export class Curves {
       this.plot(g, l.values, (i) => this.xt((this.duration * i) / (l.values.length - 1)), y, lit ? text : accent, lit ? 2 : 1.5);
       // the move's name: its channels
       const names = l.channels.length ? l.channels.map((/** @type {string} */ c) => c.replace(/_[xyz]$/, "")).filter((/** @type {string} */ c, /** @type {number} */ i, /** @type {string[]} */ a) => a.indexOf(c) === i) : ["(no channels)"];
-      const label = `${k + 1}. ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}${l.twin ? " (and twins, faint)" : ""}`;
+      const label = `${k + 1}. ${names.slice(0, 3).join(", ")}${names.length > 3 ? ` +${names.length - 3}` : ""}${l.links ? ` (spread over ${l.links.length + 1})` : ""}${l.twin ? " (and twins, faint)" : ""}`;
       g.fillStyle = lit ? text : muted;
       g.fillText(label, b.l0 + 6, y0 + 12);
     });

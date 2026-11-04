@@ -14,8 +14,6 @@
     "iks": [
       {"name": "l_leg", "tip": "l_foot"},
       {"name": "r_leg", "tip": "r_foot"},
-      {"name": "l_hand", "tip": "l_cannon"},
-      {"name": "r_hand", "tip": "r_cannon"},
       {"name": "head_aim", "tip": "sensor", "aim": true}
     ],
     "pose": {

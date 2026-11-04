@@ -58,8 +58,8 @@ to know something the engine computes.
 | `{"q":"pose","clip":"attack","time":0.4}` | every channel at one moment, `values` |
 | `{"q":"parts","clip":..,"time":..,"rest":true,"parts":[..]}` | instances' frames in the world (metres, quaternions); `rest`: every value 0 |
 | `{"q":"trajectory","clip":"walk","part":"l_foot","n":60}` | an instance's path over a clip (foot slide, motion paths) |
-| `{"q":"motion","clip":"walk","motion":1,"n":120}` | a motion as the engine reads it: its shape over one cycle, and each move's channels, delay, what it adds over the clip and the arcs it puts positions on |
-| `{"q":"arc","arc":"strike","on":"r_hand"}` | an arc as it would put a position, in metres (editing an arc no shown motion uses) |
+| `{"q":"motion","clip":"walk","motion":1,"n":120}` | a motion as the engine reads it: its shape over one cycle, and each move's channels, delay, what it adds over the clip, the arcs it puts positions on, and a spread move's later links |
+| `{"q":"arc","arc":"step","on":"l_leg"}` | an arc as it would put a position, in metres (editing an arc no shown motion uses) |
 | `{"q":"channels"}` | every channel: name, kind (HINGE, SLIDE, BALL, POSITION, WEIGHT), size, range |
 | `{"q":"bounds","clip":..,"time":..}` | the box around the posed character |
 | `{"q":"camera"}` | the main camera's rotation and the view it is in (the view gizmo) |

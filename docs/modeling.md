@@ -281,22 +281,23 @@ turning every joint of its chain, each about the axes it turns. The chain is fou
 assembly (`mech.ik_root`): up from the tip to just below the nearest branch, an instance holding
 several children (a pelvis, a torso). A leg reaches from its thigh, an arm from its upper arm. The
 tip reaches with its **end** (`mech.ik_end`): as far along its last link, at rest, as its
-pieces and those hanging from it go, on that line: a hand's fingertips, a foot's sole, a gun's
-muzzle, not the joint at their base. The tip's own joints (an ankle, a wrist) don't reach. A foot
-(its end on the ground at rest) holds: its joints turn it to face the way their channels turned
-it in the model's space, so a planted foot stays as the clip angles it to the ground however the
-knee bends. A hand keeps its joints' turns, so its fist stays on its forearm as the clip sets the
-wrist. Its channels are named after it: `<name>` (a position), the point in the model's space as
+pieces and those hanging from it go, on that line: a foot's sole, not the ankle at its base. The
+tip's own joints (an ankle) don't reach. A foot (its end on the ground at rest) holds: its joints
+turn it to face the way their channels turned it in the model's space, so a planted foot stays as
+the clip angles it to the ground however the knee bends. A tip off the ground keeps its own
+joints' turns. Its channels are named after it: `<name>` (a position), the point in the model's space as
 an **offset from where the end is at rest** (model units: 0 is the foot where it stands, so a
 target needs no placing), `<name>.swivel` (a turn, 0 by default: see the pole below), and
 `<name>.weight`, from 0 (the chain as its joints' channels put it) to 1 (reaching). The solver is cyclic coordinate
 descent, 16 passes, tip first, each joint held in its range; the result is blended with the
 channels' motion by the weight. Still short of the target, it passes again with the middle joint
-let go of its pole (the stops may keep it from just there), then starts again from the chain's
-first joint a quarter, half and three quarters across its range, in that order, keeping the first
-that reaches, else the nearest. A turn about an axis the end lies on (a forearm's twist, the
+let go of its pole (the stops may keep it from just there). A turn about an axis the end lies on (a forearm's twist, the
 fingertips on its line) is skipped: it would be noise. A target out of reach (past the stops, not
 only the chain's length) is reached for as near as the stops let: draw paths inside it. The mech's `l_leg` and `r_leg` reach each foot from its thigh.
+
+**IK is for contact and aim**: feet that must stay on the ground, heads that look. Arms, hands and
+guns are FK, their joints' turns between stops: a mech's arm has too few joints to chase a point
+in space (its reach is full of holes), so a target for it ends in poses it can't reach.
 
 Every chain bends toward a **pole**, which the rig works out (`mech.ik_pole`), so there is none to
 place. Its middle joint (the pivot nearest halfway along it: a knee, an elbow) bends the way it is
@@ -305,8 +306,7 @@ bent at rest (a strider's zigzag), or, for a chain straight at rest, the side it
 line from the joint above the middle one to the target, that way, by the chain's length, turned
 with the model and swung as the limb swings (the shortest turn from the chain's line at rest to
 its line to the target). So it goes where the target goes: a foot stepping far ahead or aside
-keeps its knee pointing the way the leg is built, never flipping, and an arm hanging with its
-elbow back, swung up ahead to punch, has its elbow down. Each pass first swings the middle joint
+keeps its knee pointing the way the leg is built, never flipping. Each pass first swings the middle joint
 around the line from the joint above it to the target, toward the pole, with the joints above
 it; then the tip reaches as before. So the chain bends in the plane through the pole. (A chain
 with more joints between its middle and its tip, the strider's hock, can still swap between two
@@ -315,18 +315,26 @@ solutions at a few targets: a limit of the solver.)
 The pole is worked out, but how the limb bends is still the clip's to say: **`<name>.swivel`**
 turns the pole about the line from the joint above the middle one (a hip, a shoulder) to the
 target, by that many radians. The middle joint goes round the circle its two segments allow, and
-the tip stays on the target: an elbow flared out or rolled up through a strike, a knee swung out
-in a wide stance. 0 is the pole as worked out, so nothing needs setting until a clip wants it. It
+the tip stays on the target: a knee swung out in a wide stance. 0 is the pole as worked out, so nothing needs setting until a clip wants it. It
 is a channel like any other: a move adds it by its shape (beside an arc, the elbow rolls as the
-fist goes along it), and its twin is the other side's swivel, mirrored (`mech.channel_twin`: a
-reflected turn turns the other way, so a WITH move flares both elbows out). An aiming target has
+foot goes along it), and its twin is the other side's swivel, mirrored (`mech.channel_twin`: a
+reflected turn turns the other way, so a WITH move swings both knees out). An aiming target has
 no bend, so its swivel does nothing.
 
 With `"aim": true` a target is looked at, not reached: its chain, the tip's own joints included
 (a neck), turns so the tip faces it, as it faced ahead (+z) at rest: a head looking, a gun
 aiming. Its point is then an offset from a point ahead of the tip at rest (as far ahead as the
-tip is high). The mech's `head_aim` turns its head by the neck; the strider's turns its sensor,
-and its `l_hand` and `r_hand` reach its cannons from the shoulders.
+tip is high). The mech's `head_aim` turns its head by the neck; the strider's turns its sensor.
+
+An aim's turn is shared along its chain, the tip taking the most. Where the tip hangs from a parent,
+the chain runs up from it, as above (the neck). Where the tip **is** the root (the dragon's head,
+whose body hangs from it), the chain runs down instead: the body below it (`mech.ik_body`: from
+the tip, each time the child with the most below it, the spine rather than a jaw or a limb, to the
+tail). The turn that has the head face the target, times the weight, turns the root, and each
+joint down the body turns back so its link keeps only its share of that turn: 1 less how far
+along the body it is (pivot to pivot, from the head, of the body's length). The head faces the
+target, the neck follows nearly as much, and the tail hardly moves. The dragon's `head_aim` aims
+this way.
 
 ### The rest pose
 
@@ -366,7 +374,8 @@ of any piece at rest.
 1. sets each bone's motion from its joint's channel: turns about its axes, or a slide
 2. solves each bone from its parent (a root's anchor from the root's channels): `parent ∘ offset ∘
    rest ∘ Rx·Ry·Rz`, then a linear actuator's slide along its -y
-3. reaches with each IK target whose weight is above 0, and solves again
+3. aims each aim whose tip is the root (it turns the root, so it goes first), then reaches with
+   each other IK target whose weight is above 0, solving again after each
 4. writes the bone transforms
 
 `rig_solve` does steps 1 to 3 without touching the scene, so tools can ask where things would

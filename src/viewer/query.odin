@@ -30,9 +30,10 @@ import "../mjolnir/render"
 //     cycle (n values, u 0 to 1), moves: [{channels (names, as resolved), delay, values (n: how
 //     much of its amounts the move adds, over the clip), arcs (each arc a position follows: {name
 //     (the channel), arc (its name), points, curve: the arc through them; in metres, where they
-//     put it on the rest pose, for drawing and dragging them}), and for a twin move `twin`, the
-//     same for its twins}], one per move as written}
-//   {"q": "arc", "arc": "strike", "on": "r_hand"}
+//     put it on the rest pose, for drawing and dragging them}), for a move with a spread `links`
+//     (each later channel: {channel, delay (cycles past the move's), values}), and for a twin move
+//     `twin`, the same for its twins}], one per move as written}
+//   {"q": "arc", "arc": "step", "on": "l_leg"}
 //     an arc of the animation as it would put position channel `on` (an IK target, the root) on
 //     the rest pose: {name, arc, points, curve} in metres, as a motion's arcs are; for editing an arc
 //     no motion shown uses
@@ -265,6 +266,21 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
         write_arc(b, rig, pose, c, app.asset.anim.arcs[a.arc].name, mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], a.flip)
       }
       strings.write_byte(b, ']')
+      // a spread move's later links (Move.spread), each its own delay later
+      links := 0
+      last = ""
+      for target in mo.targets[mv.first:][:mv.count] {
+        c, _, _ := mech.value_channel(m, target.index)
+        if target.delay == 0 || c.name == last do continue
+        last = c.name
+        strings.write_string(b, `,"links":[` if links == 0 else `,`)
+        links += 1
+        for &v, i in row do v = mech.motion_move(mo, k, f32(i) / f32(len(row) - 1), target.delay)
+        fmt.sbprintf(b, `{{"channel":%q,"delay":%v,"values":`, c.name, target.delay)
+        write_floats(b, row)
+        strings.write_byte(b, '}')
+      }
+      if links > 0 do strings.write_byte(b, ']')
     }
     k := 0
     for src, w in app.asset.anim.clips[clip].motions[q.motion].moves {

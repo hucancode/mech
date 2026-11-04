@@ -452,6 +452,11 @@ function motionPanel(clip, mo, k, set) {
             "cycles late: the other foot half a cycle, a strike's next link a little; or drag its lane in the dock",
           ),
           row(
+            "spread",
+            num({ value: mv.spread ?? 0, step: 0.05, digits: 3, onchange: (v) => set(() => ((v = Math.round(v * 1e4) / 1e4), v ? (mv.spread = v) : delete mv.spread), `spread${k}-${n}`) }),
+            "cycles from its first channel to its last, one after another in the model's order (down a chain): a wave down a spine, an arm firing shoulder, elbow, wrist",
+          ),
+          row(
             "twin",
             select({ value: mv.twin, none: "none", options: ["WITH", "OPPOSITE"], onchange: (v) => set(() => (v ? (mv.twin = v) : delete mv.twin), `twin${k}-${n}`) }),
             "the other side of the body too, by the same amounts: WITH at the same time (both hands opening), OPPOSITE half a cycle later (the other foot, the other arm swinging back)",

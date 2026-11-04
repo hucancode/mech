@@ -91,13 +91,17 @@ Twin :: enum u8 {
 }
 
 // Move is channel amounts that move together, `delay` cycles of its motion's shape late (a foot
-// half a cycle behind the other, a strike firing feet, pelvis, shoulder, arm in turn, a hand's
-// knuckles closing one after another). With a `twin`, its channels' twins move too. The rest pose
-// (Model.pose) is a move too, its delay unused.
+// half a cycle behind the other, a strike firing feet, pelvis, shoulder, arm in turn). `spread`
+// runs its channels one after another: in the model's order (parents first: down a chain, head to
+// tail), the k-th of n runs spread * k / (n - 1) cycles later still, so one move is a wave down a
+// spine or an arm firing shoulder, elbow, wrist (a 3-value channel is one link; an arc runs at the
+// move's delay). With a `twin`, its channels' twins move too, at the same links' delays. The rest
+// pose (Model.pose) is a move too, its delay and spread unused.
 Move :: struct {
-  delay: f32,
-  twin:  Twin,
-  by:    map[string]Value,
+  delay:  f32,
+  spread: f32,
+  twin:   Twin,
+  by:     map[string]Value,
 }
 
 // Motion is a shape over time added onto channels. Its shape is points over one cycle
@@ -233,10 +237,12 @@ ArcData :: struct {
   arc:          int,
 }
 
-// Target is one of a pose's values (`index`) and an amount for it.
+// Target is one of a pose's values (`index`) and an amount for it, `delay` cycles later than its
+// move (its link's, of a move's spread).
 Target :: struct {
   index: int,
   value: f32,
+  delay: f32,
 }
 
 // targets_resolve appends `values`' channels in model `m` to `out`, one target per value, times
@@ -287,13 +293,13 @@ targets_resolve :: proc(m: ^Model, what: string, values: map[string]Value, out: 
         if what != "" do log.warnf("%s: %s is a %v, three values [x, y, z], not one", what, name, c.kind)
         continue
       }
-      append(out, Target{c.first, v * scale})
+      append(out, Target{c.first, v * scale, 0})
     case [3]f32:
       if sizes[c.kind] != 3 {
         if what != "" do log.warnf("%s: %s is a %v, one value, not three", what, name, c.kind)
         continue
       }
-      for x, n in v do append(out, Target{c.first + n, x * scale})
+      for x, n in v do append(out, Target{c.first + n, x * scale, 0})
     }
   }
 }
@@ -309,12 +315,13 @@ move_resolve :: proc(m: ^Model, what: string, mv: Move, targets: ^[dynamic]Targe
   first, arcs_first := len(targets), arcs_count(mo)
   targets_resolve(m, what, mv.by, targets, anim, mo)
   count := len(targets) - first
+  if mv.spread != 0 do targets_spread(m, targets[first:][:count], mv.spread)
   append(moves, MoveData{mv.delay, first, count, arcs_first, arcs_count(mo) - arcs_first})
   if mv.twin == .NONE do return
   start := len(targets)
   for k in first ..< first + count {
     t := targets[k]
-    if twin, flip := channel_twin(m, t.index); twin >= 0 do append(targets, Target{twin, t.value * flip})
+    if twin, flip := channel_twin(m, t.index); twin >= 0 do append(targets, Target{twin, t.value * flip, t.delay})
   }
   arcs_start := arcs_count(mo)
   for k in arcs_first ..< arcs_start {
@@ -329,6 +336,23 @@ move_resolve :: proc(m: ^Model, what: string, mv: Move, targets: ^[dynamic]Targe
     if whole do append(&mo.arcs, twin)
   }
   append(moves, MoveData{mv.delay + (0.5 if mv.twin == .OPPOSITE else 0), start, len(targets) - start, arcs_start, arcs_count(mo) - arcs_start})
+}
+
+// targets_spread delays `targets` (one move's) link by link (Move.spread): their channels in the
+// model's order, the k-th of n `spread * k / (n - 1)` cycles late.
+targets_spread :: proc(m: ^Model, targets: []Target, spread: f32) {
+  heads := make([dynamic]int, context.temp_allocator)
+  for t in targets {
+    c, _, _ := value_channel(m, t.index)
+    if _, found := slice.linear_search(heads[:], c.first); !found do append(&heads, c.first)
+  }
+  if len(heads) < 2 do return
+  slice.sort(heads[:])
+  for &t in targets {
+    c, _, _ := value_channel(m, t.index)
+    k, _ := slice.binary_search(heads[:], c.first)
+    t.delay = spread * f32(k) / f32(len(heads) - 1)
+  }
 }
 
 // model_pose is `m`'s rest pose, one value per channel: Model.pose, every other channel 0.
@@ -401,7 +425,7 @@ clip_sample :: proc(c: ^Clips, clip: int, t: f32, out: []f32) {
 motion_apply :: proc(mo: ^MotionData, x: f32, out: []f32) {
   for mv, k in mo.moves {
     f := motion_move(mo, k, x)
-    for target in mo.targets[mv.first:][:mv.count] do out[target.index] += target.value * f
+    for target in mo.targets[mv.first:][:mv.count] do out[target.index] += target.value * (f if target.delay == 0 else motion_move(mo, k, x, target.delay))
     for a in mo.arcs[mv.arcs_first:][:mv.arcs_count] {
       p := arc_at(mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], f)
       for ch, n in a.channels do out[ch] += p[n] * a.flip[n]
@@ -445,9 +469,10 @@ arc_at :: proc(points: [][3]f32, sharp: []bool, s: f32) -> [3]f32 {
   return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (3 * t2 - 2 * t3) * p2 + (t3 - t2) * m2
 }
 
-// motion_move is how much of its amounts move `k` of motion `mo` adds at clip progress `x`.
-motion_move :: proc(mo: ^MotionData, k: int, x: f32) -> f32 {
-  return shape_value(mo.shape[:], mo.rate * x - mo.moves[k].delay)
+// motion_move is how much of its amounts move `k` of motion `mo` adds at clip progress `x`; of a
+// target `late` cycles later than its move (Target.delay), that target's.
+motion_move :: proc(mo: ^MotionData, k: int, x: f32, late: f32 = 0) -> f32 {
+  return shape_value(mo.shape[:], mo.rate * x - mo.moves[k].delay - late)
 }
 
 // shape_value is shape `points` (in order of u) at `u` cycles: each point's value at its u,

@@ -777,10 +777,10 @@ test_arc :: proc(t: ^testing.T) {
   defer animation_destroy(a)
   // an open arc, named in the animation's list; a move names it under a stem
   ARC :: `{"arcs": [{"name": "reach", "points": [[0, 0, 0], [0.5, 1, 1], [1, 2, 0]]}], "clips": [{"name": "reach", "duration": 1, "motions": [
-    {"shape": [{}, {"u": 1, "v": 1}], "moves": [{"twin": "WITH", "by": {"l_hand": "reach"}}]}]},
+    {"shape": [{}, {"u": 1, "v": 1}], "moves": [{"twin": "WITH", "by": {"l_leg": "reach"}}]}]},
     {"name": "out_and_back", "duration": 1, "motions": [
-    {"shape": [{}, {"u": 0.5, "v": 1}, {"u": 1}], "moves": [{"by": {"l_hand": "reach"}}]}]},
-    {"name": "unknown", "duration": 1, "motions": [{"moves": [{"by": {"l_hand": "nowhere"}}]}]},
+    {"shape": [{}, {"u": 0.5, "v": 1}, {"u": 1}], "moves": [{"by": {"l_leg": "reach"}}]}]},
+    {"name": "unknown", "duration": 1, "motions": [{"moves": [{"by": {"l_leg": "nowhere"}}]}]},
     {"name": "turn", "duration": 1, "motions": [{"moves": [{"by": {"l_arm.shoulder": "reach", "root.turn": "reach"}}]}]}]}`
   arc, aok := animation_parse(transmute([]u8)string(ARC))
   if !testing.expect(t, aok) do return
@@ -789,13 +789,13 @@ test_arc :: proc(t: ^testing.T) {
   defer clips_destroy(&clips)
   values := make([]f32, model_channels(m))
   defer delete(values)
-  l := [3]int{value_of(m, "l_hand"), value_of(m, "l_hand", 1), value_of(m, "l_hand", 2)}
-  r := [3]int{value_of(m, "r_hand"), value_of(m, "r_hand", 1), value_of(m, "r_hand", 2)}
+  l := [3]int{value_of(m, "l_leg"), value_of(m, "l_leg", 1), value_of(m, "l_leg", 2)}
+  r := [3]int{value_of(m, "r_leg"), value_of(m, "r_leg", 1), value_of(m, "r_leg", 2)}
   for x in ([]f32{0, 0.25, 0.5, 0.75}) {
     clip_sample(&clips, 0, x, values)
     want := arc_at([][3]f32{{0, 0, 0}, {0.5, 1, 1}, {1, 2, 0}}, nil, x)
     got := [3]f32{values[l[0]], values[l[1]], values[l[2]]} - {clips.pose[l[0]], clips.pose[l[1]], clips.pose[l[2]]}
-    testing.expectf(t, linalg.length(got - want) < 1e-5, "at %v the hand is on its arc: %v, want %v", x, got, want)
+    testing.expectf(t, linalg.length(got - want) < 1e-5, "at %v the foot's target is on its arc: %v, want %v", x, got, want)
     twin := [3]f32{values[r[0]], values[r[1]], values[r[2]]} - {clips.pose[r[0]], clips.pose[r[1]], clips.pose[r[2]]}
     testing.expectf(t, linalg.length(twin - {-want.x, want.y, want.z}) < 1e-5, "its twin on the arc mirrored: %v", twin)
   }
@@ -805,7 +805,7 @@ test_arc :: proc(t: ^testing.T) {
     got := [3]f32{values[l[0]], values[l[1]], values[l[2]]} - {clips.pose[l[0]], clips.pose[l[1]], clips.pose[l[2]]}
     testing.expectf(t, linalg.length(got - want) < 1e-5, "out and back at %v: %v, want %v", f32(x) / 2, got, want)
   }
-  // an arc the animation lacks is skipped: the hand stays at rest
+  // an arc the animation lacks is skipped: the target stays at rest
   clip_sample(&clips, 2, 0.5, values)
   testing.expect(t, slice.equal(values, clips.pose[:]), "an unknown arc moves nothing")
   // only a position follows an arc: a ball's rotation and the root's turn don't
@@ -821,9 +821,8 @@ test_arc :: proc(t: ^testing.T) {
   testing.expectf(t, out == again, "an arc round-trips: %s", out)
 }
 
-// IK reaches with its tip's end, not the joint at its base: a hand with its fingertips, a foot
-// with its sole (on the ground at rest). A foot holds facing as the clip angles it; a hand
-// keeps its wrist's turns.
+// IK reaches with its tip's end, not the joint at its base: a foot with its sole (on the ground at
+// rest), holding facing as the clip angles it. (The mech's arms are FK: no hand reaches.)
 @(test)
 test_ik_reach_point :: proc(t: ^testing.T) {
   text := read(t, "mech.json")
@@ -846,18 +845,15 @@ test_ik_reach_point :: proc(t: ^testing.T) {
     name := c.name
     if ik.aim do continue
     tip := rig_frame(rig, ik.tip).position
-    if strings.has_prefix(name, "l_leg") || strings.has_prefix(name, "r_leg") {
-      testing.expectf(t, ik.holds && abs(ik.rest.y) < 0.01 && ik.rest.y < tip.y - 0.1, "%s reaches with its sole, on the ground, and holds: %v (ankle %v)", name, ik.rest, tip)
-    } else {
-      testing.expectf(t, !ik.holds && ik.rest.y < tip.y - 0.4, "%s reaches with its fingertips, below the palm's frame, and keeps its wrist: %v (palm %v)", name, ik.rest, tip)
-    }
+    testing.expectf(t, strings.has_suffix(name, "_leg"), "only the legs reach: %s", name)
+    testing.expectf(t, ik.holds && abs(ik.rest.y) < 0.01 && ik.rest.y < tip.y - 0.1, "%s reaches with its sole, on the ground, and holds: %v (ankle %v)", name, ik.rest, tip)
   }
 }
 
-// The mech's attack puts its fist on an arc it can reach: held at the impact, the fingertips are on
-// their target, and the head aims at it.
+// The mech's attack is FK: driven out, the right fist is ahead of its shoulder, about as high, and
+// held still on the drive's stop; the head aims at the impact all the while.
 @(test)
-test_attack_reaches :: proc(t: ^testing.T) {
+test_attack_strikes :: proc(t: ^testing.T) {
   text := read(t, "mech.json")
   defer delete(text)
   m, a, ok := character_parse(text)
@@ -875,23 +871,23 @@ test_attack_reaches :: proc(t: ^testing.T) {
   values := make([]f32, model_channels(m))
   defer delete(values)
   c := clips_find(&clips, "attack")
-  hand, eyes := value_of(m, "r_hand"), value_of(m, "head_aim")
-  fist, look: RigIk
-  for ik in rig.iks {
-    if ik.channel == hand do fist = ik
-    if ik.channel == eyes do look = ik
-  }
-  head := model_instance(m, "head")
-  // the impact held and followed through, before the return (the head lets go from 0.68)
+  eyes := value_of(m, "head_aim")
+  look: RigIk
+  for ik in rig.iks do if ik.channel == eyes do look = ik
+  head, fist, shoulder := model_instance(m, "head"), model_instance(m, "r_palm"), model_instance(m, "r_arm")
+  held: [3]f32
+  // the drive held, once its stop has stopped bouncing, until the return
   for k in 0 ..= 10 {
-    x := 0.5 + 0.18 * f32(k) / 10
+    x := 0.55 + 0.12 * f32(k) / 10
     clip_sample(&clips, c, x * clips.clips[c].duration, values)
     rig_solve(rig, values)
-    target := fist.rest + {values[hand], values[hand + 1], values[hand + 2]}
-    testing.expectf(t, linalg.length(ik_point(rig, fist) - target) < 0.05, "at %v the fist is on its target: %v, want %v", x, ik_point(rig, fist), target)
+    f, s := rig_frame(rig, fist).position, rig_frame(rig, shoulder).position
+    testing.expectf(t, f.z > s.z + 0.5 * linalg.length(f - s) && abs(f.y - s.y) < 0.5 * linalg.length(f - s), "at %v the fist is driven out ahead at shoulder height: fist %v, shoulder %v", x, f, s)
+    if k == 0 do held = f
+    testing.expectf(t, linalg.length(f - held) < 0.02 * m.scale, "at %v the fist holds on its stop: %v, then %v", x, held, f)
     h := rig_frame(rig, head)
     at := look.rest + {values[eyes], values[eyes + 1], values[eyes + 2]}
-    testing.expectf(t, linalg.dot(linalg.mul(h.rotation, look.look), linalg.normalize(at - h.position)) > 0.999, "at %v the head aims at it", x)
+    testing.expectf(t, linalg.dot(linalg.mul(h.rotation, look.look), linalg.normalize(at - h.position)) > 0.999, "at %v the head aims at the impact", x)
   }
 }
 
@@ -938,7 +934,7 @@ test_ik_swivel :: proc(t: ^testing.T) {
     name:   string,
     target: [3]f32, // an offset, in parts of the chain's length
   }
-  for c in ([]Case{{"l_leg", {0, 0.1, 0.15}}, {"l_hand", {0.1, 0.35, 0.35}}}) {
+  for c in ([]Case{{"l_leg", {0, 0.1, 0.15}}, {"r_leg", {-0.05, 0.2, 0.25}}}) {
     ik, found := find(rig, m, c.name)
     if !testing.expectf(t, found && ik.mid > 0, "%s bends", c.name) do continue
     copy(values, pose)
@@ -954,17 +950,17 @@ test_ik_swivel :: proc(t: ^testing.T) {
     }
     values[ik.channel + IK_SWIVEL] = 0
   }
-  // twins: the left hand swiveled one way, the right the other, are each other's mirror
-  l, _ := find(rig, m, "l_hand")
-  r, _ := find(rig, m, "r_hand")
+  // twins: the left leg swiveled one way, the right the other, are each other's mirror
+  l, _ := find(rig, m, "l_leg")
+  r, _ := find(rig, m, "r_leg")
   copy(values, pose)
   for side in ([]RigIk{l, r}) {
     x := f32(0.1 if side.channel == l.channel else -0.1)
-    values[side.channel], values[side.channel + 1], values[side.channel + 2] = x * side.length, 0.35 * side.length, 0.35 * side.length
+    values[side.channel], values[side.channel + 1], values[side.channel + 2] = x * side.length, 0.1 * side.length, 0.15 * side.length
     values[side.channel + IK_WEIGHT] = 1
   }
   twin, flip := channel_twin(m, l.channel + IK_SWIVEL)
-  testing.expectf(t, twin == r.channel + IK_SWIVEL && flip == -1, "l_hand_swivel's twin is r_hand_swivel, mirrored: %v %v", twin, flip)
+  testing.expectf(t, twin == r.channel + IK_SWIVEL && flip == -1, "l_leg.swivel's twin is r_leg.swivel, mirrored: %v %v", twin, flip)
   values[l.channel + IK_SWIVEL], values[r.channel + IK_SWIVEL] = 0.4, -0.4
   _, _, _, lm := bent(rig, l, values)
   _, _, _, rm := bent(rig, r, values)
@@ -983,7 +979,7 @@ test_poses :: proc(t: ^testing.T) {
   defer animation_destroy(a)
   POSES :: `{"arcs": [{"name": "reach", "points": [[0, 0, 0], [0, 1, 0]]}],
     "poses": [{"name": "fist", "by": {"r_finger_a_1.knuckle": -0.4, "r_leg": [0, 0.2, 0]}},
-      {"name": "odd", "by": {"fist": 1, "r_hand": "reach", "root": [0, 0.1, 0]}},
+      {"name": "odd", "by": {"fist": 1, "l_leg": "reach", "root": [0, 0.1, 0]}},
       {"name": "root", "by": {"pelvis.spin": 1}}],
     "clips": [{"name": "one", "duration": 1, "motions": [{"moves": [{"by": {"fist": 1}}]}]},
     {"name": "both", "duration": 1, "motions": [{"moves": [{"twin": "WITH", "by": {"fist": 0.5}}]}]},
@@ -1009,7 +1005,7 @@ test_poses :: proc(t: ^testing.T) {
   // channel `root` wins over the pose `root`
   clip_sample(&clips, 2, 0.5, values)
   testing.expectf(t, near(moved(&clips, values, rk), 0), "no pose in a pose: %v", moved(&clips, values, rk))
-  testing.expectf(t, near(moved(&clips, values, value_of(m, "r_hand", 1)), 0), "no arc in a pose")
+  testing.expectf(t, near(moved(&clips, values, ly), 0), "no arc in a pose")
   testing.expectf(t, near(moved(&clips, values, value_of(m, "root", 1)), 0.5), "pose amounts times 2, the channel root's 0.3: %v", moved(&clips, values, value_of(m, "root", 1)))
   testing.expectf(t, near(moved(&clips, values, value_of(m, "pelvis.spin")), 0), "the channel wins over the pose")
   // poses round-trip
@@ -1021,4 +1017,105 @@ test_poses :: proc(t: ^testing.T) {
   again := animation_format(back)
   defer delete(again)
   testing.expectf(t, out == again, "poses round-trip: %s", out)
+}
+
+// A move's spread runs its channels one after another in the model's order (down a chain): the
+// k-th of n `spread * k / (n - 1)` cycles late, its twins at the same delays; a move without one
+// moves all its channels at once; and a spread writes back out as it was read.
+@(test)
+test_motion_spread :: proc(t: ^testing.T) {
+  text := read(t, "mech.json")
+  defer delete(text)
+  m, shipped, ok := character_parse(text)
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  defer animation_destroy(shipped)
+  ANIM :: `{"clips": [{"name": "arm", "duration": 1, "motions": [{"shape": [{"u": 0.25}, {"u": 0.5, "v": 1}, {"u": 0.75}], "moves": [{"spread": 0.2, "twin": "WITH", "by": {"l_palm.wrist": 3, "l_arm.shoulder_top": 1, "l_forearm.elbow": 2}}, {"by": {"torso.waist": [0, 1, 0]}}]}]}]}`
+  a, aok := animation_parse(transmute([]u8)string(ANIM))
+  if !testing.expect(t, aok) do return
+  defer animation_destroy(a)
+  clips := clips_build(a, m)
+  defer clips_destroy(&clips)
+  values := make([]f32, model_channels(m))
+  defer delete(values)
+  shape := clips.clips[0].motions[0].shape[:]
+  Link :: struct {
+    name:   string,
+    amount: f32,
+    late:   f32,
+  }
+  links := []Link{{"l_arm.shoulder_top", 1, 0}, {"l_forearm.elbow", 2, 0.1}, {"l_palm.wrist", 3, 0.2}}
+  for x in ([]f32{0.3, 0.45, 0.55, 0.62, 0.7}) {
+    clip_sample(&clips, 0, x, values)
+    for l in links {
+      c := value_of(m, l.name)
+      want := l.amount * shape_value(shape, x - l.late)
+      testing.expectf(t, abs(values[c] - clips.pose[c] - want) < 1e-5, "at %v %s %v, want %v", x, l.name, values[c] - clips.pose[c], want)
+      twin, flip := channel_twin(m, c)
+      testing.expectf(t, twin >= 0 && abs(values[twin] - clips.pose[twin] - want * flip) < 1e-5, "at %v %s's twin %v, want %v", x, l.name, values[twin] - clips.pose[twin], want * flip)
+    }
+    waist := value_of(m, "torso.waist", 1)
+    testing.expectf(t, abs(values[waist] - clips.pose[waist] - shape_value(shape, x)) < 1e-5, "at %v the waist moves without a spread", x)
+  }
+  out := animation_format(a, context.temp_allocator)
+  again, rok := animation_parse(transmute([]u8)out)
+  if !testing.expect(t, rok) do return
+  defer animation_destroy(again)
+  testing.expectf(t, again.clips[0].motions[0].moves[0].spread == 0.2 && again.clips[0].motions[0].moves[1].spread == 0, "spread round-trips: %s", out)
+}
+
+// An aim whose tip is the root (the dragon's head) turns the head to face its target, the body
+// below following it less and less toward the tail; by its weight, part of the way.
+@(test)
+test_aim_damped :: proc(t: ^testing.T) {
+  text := read(t, "dragon.json")
+  defer delete(text)
+  m, a, ok := character_parse(text)
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  defer animation_destroy(a)
+  w: world.World
+  world.init(&w, 4096)
+  defer world.shutdown(&w)
+  lib: Library
+  rig, _ := rig_create(&lib, &w, nil, m, w.root)
+  defer rig_destroy(rig, &w)
+  clips := clips_build(a, m)
+  defer clips_destroy(&clips)
+  c := value_of(m, "head_aim")
+  ik: RigIk
+  for x in rig.iks do if x.channel == c do ik = x
+  if !testing.expectf(t, ik.body && ik.count >= 11, "the dragon's head_aim turns its body: %v bones", ik.count) do return
+  head := model_instance(m, "head")
+  chain := rig.chains[ik.first:][:ik.count]
+  values := make([]f32, model_channels(m))
+  defer delete(values)
+  copy(values, clips.pose[:])
+  rig_solve(rig, values)
+  rest := make([]quaternion128, len(chain) + 1)
+  defer delete(rest)
+  rest[0] = rig_frame(rig, head).rotation
+  for bone, k in chain do rest[k + 1] = rig.poses[bone].rotation
+  angle :: proc(a, b: quaternion128) -> f32 {
+    return 2 * math.acos(min(1, abs(a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w)))
+  }
+  // off to its left and up, ahead
+  values[c], values[c + 1], values[c + 2], values[c + IK_WEIGHT] = 3, 1.5, -1, 1
+  rig_solve(rig, values)
+  h := rig_frame(rig, head)
+  want := linalg.normalize(ik.rest + {3, 1.5, -1} - h.position)
+  testing.expectf(t, linalg.dot(linalg.mul(h.rotation, ik.look), want) > 0.995, "the head faces its target: %v, want %v", linalg.mul(h.rotation, ik.look), want)
+  full := angle(rest[0], h.rotation)
+  testing.expectf(t, full > 0.3, "the head turns: %v", full)
+  last := full
+  for bone, k in chain {
+    turned := angle(rest[k + 1], rig.poses[bone].rotation)
+    testing.expectf(t, turned <= last + 1e-3, "%s turns no more than the bone before it: %v, then %v", m.assembly[rig.bones[bone].part].name, last, turned)
+    last = turned
+  }
+  testing.expectf(t, last < 0.1 * full, "the tail hardly turns: %v of the head's %v", last, full)
+  values[c + IK_WEIGHT] = 0.5
+  rig_solve(rig, values)
+  half := angle(rest[0], rig_frame(rig, head).rotation)
+  testing.expectf(t, abs(half - full / 2) < 0.1 * full, "by half its weight, half the turn: %v of %v", half, full)
 }

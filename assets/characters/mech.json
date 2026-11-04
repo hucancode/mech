@@ -14,8 +14,6 @@
     "iks": [
       {"name": "l_leg", "tip": "l_foot"},
       {"name": "r_leg", "tip": "r_foot"},
-      {"name": "l_hand", "tip": "l_palm"},
-      {"name": "r_hand", "tip": "r_palm"},
       {"name": "head_aim", "tip": "head", "aim": true}
     ],
     "pose": {
@@ -464,20 +462,6 @@
   "animation": {
     "arcs": [
       {
-        "name": "strike",
-        "points": [
-          [-0.456, 0.229, 0.98],
-          [-0.846, 0.729, -0.2],
-          [-0.546, 2.129, 1.4],
-          [0.404, 2.629, 2.5],
-          [1.304, 2.529, 2.9],
-          [1.654, 2.329, 2.85],
-          [0.304, 1.229, 2],
-          [-0.456, 0.229, 0.98]
-        ],
-        "corners": [0]
-      },
-      {
         "name": "step",
         "points": [
           [0, 0, 0.875],
@@ -673,27 +657,18 @@
             ],
             "moves": [
               {
+                "spread": 0.05,
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.shoulder_top": -0.42
-                }
-              },
-              {
-                "delay": 0.05,
-                "twin": "OPPOSITE",
-                "by": {
+                  "l_arm.shoulder_top": -0.42,
                   "l_forearm.elbow": -0.07
                 }
               },
               {
+                "spread": 0.1,
                 "by": {
+                  "head.neck": [0, -0.063, 0],
                   "torso.waist": [0, 0.084, 0]
-                }
-              },
-              {
-                "delay": 0.1,
-                "by": {
-                  "head.neck": [0, -0.063, 0]
                 }
               }
             ]
@@ -759,27 +734,18 @@
             ],
             "moves": [
               {
+                "spread": 0.05,
                 "twin": "OPPOSITE",
                 "by": {
-                  "l_arm.shoulder_top": -0.87
-                }
-              },
-              {
-                "delay": 0.05,
-                "twin": "OPPOSITE",
-                "by": {
+                  "l_arm.shoulder_top": -0.87,
                   "l_forearm.elbow": -0.07
                 }
               },
               {
+                "spread": 0.1,
                 "by": {
+                  "head.neck": [0, -0.131, 0],
                   "torso.waist": [0, 0.174, 0]
-                }
-              },
-              {
-                "delay": 0.1,
-                "by": {
-                  "head.neck": [0, -0.131, 0]
                 }
               }
             ]
@@ -800,6 +766,8 @@
             "moves": [
               {
                 "by": {
+                  "head_aim": [0.4, -1.181, 0.988],
+                  "head_aim.weight": 1,
                   "l_foot.ankle": -0.105,
                   "l_leg": [-0.1, 0, 0.5],
                   "l_thigh.hip_top": 0.174,
@@ -829,7 +797,6 @@
           },
           {
             "shape": [
-              {},
               {"u": 0.05},
               {"u": 0.25, "v": 1, "ease": "OUT"},
               {"u": 0.33, "v": 1},
@@ -857,6 +824,15 @@
               },
               {
                 "delay": 0.0375,
+                "spread": 0.025,
+                "by": {
+                  "r_arm.shoulder_top": -0.6,
+                  "r_forearm.elbow": 1.5,
+                  "r_palm.wrist": 0.3
+                }
+              },
+              {
+                "delay": 0.05,
                 "by": {
                   "fist": 1
                 }
@@ -865,42 +841,8 @@
           },
           {
             "shape": [
-              {"u": 0.02},
-              {"u": 0.12, "v": 1, "ease": "SETTLE"},
-              {"u": 0.68, "v": 1},
-              {"u": 0.94}
-            ],
-            "moves": [
-              {
-                "by": {
-                  "head_aim": [0.4, -1.181, 0.988],
-                  "head_aim.weight": 1
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {},
-              {"u": 0.04},
-              {"u": 0.1, "v": 1},
-              {"u": 0.96, "v": 1},
-              {"u": 1}
-            ],
-            "moves": [
-              {
-                "by": {
-                  "r_hand.weight": 1
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {},
               {"u": 0.33},
-              {"u": 0.42, "v": 1.08, "ease": "IN"},
-              {"u": 0.48, "v": 1, "ease": "SETTLE"},
+              {"u": 0.44, "v": 1, "ease": "SETTLE"},
               {"u": 0.68, "v": 1},
               {"u": 0.94}
             ],
@@ -919,57 +861,18 @@
                 }
               },
               {
-                "delay": 0.04,
+                "delay": 0.03,
+                "spread": 0.02,
                 "by": {
-                  "fist": 1
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {},
-              {"u": 0.46},
-              {"u": 0.6, "v": 1, "ease": "OUT"},
-              {"u": 0.68, "v": 1},
-              {"u": 0.94}
-            ],
-            "moves": [
-              {
-                "by": {
-                  "l_thigh.hip_bottom": -0.1,
-                  "pelvis.spin": 0.1,
-                  "r_thigh.hip_bottom": 0.1
+                  "r_arm.shoulder_top": 1.45,
+                  "r_forearm.elbow": -0.26,
+                  "r_palm.wrist": 0
                 }
               },
               {
-                "delay": 0.01,
-                "by": {
-                  "torso.waist": [0, 0.1, 0]
-                }
-              }
-            ]
-          },
-          {
-            "shape": [
-              {},
-              {"u": 0.05},
-              {"u": 0.15, "v": 0.1429, "ease": "OUT"},
-              {"u": 0.25, "v": 0.2857},
-              {"u": 0.33, "v": 0.2857},
-              {"u": 0.42, "v": 0.6014, "ease": "IN"},
-              {"u": 0.47, "v": 0.5714, "ease": "SETTLE"},
-              {"u": 0.6, "v": 0.7143, "ease": "OUT"},
-              {"u": 0.68, "v": 0.7143},
-              {"u": 0.81, "v": 0.8571},
-              {"u": 0.94, "v": 1},
-              {"u": 1, "v": 1}
-            ],
-            "moves": [
-              {
                 "delay": 0.04,
                 "by": {
-                  "r_hand": "strike"
+                  "fist": 1
                 }
               }
             ]
@@ -1010,30 +913,20 @@
             ],
             "moves": [
               {
+                "spread": 0.08,
+                "twin": "WITH",
                 "by": {
                   "head.neck": [-0.21, 0, 0],
-                  "torso.waist": [-0.105, 0, 0]
-                }
-              },
-              {
-                "delay": 0.04,
-                "twin": "WITH",
-                "by": {
                   "l_arm.shoulder_top": 1.76,
-                  "l_forearm.elbow": -0.175
-                }
-              },
-              {
-                "delay": 0.08,
-                "twin": "WITH",
-                "by": {
                   "l_finger_a_1.knuckle": 0.3665,
                   "l_finger_a_2.knuckle": -0.1963,
                   "l_finger_b_1.knuckle": 0.3665,
                   "l_finger_b_2.knuckle": -0.1963,
+                  "l_forearm.elbow": -0.175,
                   "l_palm.wrist": 1.047,
                   "l_thumb_1.knuckle": 0.3665,
-                  "l_thumb_2.knuckle": -0.1963
+                  "l_thumb_2.knuckle": -0.1963,
+                  "torso.waist": [-0.105, 0, 0]
                 }
               }
             ]

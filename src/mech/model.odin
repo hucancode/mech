@@ -389,6 +389,29 @@ ik_root :: proc(m: ^Model, tip: int) -> int {
   return i
 }
 
+// ik_body is the body an aiming IK's tip that is a root (the dragon's head) turns along with it:
+// down from it, at each instance the child with the most below it (the spine, not a jaw or a limb),
+// to the end (the tail); the instances in order, tip first not included. Empty for a tip with a
+// parent, whose chain runs up (ik_root).
+ik_body :: proc(m: ^Model, tip: int, allocator := context.allocator) -> []int {
+  out := make([dynamic]int, allocator)
+  if tip < 0 || model_instance(m, m.assembly[tip].parent) >= 0 do return out[:]
+  // each instance's height: the most links below it (instances are listed parents first)
+  height := make([]int, len(m.assembly), context.temp_allocator)
+  parents := make([]int, len(m.assembly), context.temp_allocator)
+  for inst, i in m.assembly do parents[i] = model_instance(m, inst.parent)
+  #reverse for p, i in parents do if p >= 0 && p < i do height[p] = max(height[p], height[i] + 1)
+  at := tip
+  for {
+    next := -1
+    for p, i in parents do if p == at && i > at && (next < 0 || height[i] > height[next]) do next = i
+    if next < 0 do break
+    append(&out, next)
+    at = next
+  }
+  return out[:]
+}
+
 // ik_channel is the first of IK target `k`'s values; k = len(m.iks) is the root's first.
 ik_channel :: proc(m: ^Model, k: int) -> int {
   return k * IK_VALUES

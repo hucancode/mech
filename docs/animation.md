@@ -21,6 +21,17 @@ or once following `action_loops`, cross-fading between clips. An action with no 
 rest pose. Tools can also play any clip or hold explicit values (`mech_play_clip`,
 `mech_show_values`).
 
+## What there is to learn
+
+| layer | concepts |
+| --- | --- |
+| model ([modeling.md](modeling.md)) | **Part** (shapes, slots, joints, length) · **Joint** (HINGE, LINEAR, BALL, its stops) · **Instance** (parent, slot, mirror, rest twist and bend) · **Ik** (`tip`, `aim`) · the **rest pose** (a move) |
+| channels | `<instance>.<joint>` · `root`, `root.turn` · `<ik>`, `<ik>.swivel`, `<ik>.weight` |
+| animation | **Clip** → **Motion** `{shape, rate, moves}` → **Move** `{delay, spread, twin, by}` · named **Poses** (amounts) · named **Arcs** (a path for a position) · five **Eases** |
+
+That is all. A chain is not an object: it is a move's own channels, in the model's order. There
+are no key frames and no curve per joint.
+
 ## Motions
 
 There is one kind of track. A motion is **a shape over time, added onto some channels**. A walk,
@@ -48,8 +59,9 @@ A motion is `{shape, rate, moves}`:
 - **shape**: points `{u, v, ease}` over one cycle: the value `v` at `u` (0 to 1), reached from
   the point before by `ease`. No points means 1 throughout: a pose held.
 - **rate**: how many whole cycles of the shape run over the clip (default 1).
-- **moves**: a list of `{delay, twin, by}`. `by` holds the channel amounts that move together,
-  and `delay` says how many cycles late they run. Each amount is shaped as its channel
+- **moves**: a list of `{delay, spread, twin, by}`. `by` holds the channel amounts that move
+  together, and `delay` says how many cycles late they run. `spread` runs them one after another
+  instead ([Spread](#spread)). Each amount is shaped as its channel
   ([modeling.md](modeling.md#rigging-channels-ik-targets)): a number for a turn, a slide or a
   weight, `[x, y, z]` for a rotation or a position; or, for a position, an arc's name
   ([Arcs](#arcs)); or, for a pose, how much of it ([Poses](#poses)). `twin` moves the other side
@@ -67,16 +79,32 @@ A move's delay is written on the move itself, so you can read when it fires:
 - **A trot's diagonal pairs** are two moves of two channels each.
 - **A strike** fires feet, pelvis, chest, shoulder, arm and fist as moves in that order, each a
   little later.
-- **A wave down a chain** is a move per joint, the delays growing toward the tail.
-- **A hand closing** is a move per row of knuckles, each a little later: the bases first, the
-  tips last.
+- **A wave down a chain** is one move over the chain's joints with a spread.
+- **An arm firing** shoulder, elbow, wrist is one move with a small spread.
+
+### Spread
+
+A move's `spread` (cycles, default 0) runs its channels one after another. Its channels, in the
+model's order (parents first: down a chain, head to tail), are links 0 to n − 1, and link k runs
+`spread · k / (n − 1)` cycles later than the move's delay:
+
+```
+out[c] += by[c] * shape(rate * x - delay - spread * k / (n - 1))
+```
+
+The shape is the curve; the spread is the offset along the chain. A 3-value channel is one link.
+The amounts stay each channel's own, so a wave that grows toward the tail is just its numbers.
+Twins run at their links' delays (an OPPOSITE twin half a cycle on). An arc in a spread move runs
+at the move's delay; the rest pose ignores spread as it ignores delay. The dragon's slither is two
+such moves: one turning each spine joint, `spread: 1` (a wavelength along the body), and one
+turning the next joint back by as much, so each segment heads as the shape says.
 
 ### Arcs
 
 A path in space is drawn, not keyed. An **arc** is the animation's, by name, shared by every
-clip: `"arcs": [{"name": "strike", "points": [[x, y, z], ..]}]`, a smooth curve through its
+clip: `"arcs": [{"name": "step", "points": [[x, y, z], ..]}]`, a smooth curve through its
 points (`mech.arc_at`, Catmull-Rom). A move puts a **position** on it by naming it,
-`"r_hand": "strike"` (an IK target or the root: a turn or a rotation is one value per axis, no
+`"l_leg": "step"` (an IK target or the root: a turn or a rotation is one value per axis, no
 path, so no arc moves it). The points are written as the position's own values are: offsets from
 where it is at rest (an IK target's tip, the model's origin), in the model's space. The move puts
 the position on the arc where its motion's shape says, instead of adding amounts:
@@ -105,8 +133,7 @@ the segment's own chord as the tangent instead:
 
 A **closed** arc, one whose last point is its first, runs smooth through that point too, since its
 neighbours wrap round the seam. It turns hard there only when that point is a corner (either
-index). The strike lists corner 0: it starts and ends at rest, its ends' tangents along their
-own segments.
+index). A gait's foot lists corners 0 and 1, so it turns hard where it touches down and lifts.
 
 A **gait's foot** is one closed arc (the mech's `step` and `stride`):
 
@@ -117,16 +144,15 @@ A **gait's foot** is one closed arc (the mech's `step` and `stride`):
 - The stride is the ground points' distance apart and the lift is the top point's height, both
   dragged in the view.
 
-A move can also hold an IK target's swivel beside its arc (`"r_hand.swivel": 0.4`,
+A move can also hold an IK target's swivel beside its arc (`"l_leg.swivel": 0.4`,
 [modeling.md](modeling.md#rigging-channels-ik-targets)): it is an amount like any other, times the
-shape, so the elbow rolls up as the fist goes along the path.
+shape, so the knee swings out as the foot goes along the path.
 
-A fist's strike is one arc (the mech's `strike`): at rest, wound back, cocked, out to the impact,
-followed through, back round, at rest again; its shape steps along it, held at the impact. An IK
-target follows its arc in the model's space, so the arc is where the hand goes whatever the body
-does: draw it where the arm can reach with the body as the clip turns it. The character editor
-lists the arcs, edits the one picked in the view (a dot per point to drag), and the curve editor
-marks the shape values that put a position on each point ([editors.md](editors.md#animate)).
+Arcs are for what must stay put in the world: a foot on the ground, the root lunging. A gesture
+(a fist's strike, a wave) is not drawn as a path for an IK target to chase: a mech's arm has too
+few joints to follow one, so it is its joints' turns, FK, firing into their stops. The character
+editor lists the arcs, edits the one picked in the view (a dot per point to drag), and the curve
+editor marks the shape values that put a position on each point ([editors.md](editors.md#animate)).
 
 ### Poses
 
@@ -212,10 +238,10 @@ is whatever the artist drags it into:
 | a walk's feet | one move on the left leg's IK target with an OPPOSITE twin, on a closed foot arc ([Arcs](#arcs)): front and back on the ground (corners), the top of the swing; its shape `{u: duty, v: 1/3}`, the delay its touch-down. A duty over 0.5 walks, under 0.5 runs (every foot off the ground at once). A quadruped's walk is two such moves, a hind foot and the fore foot on its side a quarter cycle later (delays 0, ¼; their twins at ½, ¾); a trot, a fore and hind foot together on one move |
 | its bob | a bounce on `root` (its y), rate 2 for a biped (once a step), lowest as each foot lands |
 | a sway, a hull against the legs | a sine or a square, one move |
-| a wave (a snake's slither, a tail's sway) | a move per joint down a chain, each turning about the chain's side axis (a snake slithers about Y), each a fraction of a cycle later than the one before: the wave travels tailward. To have each segment head as the shape says instead of the turns piling up, each move also turns the next joint back by as much (the dragon's slither) |
-| arms swinging | a square: the left shoulder one move with an OPPOSITE twin, the forearm a move a little later. The waist and head turning against them are moves of the same motion (one shape, no twin) |
-| a strike | a hit, its moves the hit's channels in firing order (feet, pelvis, chest, shoulder), each a little later, driving into its stop. The wind-up is a hit before it with the coil's amounts, OUT, over the clip's first part, letting go as the strike rises. The fist is an arc on the hand's IK target, its shape stepping along it last of all: wound back, cocked, driven into the impact, followed through, back. The head aims at the impact. A step into it is a one-shot shape of its own on the foot's IK target (out, held, back), with a lift for each step |
-| a head that is the root (the dragon) | turn the root and the first spine joint back by as much: the head turns alone |
+| a wave (a snake's slither, a tail's sway) | one move over the chain's joints with a spread, each turning about the chain's side axis (a snake slithers about Y): the wave travels tailward, a wavelength along the chain for `spread: 1`. To have each segment head as the shape says instead of the turns piling up, a second spread move turns the next joint back by as much (the dragon's slither) |
+| arms swinging | a square: the shoulder and forearm one move with an OPPOSITE twin and a small spread (the forearm a little later). The waist and head turning against them are one more move of the same motion with a spread, no twin |
+| a strike | two hits: the coil (OUT into its stop, held) and the drive (into a SETTLE stop, held, back), each firing its chain as moves a little later in turn: pelvis, waist, then the arm as one move with a spread (shoulder, elbow, wrist), then the fist. The arm is FK: its joints' turns, not a hand chasing a path. The head aims at the impact. A step into it is a one-shot shape of its own on the foot's IK target (out, held, back), with a lift for each step |
+| a head that is the root (the dragon) | aim it: its `head_aim` turns the head to face its target, the body following less and less toward the tail ([modeling.md](modeling.md#rigging-channels-ik-targets)) |
 
 ## How a clip is sampled
 
@@ -239,6 +265,12 @@ The mech moves like a machine, not a person: legs stand straight, there's no idl
 and strikes aren't boxing moves. A strike carries force up a chain, feet → pelvis → shoulder →
 arm → fist, each link firing in turn.
 
+- **IK for contact and aim, FK for gesture.** Feet stay on the ground by IK, heads aim by IK;
+  arms, hands and cannons move by their joints' turns, between stops.
+- **When a clip grows, change the approach, not the amount of data.** A shape of more than about
+  six points, a channel in more than two motions, or an IK target needing a hand-drawn path to
+  reach means the motion is fighting the machine: use FK, a pose or a spread instead.
+
 ## The assets
 
 Each character's stance is its rest pose (the model's `pose`, one side written, WITH). Its clips
@@ -250,17 +282,20 @@ every frame of every clip against the reference in `bin/golden`.
   (the guard held, the weight shifting foot to foot between stops), `walk` and `run` (feet
   on their IK targets' closed foot arcs (`step`, `stride`), crouched, the fists a `fist` pose, coming down hard on each step, the arms swinging between
   stops against the legs, the waist and head twisting), `attack` (the head locks on the impact
-  point; the left foot steps into a lunge and a wind-up coils pelvis and waist, the right fist
-  swinging back and up to cocked by the shoulder; the body drives round into its stop and the
-  fist, on its IK target's arc (`strike`), drives out to the impact ahead at shoulder height, past it and
-  back, follows through and comes back round to rest) and `cast` (gather, then the arms thrown up and the hands
-  opening, a kick back as it fires).
+  point as the left foot steps into a lunge; the coil turns pelvis and waist and swings the right
+  arm back, elbow cocked, the fist closing; the drive fires the chain the other way, pelvis,
+  waist, then shoulder, elbow and wrist slamming into their stops with the arm locked straight
+  ahead at shoulder height, held, then back to rest; the arms are FK, there is no hand IK) and
+  `cast` (gather, then waist, head, arms and hands thrown up and open as one spread move, a kick
+  back as it fires).
 - `assets/characters/strider.json`: the same, for a reverse-jointed body: the sensor scans,
   `walk` and `run` counter-swing pelvis, hull and cannons, `attack` is a cannon ram with a step
   and a root lunge, `cast` braces and tips the rack, then three launches kick the rack and root
   back (three moves of the same amounts, a quarter cycle apart).
-- `assets/characters/dragon.json`: the head is the root. `idle` (the head scanning, the tail
+- `assets/characters/dragon.json`: the head is the root, aimed by `head_aim` (its body following,
+  damped toward the tail). `idle` (the head scanning, the tail
   ticking side to side), `combat_idle` (reared: head up, the neck sloping down to the body on
   the ground, forelimbs raised, the jaw snapping in steps, swaying between stops), `slither`
-  (limbs folded back, a square wave down the spine's z turns, a wavelength along it) and
+  (limbs folded back, a square wave down the spine's z turns, a wavelength along it: two spread
+  moves) and
   `attack` (coil back and up, then lunge, the jaw snapping shut on the hit).
