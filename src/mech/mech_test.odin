@@ -10,6 +10,7 @@ import "core:os"
 import "core:slice"
 import "core:strings"
 import "core:testing"
+import "../mjolnir/animation"
 import "../mjolnir/world"
 
 @(private = "file")
@@ -33,7 +34,7 @@ value_of :: proc(m: ^Model, name: string, axis := 0) -> int {
 // real changes in a diff.
 @(test)
 test_files_round_trip :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -52,7 +53,7 @@ test_files_round_trip :: proc(t: ^testing.T) {
 @(test)
 test_shipped_clips :: proc(t: ^testing.T) {
   LOOPS :: []string{"idle", "combat_idle", "walk", "run", "slither"}
-  for name in ([]string{"mech", "dragon", "strider"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -79,14 +80,19 @@ test_shipped_clips :: proc(t: ^testing.T) {
       clip_sample(&clips, c, clip.duration, end)
       for v, i in start do testing.expectf(t, abs(v - end[i]) < 1e-4, "%s %s loops: %s %v, then %v", name, clip.name, value_name(m, i), v, end[i])
       if clip.name != "walk" && clip.name != "run" do continue
-      // the ground: the feet at rest, the legs reaching
+      // the ground: the feet at rest, the legs reaching (every IK target that holds a foot)
+      feet := make([dynamic]int, context.temp_allocator)
+      for ik in rig.iks do if ik.holds do append(&feet, ik.tip)
+      if len(feet) == 0 do continue
       copy(end, clips.pose[:])
       for &v, i in end do if i >= root_channel(m) do v = 0
-      for ch in ([]string{"l_leg", "r_leg"}) do for k in 0 ..< 3 do end[value_of(m, ch, k)] = 0
-      end[value_of(m, "l_leg.weight")], end[value_of(m, "r_leg.weight")] = 1, 1
+      for ik in rig.iks do if ik.holds {
+        for k in 0 ..< 3 do end[ik.channel + k] = 0
+        end[ik.channel + IK_WEIGHT] = 1
+      }
       rig_solve(rig, end)
-      feet := [2]int{place_of(m, "l_foot"), place_of(m, "r_foot")}
-      rest := [2][3]f32{rig_frame(rig, feet[0]).position, rig_frame(rig, feet[1]).position}
+      rest := make([][3]f32, len(feet), context.temp_allocator)
+      for f, n in feet do rest[n] = rig_frame(rig, f).position
       for k in 0 ..= 60 {
         clip_sample(&clips, c, clip.duration * f32(k) / 60, end)
         rig_solve(rig, end)
@@ -102,8 +108,8 @@ test_shipped_clips :: proc(t: ^testing.T) {
 @(test)
 test_euler_round_trip :: proc(t: ^testing.T) {
   for e in ([][3]f32{{0, 0, 0}, {90, 0, -90}, {0, 180, 0}, {30, -45, 60}, {-120, 10, 5}}) {
-    back := euler(euler_from(euler(e)))
-    q := euler(e)
+    back := animation.joint_euler(euler_from(animation.joint_euler(e)))
+    q := animation.joint_euler(e)
     d := abs(back.x * q.x + back.y * q.y + back.z * q.z + back.w * q.w)
     testing.expectf(t, d > 0.99999, "euler %v does not round-trip", e)
   }
@@ -182,20 +188,51 @@ test_shape_stretch :: proc(t: ^testing.T) {
   testing.expect(t, near(at, {1, 2, 3}) && near(size, {1, 1, 1}))
 }
 
+// What the rig reports a joint turned by (rig_angles, the viewer's readout) is what its drives
+// turned it by, within its stops, with every IK let go.
+@(test)
+test_rig_angles_are_drives :: proc(t: ^testing.T) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
+    text, _ := os.read_entire_file(fmt.tprint(#directory + "/../../assets/characters/", name, ".json", sep = ""), context.allocator)
+    defer delete(text)
+    m, a, ok := character_parse(text)
+    testing.expect(t, ok)
+    defer model_destroy(m)
+    defer animation_destroy(a)
+    w: world.World
+    world.init(&w, 4096)
+    defer world.shutdown(&w)
+    lib: Library
+    rig, _ := rig_create(&lib, &w, nil, m, w.root)
+    defer rig_destroy(rig, &w)
+    values := model_pose(m, context.temp_allocator)
+    for &v, i in values do v += 0.1 * f32(i % 5) // off rest, every joint
+    for k in 0 ..< ik_count(m) do values[ik_channel(m, k) + IK_WEIGHT] = 0
+    rig_solve(rig, values)
+    want := make([][3]f32, len(rig.bones), context.temp_allocator)
+    for d in rig.drives do if !d.slide do want[d.bone][d.axis] += values[d.channel] * d.turn
+    for _, i in rig.bones {
+      w := animation.joint_clamp(want[i], rig.limits[i])
+      got := rig_angles(rig, i)
+      testing.expectf(t, linalg.length(got - w) < 1e-4, "%s bone %d: turned %v, drives %v", name, i, got, w)
+    }
+  }
+}
+
 // A joint's range holds its bone's motion; a mirror that turns an axis over turns its range over;
 // an axis with equal ends is free.
 @(test)
 test_joint_limits :: proc(t: ^testing.T) {
   knee := Joint{kind = .PIN, min = {-2.5, 0, 0}, max = {0.1, 0, 0}}
-  b: Bone
-  bone_limit(&b, knee, MIRROR_NONE)
-  mo := limit(b, {-3, 1, 0})
-  testing.expect(t, mo.x == -2.5 && mo.y == 1, "x held, y free")
-  testing.expect(t, limit(b, {0.5, 0, 0}).x == 0.1)
-  flipped: Bone
+  b := joint_limit(knee, MIRROR_NONE)
+  mo := animation.joint_clamp({-3, 1, 0}, b)
+  testing.expect(t, mo.x == -2.5 && mo.y == 0, "x held, y locked (a pin turns about x only)")
+  testing.expect(t, animation.joint_clamp({0.5, 0, 0}, b).x == 0.1)
+  ball := joint_limit(Joint{kind = .BALL, min = {-1, 0, 0}, max = {1, 0, 0}}, MIRROR_NONE)
+  testing.expect(t, animation.joint_clamp({0, 5, 0}, ball).y == 5, "a ball's axis with equal ends is free")
   mi := MIRROR_NONE
   mi.turn[.X] = true
-  bone_limit(&flipped, knee, mi)
+  flipped := joint_limit(knee, mi)
   testing.expect(t, flipped.lo.x == -0.1 && flipped.hi.x == 2.5, "mirrored: turned over")
 }
 
@@ -647,9 +684,7 @@ test_ik_root :: proc(t: ^testing.T) {
 // The worked-out pole keeps a leg bending the way it is built wherever its foot goes: sweeping
 // each leg's target ahead, behind, aside and up, the middle joint stays on its bend side, and on a
 // two-segment leg (the mech's) never jumps from one step to the next. A longer chain (the
-// strider's, its hock bending between knee and foot) can still swap solutions under cyclic
-// coordinate descent at a few targets: the solver's limit, not the pole's (the tuned poles this
-// replaced jumped at twice as many).
+// strider's, its hock bending between knee and foot) is only held to its bend side.
 @(test)
 test_ik_pole_sweep :: proc(t: ^testing.T) {
   for name in ([]string{"mech.json", "strider.json"}) {
@@ -670,7 +705,7 @@ test_ik_pole_sweep :: proc(t: ^testing.T) {
     values := make([]f32, len(pose))
     defer delete(values)
     for ik in rig.iks {
-      if ik.aim || ik.mid <= 0 do continue
+      if ik.aim || ik.mid == 0 do continue
       c, _, _ := value_channel(m, ik.channel)
       leg := c.name
       if pose[ik.channel + IK_WEIGHT] < 1 do continue // only the IKs reaching at rest (the legs)
@@ -685,12 +720,12 @@ test_ik_pole_sweep :: proc(t: ^testing.T) {
           rig_solve(rig, values)
           target := ik.rest + {values[ik.channel], values[ik.channel + 1], values[ik.channel + 2]}
           chain := rig.chains[ik.first:][:ik.count]
-          mid := rig.poses[chain[ik.mid]].position
-          above := rig.poses[chain[ik.mid - 1]].position
+          mid := rig.positions[chain[ik.mid]]
+          above := rig.positions[chain[ik.mid - 1]]
           along := linalg.normalize(target - above)
           off := (mid - above) - linalg.dot(mid - above, along) * along
           testing.expectf(t, linalg.dot(off, ik.bend) > -1e-3 * ik.length, "%s %s at %v: bends the wrong way (%v)", name, leg, target, off)
-          if k > 0 && ik.mid == ik.turning - 1 do testing.expectf(t, linalg.length(mid - last) < 0.15 * ik.length, "%s %s at %v: its middle joint jumps %v", name, leg, target, linalg.length(mid - last))
+          if k > 0 && int(ik.mid) == ik.turning - 1 do testing.expectf(t, linalg.length(mid - last) < 0.15 * ik.length, "%s %s at %v: its middle joint jumps %v", name, leg, target, linalg.length(mid - last))
           last = mid
         }
       }
@@ -925,8 +960,8 @@ test_ik_swivel :: proc(t: ^testing.T) {
     c := values[ik.channel:]
     target := ik.rest + {c[0], c[1], c[2]}
     chain := rig.chains[ik.first:][:ik.count]
-    mid = rig.poses[chain[ik.mid]].position
-    above := rig.poses[chain[ik.mid - 1]].position
+    mid = rig.positions[chain[ik.mid]]
+    above := rig.positions[chain[ik.mid - 1]]
     along = linalg.normalize(target - above)
     off = (mid - above) - linalg.dot(mid - above, along) * along
     return off, along, linalg.length(ik_point(rig, ik) - target), mid
@@ -1229,7 +1264,7 @@ test_motion_spread :: proc(t: ^testing.T) {
 // fighting the machine) are listed in the log, so their count stays visible.
 @(test)
 test_assets_check :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)

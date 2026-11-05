@@ -294,16 +294,19 @@ tip reaches with its **end** (`mech.ik_end`): as far along its last link, at res
 pieces and those hanging from it go, on that line: a foot's sole, not the ankle at its base. The
 tip's own joints (an ankle) don't reach. A foot (its end on the ground at rest) holds: its joints
 turn it to face the way their channels turned it in the model's space, so a planted foot stays as
-the clip angles it to the ground however the knee bends. A tip off the ground keeps its own
+the clip angles it to the ground however the knee bends (as near as their stops allow: the
+solver weighs the foot's facing with its reach, and the reach wins). A tip off the ground keeps its own
 joints' turns. Its channels are named after it: `<name>` (a position), the point in the model's space as
 an **offset from where the end is at rest** (model units: 0 is the foot where it stands, so a
 target needs no placing), `<name>.swivel` (a turn, 0 by default: see the pole below), and
-`<name>.weight`, from 0 (the chain as its joints' channels put it) to 1 (reaching). The solver is cyclic coordinate
-descent, 16 passes, tip first, each joint held in its range; the result is blended with the
-channels' motion by the weight. Still short of the target, it passes again with the middle joint
-let go of its pole (the stops may keep it from just there). A turn about an axis the end lies on (a forearm's twist, the
-fingertips on its line) is skipped: it would be noise. A target out of reach (past the stops, not
-only the chain's length) is reached for as near as the stops let: draw paths inside it. The mech's `l_leg` and `r_leg` reach each foot from its thigh.
+`<name>.weight`, from 0 (the chain as its joints' channels put it) to 1 (reaching). The solver
+(mjolnir's `animation.ik_solve`) is damped least squares over every joint's turns at once, 16 steps
+from the pose the channels give: the end onto the target, the middle joint toward where the pole
+puts it and, for a foot, the foot facing as the clip angled it, weighed together; then a few
+steps with the facing let go settle the end and the middle exactly. Each step moves the joints
+the least it can, each held in its range. The result is blended with the channels' motion by the
+weight, joint by joint. A target out of reach (past the stops, not only the chain's length) is
+reached for as near as the stops let: draw paths inside it. The mech's `l_leg` and `r_leg` reach each foot from its thigh.
 
 **IK is for contact and aim**: feet that must stay on the ground, heads that look. Arms, hands and
 guns are FK, their joints' turns between stops: a mech's arm has too few joints to chase a point
@@ -316,11 +319,10 @@ bent in the stance (the rest pose's joints: a strider's zigzag), or, for a chain
 line from the joint above the middle one to the target, that way, by the chain's length, turned
 with the model and swung as the limb swings (the shortest turn from the chain's line at rest to
 its line to the target). So it goes where the target goes: a foot stepping far ahead or aside
-keeps its knee pointing the way the leg is built, never flipping. Each pass first swings the middle joint
-around the line from the joint above it to the target, toward the pole, with the joints above
-it; then the tip reaches as before. So the chain bends in the plane through the pole. (A chain
-with more joints between its middle and its tip, the strider's hock, can still swap between two
-solutions at a few targets: a limit of the solver.)
+keeps its knee pointing the way the leg is built, never flipping. The middle joint is drawn to
+where its two segments put it, off the line from the joint above it to the target, toward the
+pole (never quite on the line, so a straight leg or one out of reach still bends the pole's
+way). So the chain bends in the plane through the pole.
 
 The pole is worked out, but how the limb bends is still the clip's to say: **`<name>.swivel`**
 turns the pole about the line from the joint above the middle one (a hip, a shoulder) to the
@@ -441,6 +443,21 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   the zigzag (thigh back, shin forward, hock back, foot level), so the knees point backwards and
   their ranges keep them there. The hull's `arm` and the pelvis's `thigh` slots mirror, so each
   limb is written once.
+- `assets/characters/spider.json`: eight IK legs from four mirrored `leg_1`..`leg_4` slots on one
+  thorax, all sharing the `femur`, `tibia` and `tarsus` parts (each slot yawed differently). Each
+  leg is a BALL `hip`, a `knee` pin and a rigid bent foot; the abdomen and the head's neck are BALL
+  joints, the head aims by IK and the mirrored `fang`s slide out on LINEAR joints. One IK target per
+  leg pair (`leg_1`..`leg_4`).
+- `assets/characters/tiger.json`: a quadruped on IK paws (`fore_leg`, `hind_leg`). The spine is a BALL chain
+  chest, belly, pelvis; a four-segment BALL tail waves by spread moves. Forelegs hang from a mirrored
+  `shoulder` slot, nearly straight; hind legs from a mirrored `hip` slot, digitigrade (forward knee, backward
+  hock). The jaw is a pin, the head aims by IK, ears, eyes and stripes are mirrored shapes.
+- `assets/characters/eagle.json`: a perched raptor. A BALL shoulder, elbow, wrist chain folds against
+  the body at rest and a `spread` pose opens it; the tail fans on a pin, the beak's jaw is a pin. Talons
+  hold the perch by IK and are drawn up (weight 0, a `tuck` pose) in flight.
+- `assets/characters/shark.json`: a limbless swimmer built on the dragon's pattern: the head is the
+  root, six BALL-jointed segments taper to a caudal fin, mirrored pectoral and pelvic fins are BALL
+  joints, the jaw is a pin with teeth. It hovers above the ground (a `root` lift) and has no IK.
 
 ## Not supported yet
 

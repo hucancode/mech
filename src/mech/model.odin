@@ -8,6 +8,7 @@ import "core:math/linalg"
 import "core:mem"
 import "core:slice"
 import "core:strings"
+import "../mjolnir/animation"
 import "../mjolnir/geometry"
 
 // A Model is a mech as data: a library of parts, each a handful of primitive shapes with named
@@ -675,15 +676,6 @@ model_material :: proc(m: ^Model, name: string) -> int {
   return -1
 }
 
-// euler turns euler angles in radians into a rotation: about x, then y, then z, each about the
-// already turned axes (R = Rx * Ry * Rz).
-euler :: proc(r: [3]f32) -> quaternion128 {
-  qx := linalg.quaternion_angle_axis_f32(r.x, {1, 0, 0})
-  qy := linalg.quaternion_angle_axis_f32(r.y, {0, 1, 0})
-  qz := linalg.quaternion_angle_axis_f32(r.z, {0, 0, 1})
-  return linalg.normalize(qx * qy * qz)
-}
-
 // part_face is where part `p` hangs, in its frame: `length` above its origin, +y toward its
 // joints, +x forward (PART_FACE raised by the length).
 part_face :: proc(p: Part) -> geometry.Face {
@@ -694,8 +686,8 @@ part_face :: proc(p: Part) -> geometry.Face {
 // a stretched one's from halfway up the part's length; `size` is its extent, a stretched one's
 // length added to its y.
 shape_place :: proc(p: Part, s: Shape) -> (position: [3]f32, rotation: quaternion128, size: [3]f32) {
-  if !s.stretch do return s.position, euler(s.rotation), s.size
-  return s.position + {0, p.length / 2, 0}, euler(s.rotation), s.size + {0, p.length, 0}
+  if !s.stretch do return s.position, animation.joint_euler(s.rotation), s.size
+  return s.position + {0, p.length / 2, 0}, animation.joint_euler(s.rotation), s.size + {0, p.length, 0}
 }
 
 // shape_faces are the centres of a shape's six faces with their outward normals, in its part's
@@ -713,20 +705,13 @@ shape_faces :: proc(p: Part, s: Shape) -> (faces: [6]geometry.Face) {
   return
 }
 
-// euler_from is euler's inverse, in radians.
+// euler_from is animation.joint_euler's inverse, in radians, the least turn of the two that make
+// `q`, rounded for writing.
 euler_from :: proc(q: quaternion128) -> [3]f32 {
-  m := linalg.matrix3_from_quaternion_f32(q)
-  c := math.hypot(m[0, 0], m[0, 1])
-  x, y, z: f32
-  y = math.atan2(m[0, 2], c)
-  if c > 1e-5 {
-    x = math.atan2(-m[1, 2], m[2, 2])
-    z = math.atan2(-m[0, 1], m[0, 0])
-  } else {
-    x = math.atan2(m[2, 1], m[1, 1])
-  }
+  e := animation.joint_angles(linalg.QUATERNIONF32_IDENTITY, q)
+  x, y, z := e.x, e.y, e.z
   // the same rotation, flipped through y = 90 degrees; keep whichever turns less
-  if c > 1e-5 {
+  if z != 0 || abs(y) < math.PI / 2 - 1e-3 {
     fx, fy, fz := x - math.copy_sign(f32(math.PI), x), math.copy_sign(f32(math.PI), y) - y, z - math.copy_sign(f32(math.PI), z)
     if abs(fx) + abs(fy) + abs(fz) < abs(x) + abs(y) + abs(z) - 1e-4 do x, y, z = fx, fy, fz
   }

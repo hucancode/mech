@@ -437,7 +437,7 @@ piece_shown :: proc(rig: ^mech.Rig, i: int) -> geometry.Transform {
     middle, reach := part_middle(rig)
     p.place.position += explode_offset(p, middle, reach, app.explode)
   }
-  return geometry.transform_mul(rig.poses[p.bone], p.place)
+  return geometry.transform_mul(mech.rig_bone(rig, p.bone), p.place)
 }
 
 // outline draws the selected part's shapes (the selected shape in white) and its frame's axes.

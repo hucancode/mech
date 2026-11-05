@@ -3,8 +3,8 @@
 //   space  pause / resume
 //   drag   orbit the camera, scroll to zoom
 // The panel plays actions, loops one-shots, changes speed and cross-fade, scrubs or steps the
-// clip while paused, and swaps the model (the mech, the reverse-jointed strider, or the dragon
-// ported from mjolnir's examples).
+// clip while paused, and swaps the model (the mech, the reverse-jointed strider, the dragon
+// ported from mjolnir's examples, a spider, a tiger, an eagle or a shark).
 package main
 
 import "core:fmt"
@@ -50,6 +50,10 @@ ASSETS := [?]struct {
   {"mech", "assets/characters/mech.json"},
   {"dragon", "assets/characters/dragon.json"},
   {"strider", "assets/characters/strider.json"},
+  {"spider", "assets/characters/spider.json"},
+  {"tiger", "assets/characters/tiger.json"},
+  {"eagle", "assets/characters/eagle.json"},
+  {"shark", "assets/characters/shark.json"},
 }
 
 App :: struct {
@@ -199,7 +203,7 @@ panel_body :: proc(app: ^App, ctx: ^mu.Context) {
   mu.label(ctx, "cross-fade")
   mu.slider(ctx, &app.fade, 0, 1, 0, "%.2f s")
 
-  mu.layout_row(ctx, {80, 70, 70, -1}, 0)
+  mu.layout_row(ctx, {80, 54, 54, 54, 54, 54, 54, -1}, 0)
   mu.label(ctx, "model")
   for a, i in ASSETS {
     mu.push_id(ctx, uintptr(100 + i))

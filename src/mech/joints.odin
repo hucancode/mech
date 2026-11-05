@@ -233,13 +233,13 @@ joint_turns :: proc(j: Joint) -> (turns: bit_set[Axis]) {
 
 // joint_build bolts joint `j` onto `socket` of `parent` and returns the frame its male half bolts
 // the next joint or the part on (with PART_FACE). It gets a bone at its pivot, which its channel
-// and IK turn about its axes (joint_turns). `round`: a pin hinge's top and
+// and IK turn about its axes (joint_turns, joint_limit). `round`: a pin hinge's top and
 // bottom plates turn on a turntable next to it in the stack, so are round.
 @(private)
 joint_build :: proc(b: ^Builder, parent: Frame, socket: geometry.Face, j: Joint, round: [2]bool) -> Frame {
   a, m := joint_mounts(j)
   female := Frame{parent.bone, geometry.transform_mul(parent.place, geometry.seat(socket, a))}
-  male := Frame{add_bone(b, female.bone, female.place.position, female.place.rotation, joint_turns(j)), geometry.TRANSFORM_IDENTITY}
+  male := Frame{add_bone(b, female.bone, female.place.position, female.place.rotation), geometry.TRANSFORM_IDENTITY}
   d := joint_dims(j)
   d.round_top, d.round_bottom = round[0], round[1]
   switch j.kind {

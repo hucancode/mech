@@ -376,10 +376,11 @@ query :: proc(text: []u8, allocator := context.allocator) -> string {
       j := stack[bone.joint]
       x := mech.rig_bone_base(rig, i)
       pos, r := x.position * m.scale, x.rotation
-      at, lo, hi := rig.motion[i], bone.lo, bone.hi
+      at := mech.rig_angles(rig, i)
+      turns, lo, hi := mech.rig_turns(rig, i)
       fmt.sbprintf(&b, `{{"name":%q,"kind":%q,"bare":%v,"index":%d,"channel":%q,"pivot":[%v,%v,%v],"rotation":[%v,%v,%v,%v],"axes":[`, j.name, fmt.tprint(j.kind), mech.joint_bare(j), bone.joint, fmt.tprint(mech.place_name(m, rig.places[inst]), ".", j.name, sep = ""), pos.x, pos.y, pos.z, r.x, r.y, r.z, r.w)
       n := 0
-      for axis in mech.Axis do if axis in bone.turns {
+      for axis in mech.Axis do if axis in turns {
         if n > 0 do strings.write_byte(&b, ',')
         n += 1
         fmt.sbprintf(&b, `%q`, fmt.tprint(axis))
@@ -503,7 +504,7 @@ find_place :: proc(rig: ^mech.Rig, name: string) -> int {
 solve_at :: proc(clip: int, time: Maybe(f32), values: []f32) {
   rig := character.mech_rig(&app.mech)
   t, ok := time.?
-  if !ok do return // rig.poses already hold what is shown
+  if !ok do return // the rig's pose already holds what is shown
   mech.clip_sample(&app.asset.clips, clip, t, values)
   mech.rig_solve(rig, values)
 }
