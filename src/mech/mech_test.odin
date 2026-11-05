@@ -34,7 +34,7 @@ value_of :: proc(m: ^Model, name: string, axis := 0) -> int {
 // real changes in a diff.
 @(test)
 test_files_round_trip :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -53,7 +53,7 @@ test_files_round_trip :: proc(t: ^testing.T) {
 @(test)
 test_shipped_clips :: proc(t: ^testing.T) {
   LOOPS :: []string{"idle", "combat_idle", "walk", "run", "slither"}
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -80,25 +80,18 @@ test_shipped_clips :: proc(t: ^testing.T) {
       clip_sample(&clips, c, clip.duration, end)
       for v, i in start do testing.expectf(t, abs(v - end[i]) < 1e-4, "%s %s loops: %s %v, then %v", name, clip.name, value_name(m, i), v, end[i])
       if clip.name != "walk" && clip.name != "run" do continue
-      // the ground: the feet at rest, the legs reaching (every IK target that holds a foot)
-      feet := make([dynamic]int, context.temp_allocator)
-      for ik in rig.iks do if ik.holds do append(&feet, ik.tip)
-      if len(feet) == 0 do continue
-      copy(end, clips.pose[:])
-      for &v, i in end do if i >= root_channel(m) do v = 0
-      for ik in rig.iks do if ik.holds {
-        for k in 0 ..< 3 do end[ik.channel + k] = 0
-        end[ik.channel + IK_WEIGHT] = 1
-      }
-      rig_solve(rig, end)
+      // the ground: where the feet stand at rest (every IK target that holds a foot); a foot is
+      // where it reaches with (ik_point), which it turns about
+      feet := make([dynamic]RigIk, context.temp_allocator)
+      for ik in rig.iks do if ik.holds do append(&feet, ik)
       rest := make([][3]f32, len(feet), context.temp_allocator)
-      for f, n in feet do rest[n] = rig_frame(rig, f).position
+      for f, n in feet do rest[n] = f.rest
       for k in 0 ..= 60 {
         clip_sample(&clips, c, clip.duration * f32(k) / 60, end)
         rig_solve(rig, end)
         for f, n in feet {
-          p := rig_frame(rig, f).position
-          testing.expectf(t, p.y > rest[n].y - 0.01 && abs(p.x - rest[n].x) < 0.01, "%s %s: %s at %v, rest %v", name, clip.name, place_name(m, model_places(m)[f]), p, rest[n])
+          p := ik_point(rig, f)
+          testing.expectf(t, p.y > rest[n].y - 0.01 && abs(p.x - rest[n].x) < 0.01, "%s %s: %s at %v, rest %v", name, clip.name, place_name(m, model_places(m)[f.tip]), p, rest[n])
         }
       }
     }
@@ -192,7 +185,7 @@ test_shape_stretch :: proc(t: ^testing.T) {
 // turned it by, within its stops, with every IK let go.
 @(test)
 test_rig_angles_are_drives :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
     text, _ := os.read_entire_file(fmt.tprint(#directory + "/../../assets/characters/", name, ".json", sep = ""), context.allocator)
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -404,18 +397,24 @@ test_motion_walks :: proc(t: ^testing.T) {
   clips.pose[value_of(m, "l_leg.weight")], clips.pose[value_of(m, "r_leg.weight")] = 1, 1
   values := make([]f32, model_channels(m))
   defer delete(values)
-  // the sole, which the leg reaches with (ik_point)
+  // the foot: where its target is (the clip's), and how high its lowest corner stands (the rig's:
+  // it rolls on its heel and ball, but stays on the ground)
   foot := 0
   rest := rig.iks[foot].rest
-  at :: proc(c: ^Clips, rig: ^Rig, values: []f32, foot: int, t: f32) -> [3]f32 {
+  at :: proc(c: ^Clips, rig: ^Rig, values: []f32, foot: int, t: f32) -> (target: [3]f32, low: f32) {
     clip_sample(c, 0, t, values)
     rig_solve(rig, values)
-    return ik_point(rig, rig.iks[foot])
+    ik := rig.iks[foot]
+    target = ik.rest + {values[ik.channel], values[ik.channel + 1], values[ik.channel + 2]}
+    own, toes := contact_lows(rig, ik)
+    return target, min(own, toes)
   }
-  a0, a1, a2 := at(&clips, rig, values, foot, 0.1), at(&clips, rig, values, foot, 0.3), at(&clips, rig, values, foot, 0.5)
-  for p in ([][3]f32{a0, a1, a2}) do testing.expectf(t, abs(p.y - rest.y) < 0.02 && abs(p.x - rest.x) < 0.02, "the stance foot stays on the ground: %v, rest %v", p, rest)
+  a0, l0 := at(&clips, rig, values, foot, 0.1)
+  a1, l1 := at(&clips, rig, values, foot, 0.3)
+  a2, l2 := at(&clips, rig, values, foot, 0.5)
+  for p, k in ([][3]f32{a0, a1, a2}) do testing.expectf(t, abs(p.y - rest.y) < 0.02 && abs(p.x - rest.x) < 0.02 && abs(([]f32{l0, l1, l2})[k]) < 0.02, "the stance foot stays on the ground: %v, rest %v, lowest %v", p, rest, ([]f32{l0, l1, l2})[k])
   testing.expectf(t, abs((a0.z - a1.z) - (a1.z - a2.z)) < 0.02 && abs(a0.z - a2.z - 1.0 / 0.6 * 0.4) < 0.03, "and slides straight back at a steady speed: %v %v %v", a0.z, a1.z, a2.z)
-  swing := at(&clips, rig, values, foot, 0.8)
+  swing, _ := at(&clips, rig, values, foot, 0.8)
   testing.expectf(t, swing.y > rest.y + 0.3, "the swinging foot lifts: %v", swing.y)
   root := root_channel(m) + 1
   clip_sample(&clips, 0, 0, values)
@@ -718,13 +717,18 @@ test_ik_pole_sweep :: proc(t: ^testing.T) {
           values[ik.channel + 1] = up * ik.length
           values[ik.channel + 2] = (f32(k) / 12 - 1) * SPAN * ik.length
           rig_solve(rig, values)
+          // the limb's line: to the tip's pivot (an ankle), which a foot turning on its heel or
+          // ball takes off the line to the target; or to the target
           target := ik.rest + {values[ik.channel], values[ik.channel + 1], values[ik.channel + 2]}
           chain := rig.chains[ik.first:][:ik.count]
+          if ik.holds && ik.turning < ik.count do target = rig.positions[chain[ik.turning]]
           mid := rig.positions[chain[ik.mid]]
           above := rig.positions[chain[ik.mid - 1]]
           along := linalg.normalize(target - above)
           off := (mid - above) - linalg.dot(mid - above, along) * along
-          testing.expectf(t, linalg.dot(off, ik.bend) > -1e-3 * ik.length, "%s %s at %v: bends the wrong way (%v)", name, leg, target, off)
+          // a limb pulled straight (out of reach) lies on its line: within a few thousandths of
+          // its length of it is on it
+          testing.expectf(t, linalg.dot(off, ik.bend) > -3e-3 * ik.length, "%s %s at %v: bends the wrong way (%v)", name, leg, target, off)
           if k > 0 && int(ik.mid) == ik.turning - 1 do testing.expectf(t, linalg.length(mid - last) < 0.15 * ik.length, "%s %s at %v: its middle joint jumps %v", name, leg, target, linalg.length(mid - last))
           last = mid
         }
@@ -1264,7 +1268,7 @@ test_motion_spread :: proc(t: ^testing.T) {
 // fighting the machine) are listed in the log, so their count stays visible.
 @(test)
 test_assets_check :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "shark"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -1287,4 +1291,114 @@ test_assets_check :: proc(t: ^testing.T) {
 @(private = "file")
 place_of :: proc(m: ^Model, name: string) -> int {
   return model_place(m, model_places(m), name)
+}
+
+// contact_lows is how high IK ik's tip's own pieces' lowest corner stands, and its toes' (the
+// joints below it; MAX with none).
+@(private = "file")
+contact_lows :: proc(rig: ^Rig, ik: RigIk) -> (own, toes: f32) {
+  own, toes = math.F32_MAX, math.F32_MAX
+  tip := int(rig.chains[ik.first + ik.count - 1])
+  for c in rig.corners[ik.corners_first:][:ik.corners_count] do own = min(own, (rig.positions[tip] + linalg.mul(rig.rotations[tip], c)).y)
+  for cf in rig.conforms[ik.conform_first:][:ik.conform_count] do for c in rig.corners[cf.first:][:cf.count] do toes = min(toes, (rig.positions[cf.bone] + linalg.mul(rig.rotations[cf.bone], c)).y)
+  return
+}
+
+// Ground contact (contact.odin), on every character standing on the ground: through its walk and
+// run nothing of a foot goes through the ground and no foot snaps from one frame to the next; and,
+// for the two-part feet (strider, mech), a foot under the hip stands flat, one coming down ahead
+// lands on its heel, toes up, and one pushed back past its reach stands on its toes, heel up.
+@(test)
+test_ground_contact :: proc(t: ^testing.T) {
+  for name in ([]string{"mech", "strider", "spider", "tiger", "eagle"}) {
+    text := read(t, fmt.tprint(name, ".json", sep = ""))
+    defer delete(text)
+    m, a, ok := character_parse(text)
+    if !testing.expect(t, ok) do continue
+    defer model_destroy(m)
+    defer animation_destroy(a)
+    w: world.World
+    world.init(&w, 4096)
+    defer world.shutdown(&w)
+    lib: Library
+    rig, _ := rig_create(&lib, &w, nil, m, w.root)
+    defer rig_destroy(rig, &w)
+    clips := clips_build(a, m)
+    defer clips_destroy(&clips)
+    values := make([]f32, model_channels(m))
+    defer delete(values)
+    feet := make([dynamic]RigIk, context.temp_allocator)
+    for ik in rig.iks do if ik.holds && ik.corners_count > 0 do append(&feet, ik)
+    for clip, c in a.clips {
+      if clip.name != "walk" && clip.name != "run" do continue
+      last := make([]quaternion128, len(feet), context.temp_allocator)
+      for k in 0 ..= 60 {
+        clip_sample(&clips, c, clip.duration * f32(k) / 60, values)
+        rig_solve(rig, values)
+        for ik, n in feet {
+          own, toes := contact_lows(rig, ik)
+          testing.expectf(t, min(own, toes) > -0.01 * ik.length, "%s %s at %v: %s through the ground: %v, %v", name, clip.name, k, place_name(m, model_places(m)[ik.tip]), own, toes)
+          turn := rig.rotations[rig.chains[ik.first + ik.count - 1]]
+          if k > 0 do testing.expectf(t, abs(linalg.dot(turn, last[n])) > math.cos(f32(0.1)), "%s %s at %v: %s snaps", name, clip.name, k, place_name(m, model_places(m)[ik.tip]))
+          last[n] = turn
+        }
+      }
+    }
+    if name != "mech" && name != "strider" do continue
+    // one foot at a time, the other at rest, on the rest pose
+    for ik in feet {
+      if ik.conform_count == 0 do continue
+      tip := int(rig.chains[ik.first + ik.count - 1])
+      foot := place_name(m, model_places(m)[ik.tip])
+      // the way from the hip to the foot, along the ground, at rest
+      pose_at :: proc(rig: ^Rig, clips: ^Clips, values: []f32, ik: RigIk, at: [3]f32) {
+        copy(values, clips.pose[:])
+        values[ik.channel], values[ik.channel + 1], values[ik.channel + 2] = at.x, at.y, at.z
+        rig_solve(rig, values)
+      }
+      // its sole: its own corners on the ground at rest (in its bone's frame); its heel and ball,
+      // the sole's corners nearest and furthest along the way it reaches, how high
+      sole := make([dynamic][3]f32, context.temp_allocator)
+      ends :: proc(rig: ^Rig, sole: [][3]f32, tip: int, way: [3]f32) -> (near, far: f32) {
+        lo, hi := f32(math.F32_MAX), f32(-math.F32_MAX)
+        for c in sole {
+          p := rig.positions[tip] + linalg.mul(rig.rotations[tip], c)
+          d := linalg.dot(p, way)
+          if d < lo - 1e-4 do lo, near = d, p.y
+          else if d < lo + 1e-4 do near = min(near, p.y)
+          if d > hi + 1e-4 do hi, far = d, p.y
+          else if d > hi - 1e-4 do far = min(far, p.y)
+        }
+        return
+      }
+      // ahead: from the ankle toward the toes, at rest
+      pose_at(rig, &clips, values, ik, {})
+      forward := rig.positions[rig.conforms[ik.conform_first].bone] - rig.positions[tip]
+      forward.y = 0
+      forward = linalg.normalize(forward)
+      for c in rig.corners[ik.corners_first:][:ik.corners_count] {
+        if (rig.positions[tip] + linalg.mul(rig.rotations[tip], c)).y < 1e-3 * ik.length do append(&sole, c)
+      }
+      eps := 0.01 * ik.length
+      // under the hip: flat
+      near, far := ends(rig, sole[:], tip, forward)
+      testing.expectf(t, abs(near) < eps && abs(far) < eps, "%s %s at rest stands flat: heel %v, toe end %v", name, foot, near, far)
+      // coming down ahead: on its heel, toes up
+      pose_at(rig, &clips, values, ik, forward * 0.3 * ik.length + {0, 0.04 * ik.length, 0})
+      near, far = ends(rig, sole[:], tip, forward)
+      own, toes := contact_lows(rig, ik)
+      testing.expectf(t, abs(near - own) < 1e-3 && far > near + eps, "%s %s coming down ahead lands on its heel: heel %v, toe end %v", name, foot, near, far)
+      // pushed back past its reach, as far as a heel lifting can take it back in (a short foot on a
+      // straight leg, the mech's, not far): toes on the ground, heel up
+      rolls := false
+      for k in 1 ..= 20 {
+        pose_at(rig, &clips, values, ik, -forward * f32(k) * 0.025 * ik.length)
+        near, far = ends(rig, sole[:], tip, forward)
+        own, toes = contact_lows(rig, ik)
+        testing.expectf(t, min(own, toes) > -eps, "%s %s pushed back %v: through the ground: %v %v", name, foot, k, own, toes)
+        rolls ||= abs(toes) < eps && near > far + eps
+      }
+      testing.expectf(t, rolls, "%s %s pushed back past its reach stands on its toes, heel up", name, foot)
+    }
+  }
 }

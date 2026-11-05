@@ -246,9 +246,9 @@
           {"name": "hip_bottom", "kind": "SPIN", "min": [0, -0.6, 0], "max": [0, 0.6, 0]}
         ],
         "shapes": [
-          {"material": "shell", "stretch": true, "size": [0.5, 0, 0.46]},
-          {"material": "trim", "position": [0, 0.56, 0.25], "size": [0.36, 0.4, 0.06]},
-          {"primitive": "CYLINDER", "material": "dark", "rotation": [0, 0, 1.5707964], "size": [0.36, 0.6, 0.36]}
+          {"material": "shell", "stretch": true, "size": [0.84, 0, 0.78]},
+          {"material": "trim", "position": [0, 0.5, 0.4], "size": [0.5, 0.4, 0.06]},
+          {"primitive": "CYLINDER", "material": "dark", "rotation": [0, 0, 1.5707964], "size": [0.5, 0.9, 0.5]}
         ]
       },
       {
@@ -264,10 +264,9 @@
           }
         ],
         "shapes": [
-          {"material": "shell", "stretch": true, "size": [0.54, -0.1, 0.6]},
-          {"material": "trim", "position": [0, 0.68, 0], "size": [0.6, 0.3, 0.66]},
-          {"primitive": "CYLINDER", "material": "metal", "position": [0, 0.38, -0.38], "size": [0.11, 0.56, 0.11]},
-          {"material": "dark", "position": [0, 0.4, 0.31], "size": [0.42, 0.36, 0.08]}
+          {"material": "shell", "stretch": true, "size": [0.26, -0.04, 0.26]},
+          {"material": "trim", "position": [0, 0.68, 0], "size": [0.34, 0.24, 0.34]},
+          {"primitive": "CYLINDER", "material": "metal", "position": [0, 0.38, -0.2], "size": [0.07, 0.56, 0.07]}
         ]
       },
       {
@@ -283,8 +282,8 @@
           }
         ],
         "shapes": [
-          {"primitive": "CYLINDER", "material": "shell", "stretch": true, "size": [0.4, -0.08, 0.4]},
-          {"material": "trim", "position": [0, 0.23, 0.21], "size": [0.26, 0.2, 0.06]}
+          {"primitive": "CYLINDER", "material": "shell", "stretch": true, "size": [0.26, -0.05, 0.26]},
+          {"material": "trim", "position": [0, 0.23, 0.15], "size": [0.2, 0.2, 0.05]}
         ]
       },
       {
@@ -298,25 +297,50 @@
             "max": [0.9, 0, 0]
           }
         ],
+        "slots": [
+          {"name": "toes", "position": [0, -0.19, -0.25], "normal": [0, 0, -1], "forward": [1, 0, 0]}
+        ],
         "shapes": [
-          {"material": "dark", "position": [0, -0.25, -0.2], "size": [0.78, 0.08, 1.4]},
-          {"material": "shell", "position": [0, -0.09, 0], "size": [0.66, 0.24, 0.62]},
+          {"material": "dark", "position": [0, -0.25, 0.1], "size": [1.1, 0.08, 0.7]},
+          {"material": "shell", "position": [0, -0.09, 0.1], "size": [1, 0.24, 0.66]},
+          {"material": "trim", "position": [0, 0.035, 0.1], "size": [0.74, 0.03, 0.5]}
+        ]
+      },
+      {
+        "name": "toes",
+        "joints": [
+          {
+            "name": "ball",
+            "size": 0.38,
+            "reach": 0.52,
+            "min": [-0.6, 0, 0],
+            "max": [0.6, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "shell", "position": [0, -0.2775, 0], "size": [0.5, 0.555, 0.2]},
           {
             "primitive": "WEDGE",
             "param": 0.7,
             "material": "shell",
-            "position": [0, -0.1, -0.58],
-            "rotation": [3.1415927, 0, 3.1415927],
-            "size": [0.72, 0.22, 0.56]
+            "position": [0, -0.755, 0],
+            "rotation": [-1.5707964, 3.1415927, 0],
+            "size": [0.5, 0.2, 0.4]
           },
-          {"material": "trim", "position": [0, -0.205, -0.86], "size": [0.74, 0.01, 0.06]},
-          {"material": "trim", "position": [0, 0.035, 0], "size": [0.5, 0.03, 0.44]},
+          {"material": "trim", "position": [0, -0.25, -0.11], "size": [0.3, 0.5, 0.02]},
           {
-            "primitive": "WEDGE",
-            "param": 0.6,
             "material": "shell",
-            "position": [0, -0.11, 0.46],
-            "size": [0.6, 0.2, 0.32]
+            "position": [0.44, -0.2, 0.02],
+            "rotation": [-1.5707964, -0.0349, 0],
+            "size": [0.26, 0.16, 0.4],
+            "mirror": "X"
+          },
+          {
+            "material": "dark",
+            "position": [0.448, -0.45, 0.02],
+            "rotation": [-1.5707964, -0.0349, 0],
+            "size": [0.2, 0.12, 0.1],
+            "mirror": "X"
           }
         ]
       }
@@ -353,7 +377,8 @@
         ]
       },
       {"name": "hock", "part": "hock", "parent": "shin"},
-      {"name": "foot", "part": "foot", "parent": "hock"}
+      {"name": "foot", "part": "foot", "parent": "hock"},
+      {"name": "toes", "part": "toes", "parent": "foot", "parent_slot": "toes"}
     ]
   },
   "animation": {
@@ -371,11 +396,12 @@
       {
         "name": "stride",
         "points": [
-          [0, 0, 1.04],
-          [0, 0, -1.04],
-          [0, 0.6, 0]
+          [0, 0, 2.298],
+          [0, 0, -1.9031],
+          [0, 1.8173, -0.721],
+          [0, 1.3299, 1.9982]
         ],
-        "corners": [0, 1],
+        "at": [0, 0.3333, 0.6667, 0.8334],
         "closed": true
       }
     ],
@@ -594,10 +620,10 @@
           },
           {
             "shape": [
-              {"u": 0.15, "v": 1, "ease": "SETTLE"},
-              {"u": 0.35, "v": 1},
-              {"u": 0.65, "v": -1, "ease": "SETTLE"},
-              {"u": 0.85, "v": -1}
+              {"ease": "IN"},
+              {"u": 0.25, "v": 1, "ease": "OUT"},
+              {"u": 0.5, "ease": "IN"},
+              {"u": 0.75, "v": -1, "ease": "OUT"}
             ],
             "moves": [
               {

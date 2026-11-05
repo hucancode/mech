@@ -295,7 +295,12 @@ and strikes aren't boxing moves. A strike carries force up a chain, feet → pel
 arm → fist, each link firing in turn.
 
 - **IK for contact and aim, FK for gesture.** Feet stay on the ground by IK, heads aim by IK;
-  arms, hands and cannons move by their joints' turns, between stops.
+  arms, hands and cannons move by their joints' turns, between stops. A clip moves a foot's
+  target only: the rig lands it on its heel, stands it flat and peels its heel up as it slides
+  behind the body (ground contact, [modeling](modeling.md)), so no clip turns an ankle or a toe to
+  do it. For a run where a foot is always on the ground (one landing as the other peels off), give
+  the foot arc a duty a little over 0.5 (the mech's run: 0.55); under 0.5, both feet hang in the
+  air with nothing planted.
 - **When a clip grows, change the approach, not the amount of data.** A shape of more than about
   six points, a channel in more than two motions, or an IK target needing a hand-drawn path to
   reach means the motion is fighting the machine: use FK, a pose or a spread instead.
@@ -332,10 +337,22 @@ every frame of every clip against the reference in `bin/golden`.
 - `assets/characters/strider.json`: the same, for a reverse-jointed body: the sensor scans,
   `walk` and `run` counter-swing pelvis, hull and cannons, `attack` is a cannon ram with a step
   and a root lunge, `cast` braces and tips the rack, then three launches kick the rack and root
-  back (three moves of the same amounts, a quarter cycle apart).
+  back (three moves of the same amounts, a quarter cycle apart). No clip moves its feet' joints:
+  the rig rolls them heel to toe (ground contact, [modeling](modeling.md)), landing on the heel,
+  standing flat, peeling the heel up as a leg stretches.
 - `assets/characters/dragon.json`: the head is the root. `idle` (the head scanning, the tail
   ticking side to side), `combat_idle` (reared: head up, the neck sloping down to the body on
   the ground, forelimbs raised, the jaw snapping in steps, swaying between stops), `slither`
   (limbs folded back, a square wave down the spine's z turns, a wavelength along it: two spread
   moves) and
   `attack` (coil back and up, then lunge, the jaw snapping shut on the hit).
+- `assets/characters/spider.json`: `idle` (head scanning in settling steps, abdomen ticking),
+  `combat_idle` (front legs raised, fangs half open), `walk` and `run` (an alternating tetrapod
+  gait: four IK pairs on the closed foot arcs `step` and `stride`, with a bounce and the abdomen and head
+  counter-swinging), `attack` (rears up on the hind pairs, then the fangs swing out as the root lunges).
+- `assets/characters/tiger.json`: `idle`, `combat_idle` (a low stalk), `walk` (a lateral sequence: a hind
+  foot, then the fore foot on its side a quarter cycle later, the waist swaying smoothly), `run` (a trot, diagonal pairs landing together),
+  `attack` (crouch and coil, then a pounce: the forelegs hand from IK to FK, the jaw snaps shut on `SETTLE`).
+- `assets/characters/eagle.json`: `idle` (perched, head scanning), `combat_idle` (wings half open),
+  `walk` (a glide: one beat, then wings held, legs tucked), `run` (a fast flap, `SETTLE` beats with a spread down
+  the wing's joints), `attack` (a dive, talons thrown forward, beak snap), `cast` (wings thrown wide and held).

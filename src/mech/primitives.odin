@@ -37,7 +37,7 @@ library_destroy :: proc(lib: ^Library, r: ^render.Renderer) {
 // library_mesh is the shared mesh for a primitive with `param`, made on first use.
 library_mesh :: proc(lib: ^Library, r: ^render.Renderer, primitive: Primitive, param: f32) -> (h: render.MeshHandle, ok: bool) {
   key := MeshKey{primitive, 0}
-  if primitive == .WEDGE || primitive == .CONE do key.param = i32(math.round(clamp(param, 0, 1) * 1000))
+  if primitive != .BOX && primitive != .CYLINDER && primitive != .SPHERE do key.param = i32(math.round(clamp(param, 0, 1) * 1000))
   if cached, found := lib.meshes[key]; found do return cached, true
   p := f32(key.param) / 1000
   g: geometry.Mesh
@@ -49,9 +49,9 @@ library_mesh :: proc(lib: ^Library, r: ^render.Renderer, primitive: Primitive, p
   case .CYLINDER:
     g = geometry.make_cylinder(segments = 24, height = 1)
   case .HALF_CYLINDER:
-    g = geometry.make_cylinder(segments = 16, height = 1, arc = math.PI)
+    g = make_arc(16, math.PI, p)
   case .QUARTER_CYLINDER:
-    g = geometry.make_cylinder(segments = 10, height = 1, arc = math.PI / 2)
+    g = make_arc(10, math.PI / 2, p)
   case .CONE:
     g = geometry.make_cone(segments = 24, height = 1, top_radius = p)
   case .SPHERE:
@@ -60,6 +60,20 @@ library_mesh :: proc(lib: ^Library, r: ^render.Renderer, primitive: Primitive, p
   h = render.mesh_create(r, g) or_return
   lib.meshes[key] = h
   return h, true
+}
+
+// make_arc is a slice `arc` radians round of a unit cylinder along y (radius 1, height 1), its
+// top narrowed by `taper` (0 = a cylinder, 1 = a point, as a wedge's front drops), its cut ends
+// closed: a half or quarter cylinder, or a cone's slice.
+@(private)
+make_arc :: proc(segments: u32, arc, taper: f32) -> geometry.Mesh {
+  top_r := 1 - taper
+  slope := [2]f32{1, taper} / math.sqrt(1 + taper * taper)
+  side := [2]geometry.ProfilePoint{{{top_r, 0.5}, slope, 0}, {{1, -0.5}, slope, 1}}
+  top := [2]geometry.ProfilePoint{{{0, 0.5}, {0, 1}, 0}, {{top_r, 0.5}, {0, 1}, 0}}
+  bottom := [2]geometry.ProfilePoint{{{1, -0.5}, {0, -1}, 0}, {{0, -0.5}, {0, -1}, 0}}
+  strips := [3][]geometry.ProfilePoint{side[:], bottom[:], top[:]}
+  return geometry.make_lathe(strips[:3 if top_r > 0 else 2], segments, arc, close = true)
 }
 
 // library_material is the shared material for a paint; the name does not matter.

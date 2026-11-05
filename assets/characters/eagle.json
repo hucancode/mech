@@ -1,0 +1,563 @@
+{
+  "model": {
+    "name": "eagle",
+    "scale": 0.35,
+    "ground": true,
+    "materials": [
+      {"name": "brown", "color": [0.27, 0.17, 0.1], "roughness": 0.7},
+      {"name": "feather", "color": [0.36, 0.23, 0.13], "roughness": 0.7},
+      {"name": "tip", "color": [0.14, 0.09, 0.06], "roughness": 0.7},
+      {"name": "white", "color": [0.92, 0.9, 0.84], "roughness": 0.7},
+      {"name": "gold", "color": [0.93, 0.7, 0.16], "metallic": 0.2, "roughness": 0.5},
+      {"name": "horn", "color": [0.12, 0.11, 0.1], "metallic": 0.3, "roughness": 0.45},
+      {"name": "eye", "color": [1, 0.78, 0.15], "roughness": 0.3, "emissive": 0.6},
+      {"name": "joint", "color": [0.2, 0.2, 0.22], "metallic": 0.4, "roughness": 0.6},
+      {"name": "joint_light", "color": [0.55, 0.5, 0.42], "metallic": 0.4, "roughness": 0.6},
+      {"name": "metal", "color": [0.6, 0.6, 0.62], "metallic": 0.85, "roughness": 0.3}
+    ],
+    "hardware": {"female": "joint", "male": "joint_light", "metal": "metal"},
+    "iks": [
+      {"name": "leg", "tip": "foot"},
+      {"name": "head_aim", "tip": "head", "aim": true}
+    ],
+    "pose": {
+      "head.nod": [0, 0, 0.45],
+      "jaw.jaw": 0,
+      "l_arm.shoulder": [1.55, 0, 0.1],
+      "l_foot.toe": -0.2,
+      "l_forearm.elbow": -2.95,
+      "l_hand.wrist": 2.95,
+      "l_leg.weight": 1,
+      "l_tarsus.knee": 0.75,
+      "l_thigh.hip": -0.55,
+      "tail.tail": 0
+    },
+    "parts": [
+      {
+        "name": "head",
+        "joints": [
+          {"name": "nod", "kind": "BALL", "min": [-0.5, -0.7, -0.6], "max": [0.5, 0.7, 1]}
+        ],
+        "slots": [
+          {"name": "jaw", "position": [0, -0.46, -0.08], "normal": [0, 0, -1], "forward": [1, 0, 0]}
+        ],
+        "shapes": [
+          {"material": "white", "position": [0, -0.18, 0.04], "size": [0.52, 0.56, 0.48]},
+          {"material": "eye", "position": [0, -0.34, 0.12], "size": [0.54, 0.1, 0.07]},
+          {"material": "gold", "position": [0, -0.6, 0], "size": [0.2, 0.34, 0.16]},
+          {"material": "gold", "position": [0, -0.74, -0.08], "size": [0.16, 0.1, 0.2]}
+        ]
+      },
+      {
+        "name": "jaw",
+        "joints": [
+          {"name": "jaw", "size": 0.12, "reach": 0.2, "max": [0.7, 0, 0]}
+        ],
+        "shapes": [
+          {"material": "gold", "position": [0, -0.03, 0.12], "size": [0.16, 0.06, 0.24]}
+        ]
+      },
+      {
+        "name": "body",
+        "slots": [
+          {"name": "neck", "position": [0, 0.35, 1], "normal": [0, 0.5, 0.866], "forward": [1, 0, 0]},
+          {"name": "tail", "position": [0, 0.05, -1.55], "normal": [0, 0, -1], "forward": [1, 0, 0]},
+          {
+            "name": "wing",
+            "position": [0.6, 0.3, 0.2],
+            "normal": [1, 0, 0],
+            "forward": [0, 0, -1],
+            "mirror": "X"
+          },
+          {
+            "name": "hip",
+            "position": [0.32, -0.42, -0.1],
+            "normal": [0, -1, 0],
+            "forward": [1, 0, 0],
+            "mirror": "X"
+          }
+        ],
+        "shapes": [
+          {"primitive": "SPHERE", "material": "brown", "size": [1.3, 1.15, 2.1]},
+          {"primitive": "SPHERE", "material": "white", "position": [0, 0.1, 0.78], "size": [0.95, 0.8, 0.8]},
+          {
+            "primitive": "WEDGE",
+            "param": 0.8,
+            "material": "feather",
+            "position": [0, 0.12, -1.2],
+            "rotation": [0, 3.1415927, 0],
+            "size": [1, 0.5, 1.2]
+          },
+          {"material": "tip", "position": [0, 0.55, -0.1], "size": [0.8, 0.12, 1.2]}
+        ]
+      },
+      {
+        "name": "neck",
+        "length": 0.45,
+        "joints": [
+          {
+            "name": "neck",
+            "kind": "BALL",
+            "size": 0.34,
+            "min": [-0.7, -0.9, -0.5],
+            "max": [0.7, 0.9, 0.5]
+          }
+        ],
+        "shapes": [
+          {"primitive": "CYLINDER", "material": "white", "stretch": true, "size": [0.5, 0, 0.5]},
+          {"primitive": "SPHERE", "material": "brown", "position": [0, 0.1, 0], "size": [0.62, 0.3, 0.62]}
+        ]
+      },
+      {
+        "name": "tail",
+        "joints": [
+          {
+            "name": "tail",
+            "size": 0.3,
+            "reach": 0.3,
+            "min": [-0.9, 0, 0],
+            "max": [0.9, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "white", "position": [0, -0.9, 0], "size": [0.46, 1.8, 0.05]},
+          {
+            "material": "white",
+            "position": [0.26, -0.88, 0],
+            "rotation": [0, 0, 0.12],
+            "size": [0.42, 1.7, 0.05],
+            "mirror": "X"
+          },
+          {
+            "material": "white",
+            "position": [0.5, -0.82, 0],
+            "rotation": [0, 0, 0.26],
+            "size": [0.38, 1.55, 0.05],
+            "mirror": "X"
+          },
+          {"material": "feather", "position": [0, -0.2, 0.06], "size": [0.6, 0.4, 0.06]}
+        ]
+      },
+      {
+        "name": "arm",
+        "length": 0.9,
+        "joints": [
+          {
+            "name": "shoulder",
+            "kind": "BALL",
+            "size": 0.5,
+            "min": [-0.6, -0.7, -1.2],
+            "max": [1.9, 0.7, 1.3]
+          }
+        ],
+        "shapes": [
+          {"material": "brown", "stretch": true, "position": [0.05, 0, 0], "size": [0.55, 0, 0.2]},
+          {"material": "feather", "stretch": true, "position": [0.4, 0, 0], "size": [0.45, 0, 0.07]}
+        ]
+      },
+      {
+        "name": "forearm",
+        "length": 1.1,
+        "joints": [
+          {
+            "name": "elbow",
+            "size": 0.34,
+            "reach": 0.6,
+            "min": [-3, 0, 0],
+            "max": [0.1, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "brown", "stretch": true, "position": [-0.05, 0, 0], "size": [0.4, 0, 0.18]},
+          {"material": "feather", "stretch": true, "position": [0.45, 0, 0], "size": [0.85, 0, 0.06]},
+          {"material": "tip", "stretch": true, "position": [0.88, 0, 0], "size": [0.2, 0, 0.05]}
+        ]
+      },
+      {
+        "name": "hand",
+        "joints": [
+          {
+            "name": "wrist",
+            "size": 0.28,
+            "reach": 0.5,
+            "min": [-0.1, 0, 0],
+            "max": [3, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "feather", "position": [-0.15, -0.6, 0], "size": [0.26, 1.2, 0.05]},
+          {"material": "tip", "position": [0.1, -0.85, 0], "size": [0.26, 1.7, 0.05]},
+          {"material": "feather", "position": [0.35, -0.95, 0], "size": [0.26, 1.9, 0.05]},
+          {"material": "tip", "position": [0.6, -0.9, 0], "size": [0.26, 1.8, 0.05]},
+          {"material": "feather", "position": [0.85, -0.75, 0], "size": [0.26, 1.5, 0.05]},
+          {"material": "tip", "position": [1.1, -0.6, 0], "size": [0.26, 1.2, 0.05]},
+          {"material": "brown", "position": [-0.1, -0.45, 0], "size": [0.4, 0.9, 0.12]}
+        ]
+      },
+      {
+        "name": "thigh",
+        "length": 0.4,
+        "joints": [
+          {
+            "name": "hip",
+            "size": 0.3,
+            "reach": 0.4,
+            "min": [-1.4, 0, 0],
+            "max": [1.4, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "feather", "stretch": true, "position": [0, 0.05, 0], "size": [0.36, 0.2, 0.4]}
+        ]
+      },
+      {
+        "name": "tarsus",
+        "length": 0.42,
+        "joints": [
+          {
+            "name": "knee",
+            "size": 0.24,
+            "reach": 0.4,
+            "min": [-0.3, 0, 0],
+            "max": [2.2, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "gold", "stretch": true, "size": [0.16, 0.02, 0.18]}
+        ]
+      },
+      {
+        "name": "foot",
+        "joints": [
+          {
+            "name": "toe",
+            "size": 0.22,
+            "reach": 0.4,
+            "min": [-0.8, 0, 0],
+            "max": [1.2, 0, 0]
+          }
+        ],
+        "shapes": [
+          {"material": "gold", "position": [0, -0.08, 0.1], "size": [0.36, 0.1, 0.5]},
+          {"material": "horn", "position": [0, -0.09, 0.38], "size": [0.36, 0.08, 0.07]},
+          {"material": "horn", "position": [0, -0.09, -0.24], "size": [0.1, 0.08, 0.22]}
+        ]
+      }
+    ],
+    "assembly": [
+      {"name": "body", "part": "body"},
+      {"name": "neck", "part": "neck", "parent": "body", "parent_slot": "neck"},
+      {"name": "head", "part": "head", "parent": "neck"},
+      {"name": "jaw", "part": "jaw", "parent": "head", "parent_slot": "jaw"},
+      {"name": "tail", "part": "tail", "parent": "body", "parent_slot": "tail"},
+      {"name": "arm", "part": "arm", "parent": "body", "parent_slot": "wing"},
+      {
+        "name": "forearm",
+        "part": "forearm",
+        "parent": "arm",
+        "joints": [
+          {"name": "elbow", "twist": 1.5707964}
+        ]
+      },
+      {
+        "name": "hand",
+        "part": "hand",
+        "parent": "forearm",
+        "joints": [
+          {"name": "wrist"}
+        ]
+      },
+      {"name": "thigh", "part": "thigh", "parent": "body", "parent_slot": "hip"},
+      {"name": "tarsus", "part": "tarsus", "parent": "thigh"},
+      {"name": "foot", "part": "foot", "parent": "tarsus"}
+    ]
+  },
+  "animation": {
+    "poses": [
+      {
+        "name": "spread",
+        "by": {
+          "l_arm.shoulder": [-1.55, 0, -0.1],
+          "l_forearm.elbow": 2.95,
+          "l_hand.wrist": -2.95
+        }
+      },
+      {
+        "name": "tuck",
+        "by": {
+          "l_foot.toe": 0.9,
+          "l_leg.weight": -1,
+          "l_tarsus.knee": 0.6,
+          "l_thigh.hip": 1.6
+        }
+      }
+    ],
+    "clips": [
+      {
+        "name": "idle",
+        "duration": 4.8,
+        "motions": [
+          {
+            "shape": [
+              {"v": -1, "ease": "SETTLE"},
+              {"u": 0.1667, "v": -0.3333, "ease": "SETTLE"},
+              {"u": 0.3333, "v": 0.3333, "ease": "SETTLE"},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"},
+              {"u": 0.6667, "v": 0.3333, "ease": "SETTLE"},
+              {"u": 0.8333, "v": -0.3333, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "neck.neck": [0.55, 0, 0]
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"u": 0.45, "v": 1, "ease": "SETTLE"},
+              {"u": 0.6, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "tail.tail": 0.12
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "combat_idle",
+        "duration": 3.2,
+        "motions": [
+          {
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "head.nod": [0, 0, 0.25],
+                  "root": [0, -0.2, 0],
+                  "tail.tail": -0.25
+                },
+                "poses": {
+                  "spread": 0.55
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"v": 1, "ease": "SETTLE"},
+              {"u": 0.15, "ease": "SETTLE"},
+              {"u": 0.5, "v": -1, "ease": "SETTLE"},
+              {"u": 0.65, "ease": "SETTLE"}
+            ],
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": [0, 0, 0.14]
+                }
+              },
+              {
+                "by": {
+                  "jaw.jaw": 0.5
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "walk",
+        "duration": 2.4,
+        "motions": [
+          {
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "root": [0, 3.2, 0],
+                  "tail.tail": 0.2
+                },
+                "poses": {
+                  "spread": 1,
+                  "tuck": 1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"v": -1, "ease": "SETTLE"},
+              {"u": 0.2, "v": 1, "ease": "SETTLE"},
+              {"u": 0.55, "v": 0.3, "ease": "OUT"},
+              {"u": 0.8, "v": 0.3}
+            ],
+            "moves": [
+              {
+                "spread": 0.12,
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": [0, 0, 0.75],
+                  "l_forearm.elbow": 0.4,
+                  "l_hand.wrist": -0.4
+                }
+              },
+              {
+                "by": {
+                  "root": [0, 0.4, 0],
+                  "tail.tail": -0.3
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "duration": 1,
+        "motions": [
+          {
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "root": [0, 3.2, 0],
+                  "tail.tail": 0.2
+                },
+                "poses": {
+                  "spread": 1,
+                  "tuck": 1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {"v": -1, "ease": "SETTLE"},
+              {"u": 0.5, "v": 1, "ease": "SETTLE"}
+            ],
+            "rate": 2,
+            "moves": [
+              {
+                "spread": 0.1,
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": [0, 0, 0.9],
+                  "l_forearm.elbow": 0.45,
+                  "l_hand.wrist": -0.45
+                }
+              },
+              {
+                "by": {
+                  "root": [0, 0.5, 0],
+                  "tail.tail": -0.3
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "attack",
+        "duration": 2,
+        "motions": [
+          {
+            "shape": [
+              {},
+              {"u": 0.25, "v": 1, "ease": "OUT"},
+              {"u": 0.5, "v": 1},
+              {"u": 0.6, "ease": "IN"}
+            ],
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": [0, 0, -0.8],
+                  "root": [0, 1.6, -0.5],
+                  "tail.tail": 0.3
+                },
+                "poses": {
+                  "spread": 1
+                }
+              }
+            ]
+          },
+          {
+            "shape": [
+              {},
+              {"u": 0.5},
+              {"u": 0.7, "v": 1, "ease": "IN"},
+              {"u": 0.8, "v": 1, "ease": "SETTLE"},
+              {"u": 1, "ease": "OUT"}
+            ],
+            "moves": [
+              {
+                "by": {
+                  "head.nod": [0, 0, 0.3],
+                  "neck.neck": [0, 0, 0.3],
+                  "root": [0, -0.3, 2.6],
+                  "tail.tail": -0.4
+                }
+              },
+              {
+                "delay": 0.04,
+                "twin": "WITH",
+                "by": {
+                  "l_foot.toe": 0.6,
+                  "l_leg.weight": -1,
+                  "l_tarsus.knee": -0.7,
+                  "l_thigh.hip": -0.7
+                }
+              },
+              {
+                "delay": 0.06,
+                "by": {
+                  "jaw.jaw": 0.8
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cast",
+        "duration": 3,
+        "motions": [
+          {
+            "shape": [
+              {},
+              {"u": 0.2, "v": 1, "ease": "SETTLE"},
+              {"u": 0.8, "v": 1}
+            ],
+            "moves": [
+              {
+                "twin": "WITH",
+                "by": {
+                  "head.nod": [0, 0, -0.5],
+                  "jaw.jaw": 0.7,
+                  "neck.neck": [0, 0, -0.5],
+                  "root": [0, 0.5, 0],
+                  "tail.tail": -0.5
+                },
+                "poses": {
+                  "spread": 1
+                }
+              },
+              {
+                "twin": "WITH",
+                "by": {
+                  "l_arm.shoulder": [0, 0, -0.45]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

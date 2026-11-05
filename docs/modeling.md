@@ -195,8 +195,8 @@ The mech's shin body runs from its origin (the ankle) up to the knee, 0.06 longe
 | `BOX` | - |
 | `WEDGE` | a box whose top slopes down toward +z; `param` is how far the front top edge drops (0 = box, 1 = full wedge) |
 | `CYLINDER` | - |
-| `HALF_CYLINDER` | - (a 180° arc; turn it with `rotation`) |
-| `QUARTER_CYLINDER` | - (a 90° arc) |
+| `HALF_CYLINDER` | how far its top narrows (0 = cylinder, 1 = point); a 180° arc, turn it with `rotation` |
+| `QUARTER_CYLINDER` | as the half cylinder's; a 90° arc |
 | `CONE` | top radius / bottom radius (0 = point, 1 = cylinder), apex up |
 | `SPHERE` | - |
 
@@ -292,21 +292,54 @@ places the target once per side (`mech.model_ik_places`): the mech's one `leg`, 
 several children (a pelvis, a torso). A leg reaches from its thigh, an arm from its upper arm. The
 tip reaches with its **end** (`mech.ik_end`): as far along its last link, at rest, as its
 pieces and those hanging from it go, on that line: a foot's sole, not the ankle at its base. The
-tip's own joints (an ankle) don't reach. A foot (its end on the ground at rest) holds: its joints
-turn it to face the way their channels turned it in the model's space, so a planted foot stays as
-the clip angles it to the ground however the knee bends (as near as their stops allow: the
-solver weighs the foot's facing with its reach, and the reach wins). A tip off the ground keeps its own
-joints' turns. Its channels are named after it: `<name>` (a position), the point in the model's space as
+tip's own joints (an ankle) don't reach. A foot (its end on the ground at rest) meets the ground
+by the **contact** rules below; a tip off the ground keeps its own joints' turns. Its channels are
+named after it: `<name>` (a position), the point in the model's space as
 an **offset from where the end is at rest** (model units: 0 is the foot where it stands, so a
 target needs no placing), `<name>.swivel` (a turn, 0 by default: see the pole below), and
 `<name>.weight`, from 0 (the chain as its joints' channels put it) to 1 (reaching). The solver
 (mjolnir's `animation.ik_solve`) is damped least squares over every joint's turns at once, 16 steps
 from the pose the channels give: the end onto the target, the middle joint toward where the pole
-puts it and, for a foot, the foot facing as the clip angled it, weighed together; then a few
-steps with the facing let go settle the end and the middle exactly. Each step moves the joints
+puts it and, for a foot, the facing contact gives it, weighed together; then a few steps with the
+facing let go settle the end and the middle exactly. Each step moves the joints
 the least it can, each held in its range. The result is blended with the channels' motion by the
 weight, joint by joint. A target out of reach (past the stops, not only the chain's length) is
 reached for as near as the stops let: draw paths inside it. The mech's `l_leg` and `r_leg` reach each foot from its thigh.
+
+**Ground contact** (`src/mech/contact.odin`) places a foot before its leg reaches, by three rules
+measured from its pieces; clips only move its target, and nothing names a heel or a ball:
+
+1. **Its facing is exact.** The foot is placed first; its own joints turn it to that facing within
+   their stops, and the whole leg reaches with it held there (the hip turns what a hinged ankle
+   can't), the contact point exactly on the target. The leg is first swung whole toward the
+   target by the joints above its knee, its shape kept, so the solve starts from the way of
+   folding the target leads it to and never jumps to another as the target moves; and the foot's
+   own joints give last (the solver holds them stiff), so the leg turns the foot before the ankle
+   does and a leg reaching far back extends instead of folding its lower segments flat.
+2. **It keeps its rest angle to the leg.** It faces as its own joints' channels turn it on the
+   rest stance, swung as the line from the leg's root to the target swings from rest: a foot
+   reaching ahead tips its toes up, one under the body stands flat, one behind tips them down.
+3. **It rests on the ground.** It swings about its end only as far as no corner of it goes
+   through the ground: coming down ahead it lands on its heel, toes up, and the ground lays it flat
+   as the target comes down; planted, it stands flat, behind the body too: the share of the swing
+   that tips it toes down the ground stops as well, about the tips of its toes (the joints below it
+   as they hang), so a target lifting behind tips it up smoothly, heel first, toes last to leave.
+   Its heel lifts on the ground only as the leg runs out of reach: as the ankle nears the furthest
+   the leg reaches (measured once, the leg pulled out straight within its stops, a little at a time),
+   from a twentieth of the leg short of it but never nearer than it stands at rest, it rolls on the
+   edge toward the leg's root (behind the body its ball, ahead its heel), about that edge's line, as
+   little as keeps the ankle within reach, as far as the joints below it can turn back: the heel
+   peels up and the toes stay flat and firm. A leg pulled further (its rolls used up, or a reach that
+   way shorter than the furthest) pulls the foot off the ground, toes and all. A foot the leg can't
+   turn level (no joint of a strider's leg rolls its foot as the leg splays) stands on the edge it
+   ends on, lifted out of the ground, its toes out of it too as far as their stops let them lie
+   down. Joints below the foot (`toes` on a `ball` pin) lie flat on the ground as they near it, and
+   never go through it.
+
+A foot of two parts, a `foot` with the heel and a `toes` part on a pin at the front of its sole,
+rolls heel to toe; a one-part foot rolls as one, and a point foot (a spider's) hardly at all.
+Every piece the foot's bone carries counts as its sole, the toes' hinge lugs ahead of it too, so
+a foot rolling onto its ball never sinks its hinge into the ground.
 
 **IK is for contact and aim**: feet that must stay on the ground, heads that look. Arms, hands and
 guns are FK, their joints' turns between stops: a mech's arm has too few joints to chase a point
@@ -425,7 +458,8 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   (`src/mech_kit.odin`, seed 7). Same proportions and motion. Its torso's `arm` slot mirrors
   across its z and its pelvis's `thigh` slot across its x, so each limb is written once (18
   instances, 33 placed), and the thumb and fingers share their three segment parts
-  (`finger_1`..`finger_3`). Chains hang on the origin (each link has a length); a slot is named after the branch matched on it.
+  (`finger_1`..`finger_3`). Each foot is two parts, the `foot` (heel and sole) and its `toes` on
+  a `ball` pin at the sole's front. Chains hang on the origin (each link has a length); a slot is named after the branch matched on it.
 - `assets/characters/dragon.json`: mjolnir's dragon example (`examples/creative/dragon`), ported. The
   spine is a chain of ball joints (instances `segment_*`, `taper_*`, `tail`, each with
   channels, `segment_3.spine` a rotation and so on) placing a few shared parts (`segment`, `segment_limbs` with the limbs'
@@ -439,25 +473,32 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   with a different body. A wide hull on a ball waist, a visor `sensor` on a neck, a missile
   `rack` hinged on its back (`rack_pitch`), and arms that end in guns: the `cannon` part is the
   forearm, no hand. Each leg is four links, `thigh` (the mech's hip), `shin` (`knee`),
-  `hock` (`ankle`) and a broad, solid `foot` (`toe`); the rest pose's pin turns give its stance
+  `hock` (`ankle`) and a broad `foot` (`toe`) with three `toes`, the middle one big, on a `ball`
+  hinge with lugs (a `reach`) out of the sole's front face (its slot faces forward), so the two
+  halves of the foot are visibly pinned together; the rest pose's pin turns give its stance
   the zigzag (thigh back, shin forward, hock back, foot level), so the knees point backwards and
   their ranges keep them there. The hull's `arm` and the pelvis's `thigh` slots mirror, so each
   limb is written once.
-- `assets/characters/spider.json`: eight IK legs from four mirrored `leg_1`..`leg_4` slots on one
-  thorax, all sharing the `femur`, `tibia` and `tarsus` parts (each slot yawed differently). Each
-  leg is a BALL `hip`, a `knee` pin and a rigid bent foot; the abdomen and the head's neck are BALL
-  joints, the head aims by IK and the mirrored `fang`s slide out on LINEAR joints. One IK target per
-  leg pair (`leg_1`..`leg_4`).
-- `assets/characters/tiger.json`: a quadruped on IK paws (`fore_leg`, `hind_leg`). The spine is a BALL chain
-  chest, belly, pelvis; a four-segment BALL tail waves by spread moves. Forelegs hang from a mirrored
-  `shoulder` slot, nearly straight; hind legs from a mirrored `hip` slot, digitigrade (forward knee, backward
-  hock). The jaw is a pin, the head aims by IK, ears, eyes and stripes are mirrored shapes.
+- `assets/characters/spider.json`: eight IK legs from four mirrored `leg_1`..`leg_4` sockets on a low
+  box thorax, all sharing the `coxa`, `femur`, `tibia` and `tarsus` box parts. Each leg is hinges only: the
+  coxa's `swing` pin turns about the vertical (each socket faces out its own way), the femur's `lift` pin
+  is twisted across it, then the `knee` pin and the tarsus's `ankle` pin; a bare `roll` turntable on the
+  femur and `twist` on the tarsus give the IK its spare turn. The abdomen is a stack of discs graded to an
+  egg's profile on a BALL waist; the head's neck is a BALL, the head aims by IK and the mirrored `fang`s
+  are short teeth on bare pins (`bite`). One IK target per leg pair (`leg_1`..`leg_4`).
+- `assets/characters/tiger.json`: a boxy quadruped on IK paws (`fore_leg`, `hind_leg`). Two BALL joints
+  in the body: the chest (the root) to the pelvis (`waist`) and the neck; everything else is a pin. Legs
+  hang from mirrored slots facing down, so each pin turns about x and the leg works in its plane:
+  forelegs `shoulder`, `elbow`, `wrist`; hind legs `hip` (between bare `hip_top` and `hip_bottom`
+  turntables, so the feet stay planted while the waist sways), `knee`, `ankle` (digitigrade: forward
+  knee, backward hock) and `toe`. Each paw is a pad, a toe block and a claw strip on a sole plate. The
+  tail is a `lift` and `wag` pin pair, two `wag` pins and a `curl` pin at the tip. The head is a few
+  blocks (skull, cheeks, muzzle, ears) with a pinned jaw, and aims by IK.
 - `assets/characters/eagle.json`: a perched raptor. A BALL shoulder, elbow, wrist chain folds against
-  the body at rest and a `spread` pose opens it; the tail fans on a pin, the beak's jaw is a pin. Talons
-  hold the perch by IK and are drawn up (weight 0, a `tuck` pose) in flight.
-- `assets/characters/shark.json`: a limbless swimmer built on the dragon's pattern: the head is the
-  root, six BALL-jointed segments taper to a caudal fin, mirrored pectoral and pelvic fins are BALL
-  joints, the jaw is a pin with teeth. It hovers above the ground (a `root` lift) and has no IK.
+  the body at rest and a `spread` pose opens it; the tail fans on a pin. Short legs hang from slots under
+  the body on pins (`hip`, `knee`, `toe`), each foot one solid plate with a talon strip; they hold the
+  perch by IK and are swept back (weight 0, a `tuck` pose) in flight. The head is a block with a straight
+  beak ending in a downturned hook, the lower beak on a `jaw` pin.
 
 ## Not supported yet
 

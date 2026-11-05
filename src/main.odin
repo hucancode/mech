@@ -4,7 +4,7 @@
 //   drag   orbit the camera, scroll to zoom
 // The panel plays actions, loops one-shots, changes speed and cross-fade, scrubs or steps the
 // clip while paused, and swaps the model (the mech, the reverse-jointed strider, the dragon
-// ported from mjolnir's examples, a spider, a tiger, an eagle or a shark).
+// ported from mjolnir's examples, a spider, a tiger or an eagle).
 package main
 
 import "core:fmt"
@@ -53,7 +53,6 @@ ASSETS := [?]struct {
   {"spider", "assets/characters/spider.json"},
   {"tiger", "assets/characters/tiger.json"},
   {"eagle", "assets/characters/eagle.json"},
-  {"shark", "assets/characters/shark.json"},
 }
 
 App :: struct {

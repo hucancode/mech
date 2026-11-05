@@ -49,9 +49,15 @@ RigDrive :: struct {
 }
 
 // RigIk: the chain's bones are chains[first:][:count], root first, down to the tip's own; IK reaches
-// with the first `turning`; when it `holds` (its end stands on the ground at rest: a foot), it turns
-// the tip's own joints (an ankle) only to hold the tip facing as its channels turned it, in the
-// model's space; otherwise (a hand, a gun) they keep their channels' turns. `tip` is the instance that reaches, with
+// with the first `turning`; when it `holds` (its end stands on the ground at rest: a foot), it meets
+// the ground by the contact rules (contact.odin): `end` and `pivot` are where it reaches with and
+// its first own joint, in its tip bone's frame, `reach` the way from its root to its end at rest,
+// `face` its tip bone's facing then and `own` its own joints' turns, `toes` the way from its pivot
+// to the joints below it (its frame; 0 for none), `roll` how far it rolls on an edge at most,
+// `stretch` how far from its root its pivot is when its heel starts to lift and the furthest it reaches,
+// rig.corners[corners_first:][:corners_count] its own pieces' corners and
+// rig.conforms[conform_first:][:conform_count] the joints below it lying on the ground; otherwise
+// (a hand, a gun) the tip's own joints keep their channels' turns. `tip` is the instance that reaches, with
 // its end (`point`, in its frame: ik_point); `channel` is the first of its values (IK_VALUES),
 // its target an offset from `rest`, where that end is at rest (in the frame node's space, lifted). `mid` is the chain's
 // middle joint (animation.ik_chain_middle; 0 for none), which bends toward a pole (ik_pole): `bend` is the way
@@ -67,6 +73,12 @@ RigIk :: struct {
   rest, bend, look, line:     [3]f32,
   point:                      [3]f32,
   length:                     f32,
+  end, pivot, reach, toes:    [3]f32,
+  face, own:                  quaternion128,
+  roll:                       f32,
+  stretch:                    [2]f32,
+  corners_first, corners_count: int,
+  conform_first, conform_count: int,
 }
 
 // Rig: per bone, its skeleton (parents first, as mjolnir's animation.Pose reads it: `parents`,
@@ -94,6 +106,8 @@ Rig :: struct {
   drives:    [dynamic]RigDrive,
   iks:       [dynamic]RigIk,
   chains:    [dynamic]u32,
+  corners:   [dynamic][3]f32, // contact corners (RigIk, RigConform), in their bones' frames
+  conforms:  [dynamic]RigConform,
   lift:      f32,
 }
 
@@ -232,6 +246,7 @@ rig_create :: proc(lib: ^Library, w: ^world.World, r: ^render.Renderer, m: ^Mode
     ik.rest.y += rig.lift
     // a foot: its end stands on the ground at rest
     ik.holds = !ik.aim && m.ground && abs(ik.rest.y) < 0.05 * ik.length
+    if ik.holds do contact_measure(rig, &ik)
   }
   rig_pose(w, rig, rest)
   return rig, true
@@ -258,6 +273,8 @@ rig_destroy :: proc(rig: ^Rig, w: ^world.World) {
   delete(rig.drives)
   delete(rig.iks)
   delete(rig.chains)
+  delete(rig.corners)
+  delete(rig.conforms)
   free(rig)
 }
 
@@ -312,6 +329,8 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     if ik.aim {
       // the tip looks from its frame's origin
       animation.aim_solve(pose, chain, linalg.mul(place.rotation, ik.look), place.position, target)
+    } else if ik.holds && ik.turning < ik.count {
+      contact_solve(rig, ik, target, c[IK_SWIVEL], origin)
     } else {
       animation.ik_solve(pose, chain, {
         target      = target,
@@ -320,7 +339,6 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
         iterations  = 16,
         end         = geometry.transform_point(place, ik.point),
         ends        = u32(ik.count - ik.turning),
-        hold        = ik.holds,
         middle      = ik.mid,
       })
     }
@@ -328,6 +346,7 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     slice.fill(moved, false)
     for b in chain do moved[b] = true
     animation.pose_propagate(pose, moved)
+    if ik.holds do contact_conform(rig, ik)
   }
 }
 

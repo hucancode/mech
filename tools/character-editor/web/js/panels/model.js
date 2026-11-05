@@ -210,8 +210,8 @@ function shapeSection(part) {
   return section(picked.length > 1 ? `Shapes (${picked.length})` : "Shape", [
     picked.length > 1 && h("div", { class: "muted", style: { padding: "0 0 4px" } }, `${picked.length} shapes: primitive, material, turns and moving apply to all; the rest to this one`),
     row("primitive", select({ value: shape.primitive ?? "BOX", options: enumNames("Primitive"), onchange: (v) => setAll((s) => (s.primitive = v)) })),
-    (shape.primitive === "WEDGE" || shape.primitive === "CONE") &&
-      row(shape.primitive === "WEDGE" ? "taper" : "top radius", slider({ value: shape.param, min: 0, max: 1, onchange: (v) => setShape((s) => (s.param = v), "param") })),
+    shape.primitive !== "BOX" && shape.primitive !== "CYLINDER" && shape.primitive !== "SPHERE" &&
+      row(shape.primitive === "CONE" ? "top radius" : "taper", slider({ value: shape.param, min: 0, max: 1, onchange: (v) => setShape((s) => (s.param = v), "param") })),
     row("material", select({ value: shape.material, options: names, onchange: (v) => setAll((s) => (s.material = v)) })),
     row(
       "mirror",

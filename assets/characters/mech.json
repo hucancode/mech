@@ -303,17 +303,11 @@
             "max": [1.25, 0, 0]
           }
         ],
+        "slots": [
+          {"name": "toes", "position": [0, -0.15, -0.12], "normal": [0, -1, 0], "forward": [1, 0, 0]}
+        ],
         "shapes": [
           {"material": "shell", "position": [0, -0.12, 0], "rotation": [-3.14159, 0, -3.14159], "size": [0.32, 0.2, 0.24]},
-          {
-            "primitive": "WEDGE",
-            "param": 0.55,
-            "material": "shell",
-            "position": [0, -0.12, -0.27],
-            "rotation": [-3.14159, 0, -3.14159],
-            "size": [0.32, 0.2, 0.3]
-          },
-          {"material": "dark", "position": [0, -0.175, -0.52], "rotation": [-3.14159, 0, -3.14159], "size": [0.2944, 0.09, 0.2]},
           {"material": "shell", "position": [0, -0.12, 0.19], "rotation": [-3.14159, 0, -3.14159], "size": [0.32, 0.2, 0.14]},
           {
             "primitive": "WEDGE",
@@ -323,6 +317,23 @@
             "rotation": [0, -1e-05, 0],
             "size": [0.32, 0.2, 0.14]
           }
+        ]
+      },
+      {
+        "name": "toes",
+        "joints": [
+          {"name": "ball", "size": 0.15, "min": [-0.6, 0, 0], "max": [0.6, 0, 0]}
+        ],
+        "shapes": [
+          {
+            "primitive": "WEDGE",
+            "param": 0.55,
+            "material": "shell",
+            "position": [0, 0.03, -0.15],
+            "rotation": [-3.14159, 0, -3.14159],
+            "size": [0.32, 0.2, 0.3]
+          },
+          {"material": "dark", "position": [0, -0.025, -0.4], "rotation": [-3.14159, 0, -3.14159], "size": [0.2944, 0.09, 0.2]}
         ]
       }
     ],
@@ -365,7 +376,8 @@
           {"name": "knee", "twist": -1.5707963}
         ]
       },
-      {"name": "foot", "part": "foot", "parent": "shin"}
+      {"name": "foot", "part": "foot", "parent": "shin"},
+      {"name": "toes", "part": "toes", "parent": "foot", "parent_slot": "toes"}
     ]
   },
   "animation": {
@@ -519,7 +531,7 @@
                   "head.neck": [-0.0262, 0, 0],
                   "l_arm.shoulder_top": -0.0698,
                   "l_forearm.elbow": 0.2442,
-                  "root": [0, -0.06, 0],
+                  "root": [0, -0.1, 0],
                   "torso.waist": [0.0524, 0, 0]
                 },
                 "poses": {
@@ -612,7 +624,7 @@
           {
             "shape": [
               {},
-              {"u": 0.35, "v": 0.3333},
+              {"u": 0.55, "v": 0.3333},
               {"u": 1, "v": 1}
             ],
             "moves": [
@@ -657,7 +669,18 @@
                   "l_arm.shoulder_top": -0.55,
                   "l_forearm.elbow": -0.2
                 }
-              },
+              }
+            ]
+          },
+          {
+            "shape": [
+              {},
+              {"u": 0.25, "v": 1, "ease": "OUT"},
+              {"u": 0.5, "ease": "IN"},
+              {"u": 0.75, "v": -1, "ease": "OUT"},
+              {"u": 1, "ease": "IN"}
+            ],
+            "moves": [
               {
                 "spread": 0.1,
                 "by": {
