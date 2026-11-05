@@ -340,12 +340,15 @@ Channel :: struct {
 
 // A pose holds every channel's values (model_channel_table), one channel after another:
 //   - each placed IK target's (model_ik_places): `<ik>` its target (POSITION), `<ik>.swivel` (HINGE), `<ik>.weight` (WEIGHT),
-//     IK_VALUES in all
+//     then its trail (IK_TRAIL: how far behind its target a foot's links' are, the ball's then
+//     the toes', IK_LINKS of 3 values, model units; 0 for none, a pose no clip moves): no channel,
+//     nothing keys it; clip_sample writes it for every clip, and a foot's ball and toes follow its
+//     heel by it (ground contact). IK_VALUES in all
 //   - the root's: `root` (POSITION), `root.turn` (BALL), ROOT_VALUES in all
 //   - each joint's, in the order of the places (model_places): `<place>.<joint>`, shaped as its
 //     kind (JOINT_CHANNEL). A reflected side turns the mirrored way, so twins take the same values.
 // Clips key them all by name alike, a value shaped as the channel is (Value).
-IK_VALUES :: 5
+IK_VALUES :: 11
 // the names of an IK target's channels after its own (`l_leg.swivel`, `l_leg.weight`), and the root's
 IK_SWIVEL_NAME :: ".swivel"
 IK_WEIGHT_NAME :: ".weight"
@@ -353,6 +356,8 @@ ROOT_NAME :: "root"
 ROOT_TURN_NAME :: "root.turn"
 IK_SWIVEL :: 3 // after its target's x, y, z
 IK_WEIGHT :: 4
+IK_TRAIL :: 5 // x, y, z per link
+IK_LINKS :: 2 // the ball, the toes
 ROOT_VALUES :: 6
 
 // model_channel_table lists `m`'s channels, in the order a pose holds them; names are allocated

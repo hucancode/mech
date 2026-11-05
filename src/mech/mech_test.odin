@@ -254,21 +254,21 @@ test_channels :: proc(t: ^testing.T) {
     delete(m.parts)
     delete(m.assembly)
   }
-  // 5 + 5 IK, 6 root, then 2 instances of 3 + 1 values
-  testing.expect(t, model_channels(&m) == 10 + 6 + 8)
+  // 11 + 11 IK (target, swivel, weight, then its trail: no channel), 6 root, then 2 instances of 3 + 1 values
+  testing.expect(t, model_channels(&m) == 22 + 6 + 8)
   want := []Channel {
     {"leg", .POSITION, 0},
     {"leg.swivel", .HINGE, 3},
     {"leg.weight", .WEIGHT, 4},
-    {"arm", .POSITION, 5},
-    {"arm.swivel", .HINGE, 8},
-    {"arm.weight", .WEIGHT, 9},
-    {"root", .POSITION, 10},
-    {"root.turn", .BALL, 13},
-    {"l_leg.hip", .BALL, 16},
-    {"l_leg.knee", .HINGE, 19},
-    {"r_leg.hip", .BALL, 20},
-    {"r_leg.knee", .HINGE, 23},
+    {"arm", .POSITION, 11},
+    {"arm.swivel", .HINGE, 14},
+    {"arm.weight", .WEIGHT, 15},
+    {"root", .POSITION, 22},
+    {"root.turn", .BALL, 25},
+    {"l_leg.hip", .BALL, 28},
+    {"l_leg.knee", .HINGE, 31},
+    {"r_leg.hip", .BALL, 32},
+    {"r_leg.knee", .HINGE, 35},
   }
   table := model_channel_table(&m)
   testing.expectf(t, slice.equal(table, want), "the channels: %v", table)
@@ -276,7 +276,7 @@ test_channels :: proc(t: ^testing.T) {
     c, ok := model_channel(&m, w.name)
     testing.expectf(t, ok && c == w, "%s: %v", w.name, c)
   }
-  testing.expect(t, value_name(&m, 15) == "root.turn[2]" && value_name(&m, 19) == "l_leg.knee")
+  testing.expect(t, value_name(&m, 27) == "root.turn[2]" && value_name(&m, 31) == "l_leg.knee" && value_name(&m, 5) == "?")
   for name in ([]string{"b", "leg_x", "leg.x", "l_leg.hip.x", "l_leg.knee.x", "l_leg", "l_leg.", "root_turn"}) {
     _, ok := model_channel(&m, name)
     testing.expectf(t, !ok, "%s is no channel", name)
@@ -398,7 +398,8 @@ test_motion_walks :: proc(t: ^testing.T) {
   values := make([]f32, model_channels(m))
   defer delete(values)
   // the foot: where its target is (the clip's), and how high its lowest corner stands (the rig's:
-  // it rolls on its heel and ball, but stays on the ground)
+  // it rolls on its heel and ball, just landed still tipped up on its heel as its toes follow
+  // through, but stays on the ground)
   foot := 0
   rest := rig.iks[foot].rest
   at :: proc(c: ^Clips, rig: ^Rig, values: []f32, foot: int, t: f32) -> (target: [3]f32, low: f32) {
@@ -412,7 +413,7 @@ test_motion_walks :: proc(t: ^testing.T) {
   a0, l0 := at(&clips, rig, values, foot, 0.1)
   a1, l1 := at(&clips, rig, values, foot, 0.3)
   a2, l2 := at(&clips, rig, values, foot, 0.5)
-  for p, k in ([][3]f32{a0, a1, a2}) do testing.expectf(t, abs(p.y - rest.y) < 0.02 && abs(p.x - rest.x) < 0.02 && abs(([]f32{l0, l1, l2})[k]) < 0.02, "the stance foot stays on the ground: %v, rest %v, lowest %v", p, rest, ([]f32{l0, l1, l2})[k])
+  for p, k in ([][3]f32{a0, a1, a2}) do testing.expectf(t, abs(p.y - rest.y) < 0.02 && abs(p.x - rest.x) < 0.02 && abs(([]f32{l0, l1, l2})[k]) < 0.03, "the stance foot stays on the ground: %v, rest %v, lowest %v", p, rest, ([]f32{l0, l1, l2})[k])
   testing.expectf(t, abs((a0.z - a1.z) - (a1.z - a2.z)) < 0.02 && abs(a0.z - a2.z - 1.0 / 0.6 * 0.4) < 0.03, "and slides straight back at a steady speed: %v %v %v", a0.z, a1.z, a2.z)
   swing, _ := at(&clips, rig, values, foot, 0.8)
   testing.expectf(t, swing.y > rest.y + 0.3, "the swinging foot lifts: %v", swing.y)
@@ -1401,4 +1402,46 @@ test_ground_contact :: proc(t: ^testing.T) {
       testing.expectf(t, rolls, "%s %s pushed back past its reach stands on its toes, heel up", name, foot)
     }
   }
+}
+
+// Every clip's feet follow through: clip_sample writes, per IK target, how far behind it its ball's
+// and its toes' targets are (IK_TRAIL, where it was through the FOLLOW before, and the FOLLOW before
+// that), and the foot follows: strider's run and walk both pitch their feet differently than with
+// no trail (a still pose's), rising heel first and landing heel first.
+@(test)
+test_toes_follow :: proc(t: ^testing.T) {
+  text := read(t, "strider.json")
+  defer delete(text)
+  m, a, ok := character_parse(text)
+  if !testing.expect(t, ok) do return
+  defer model_destroy(m)
+  defer animation_destroy(a)
+  w: world.World
+  world.init(&w, 4096)
+  defer world.shutdown(&w)
+  lib: Library
+  rig, _ := rig_create(&lib, &w, nil, m, w.root)
+  defer rig_destroy(rig, &w)
+  clips := clips_build(a, m)
+  defer clips_destroy(&clips)
+  values := make([]f32, model_channels(m))
+  defer delete(values)
+  ik := rig.iks[0]
+  tip := int(rig.chains[ik.first + ik.count - 1])
+  for name in ([]string{"run", "walk"}) {
+    clip := clips_find(&clips, name)
+    most: f32 = 0
+    for k in 0 ..< 48 {
+      clip_sample(&clips, clip, clips.clips[clip].duration * f32(k) / 48, values)
+      rig_solve(rig, values)
+      with := rig.rotations[tip]
+      for n in 0 ..< 3 * IK_LINKS do values[ik.channel + IK_TRAIL + n] = 0
+      rig_solve(rig, values)
+      most = max(most, 2 * math.acos(min(abs(linalg.dot(with, rig.rotations[tip])), 1)))
+    }
+    testing.expectf(t, most > 0.1, "%s: the foot follows its trail, by %v radians at most", name, most)
+  }
+  // a pose no clip moves has none
+  copy(values, clips.pose[:])
+  for n in 0 ..< 3 * IK_LINKS do testing.expect(t, values[ik.channel + IK_TRAIL + n] == 0)
 }

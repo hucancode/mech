@@ -13,7 +13,11 @@ import "../mjolnir/geometry"
 //   2. It keeps its rest angle to the limb: the facing its channels give it (the rest pose, plus
 //      any turns a clip writes on its own joints), swung as the line from the chain's root to the
 //      target swings from where it was at rest. A leg reaching ahead tips its toes up, one under
-//      the body stands flat, one behind tips them down.
+//      the body stands flat, one behind tips them down. Its ball and toes follow its heel on
+//      the ground, in every clip (IK_TRAIL, clip_sample): its ball stands as high as its target
+//      stood the FOLLOW before, its toes turn as it turned the FOLLOW before that, so rising its
+//      heel lifts first and its toes stay flat, landing its heel comes down first and its ball, then
+//      its toes, still up, come down after it (contact_solve). A still pose has no trail.
 //   3. It rests on the ground: tipped about the corner of its own pieces it then stands on (its
 //      lowest), so nothing of it goes through the ground and, ahead, it lands on its heel and the
 //      ground lays it flat; behind it stands flat too (tipping toes down, about its toes' tips, only
@@ -95,6 +99,16 @@ contact_measure :: proc(rig: ^Rig, ik: ^RigIk) {
   ik.conform_count = len(rig.conforms) - ik.conform_first
   for cf in rig.conforms[ik.conform_first:][:ik.conform_count] do ik.toes += into(rig, tip, rig.positions[cf.bone]) - ik.pivot
   ik.toes = linalg.normalize0(ik.toes)
+  // how far ahead of its heel (its corner furthest back, level) its first joint below it (the ball)
+  // is: the lever its ball follows its heel on
+  if ik.conform_count > 0 {
+    ball := rig.positions[rig.conforms[ik.conform_first].bone]
+    if way := linalg.mul(rig.rotations[tip], ik.toes); way.xz != 0 {
+      way.y = 0
+      way = linalg.normalize(way)
+      for c in rig.corners[ik.corners_first:][:ik.corners_count] do ik.span = max(ik.span, linalg.dot(ball - (rig.positions[tip] + linalg.mul(rig.rotations[tip], c)), way))
+    }
+  }
   // the furthest its chain reaches from its root to its pivot, within its stops: pulled out the way
   // it reaches at rest a little at a time, each pull from the last, so it unfolds the way it folds
   // (then put back as it was)
@@ -128,10 +142,12 @@ contact_measure :: proc(rig: ^Rig, ik: ^RigIk) {
   }
 }
 
-// contact_solve poses IK `ik`'s chain for `target` (where its end goes, in the frame node's space)
+// contact_solve poses IK `ik`'s chain for `target` (where its end goes, in the frame node's space;
+// its ball's and its toes' trailing it by `trail` and `toes_trail`); `toes` is how far up its toes
+// stand from lying on the ground, following (contact_conform)
 // by the contact rules above: its pose (rig_skeleton) composed by the drives.
 @(private)
-contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin: geometry.Transform) {
+contact_solve :: proc(rig: ^Rig, ik: RigIk, target, trail, toes_trail: [3]f32, swivel: f32, origin: geometry.Transform) -> (toes: f32) {
   chain := rig.chains[ik.first:][:ik.count]
   tip := int(chain[ik.count - 1])
   pivot := int(chain[ik.turning])
@@ -163,6 +179,34 @@ contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin:
   to := linalg.normalize0(target - rig.positions[chain[0]])
   swing := linalg.QUATERNIONF32_IDENTITY
   if to != 0 && linalg.dot(from, to) > -0.99 do swing = linalg.quaternion_between_two_vector3(from, to)
+  // its toes follow its heel on the ground (`trail`, how far behind its target theirs is): they
+  // stand as high over its end as its target stood the FOLLOW before, so rising its heel lifts first
+  // and its toes stay down, and coming down it lands on its heel, toes still up, that roll down
+  // after it. Its pitch (the swing's turn about its side) is then that, not the limb's, no further
+  // than it rolls (past that its toes let go and follow), and the ground does not lay it flat: it
+  // stands on whichever of its corners is down, heel or ball (below). It follows as its heel or its
+  // toes near the ground, wholly on it, not at all once both stand as high as its toes can stay
+  // down for (rolled as far as it rolls); in the air it keeps the limb's.
+  follows := false
+  if way := linalg.mul(facing, ik.toes); way.xz != 0 && trail != 0 && ik.span > 0 {
+    way.y = 0
+    side := linalg.normalize(linalg.cross([3]f32{0, 1, 0}, way))
+    if swing.w < 0 do swing = -swing
+    limb := 2 * math.atan2(linalg.dot([3]f32{swing.x, swing.y, swing.z}, side), swing.w)
+    follow := clamp(math.atan2(-trail.y, ik.span), -ik.roll, ik.roll)
+    low := min(target.y, target.y + trail.y) - ik.rest.y
+    k := clamp(1 - low / (ik.span * math.sin(min(ik.roll, math.PI / 4))), 0, 1)
+    if k > 0 {
+      // its toes, a link further on, turn as it turned the FOLLOW before (a tail's next link): up
+      // from level by its pitch then, its ball's target over its toes', so landing they still point
+      // up once its ball is down, and settle after
+      toes = k * k * (3 - 2 * k) * clamp(math.atan2((toes_trail - trail).y, ik.span), -ik.roll, ik.roll)
+      // (from what the limb gives it unfollowed: toes down no further than it rolls, below)
+      pitch := math.lerp(min(limb, ik.roll), follow, k * k * (3 - 2 * k))
+      swing = linalg.quaternion_angle_axis(pitch, side) * swing * linalg.quaternion_inverse(linalg.quaternion_angle_axis(limb, side))
+      follows = true
+    }
+  }
   x := geometry.Transform{target - linalg.mul(facing, ik.end), facing, 1}
   // 3. swung about its end, as far as the ground lets it: coming down ahead it lands on its heel
   // and the ground lays it flat as the target comes down; on the ground it stands flat
@@ -177,7 +221,7 @@ contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin:
   // it tips about the tips of its toes) and no further than it rolls: on the ground behind it stands
   // flat (its heel lifts only as the limb runs out of reach, below), lifted it tips as its height
   // lets it, so it tips smoothly as it leaves the ground
-  if way := linalg.mul(x.rotation, ik.toes); ik.toes != 0 && way.xz != 0 {
+  if way := linalg.mul(x.rotation, ik.toes); ik.toes != 0 && way.xz != 0 && !follows {
     way.y = 0
     axis := linalg.normalize(linalg.cross([3]f32{0, 1, 0}, way))
     if swing.w < 0 do swing = -swing
@@ -200,7 +244,7 @@ contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin:
       x = turn_about(x, at, linalg.quaternion_angle_axis(rolled, axis))
     }
   }
-  if lowest(turn_about(x, at, swing), corners) < 0 {
+  if !follows && lowest(turn_about(x, at, swing), corners) < 0 {
     in_, out := f32(0), f32(1)
     for _ in 0 ..< 20 {
       mid := (in_ + out) / 2
@@ -210,6 +254,8 @@ contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin:
     swing = linalg.quaternion_slerp(linalg.QUATERNIONF32_IDENTITY, swing, in_)
   }
   x = turn_about(x, at, swing)
+  // following, it stands on the corner that is down, lifted out of the ground on it
+  if follows do x.position.y += max(-lowest(x, corners), 0)
   // and back down as far as the ground lets it
   x.position.y -= clamp(lowest(x, corners), 0, lift)
   // near the furthest its chain reaches (ik.stretch, from its root to its pivot), on the ground: it
@@ -254,6 +300,7 @@ contact_solve :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin:
     h.at.y -= low
     contact_hold(rig, ik, pose, h, swivel, origin, 8)
   }
+  return
 }
 
 // conform_lowest is how high IK `ik`'s joints below its tip (toes) would stand at the lowest, laid on
@@ -319,7 +366,7 @@ contact_hold :: proc(rig: ^Rig, ik: RigIk, pose: animation.Pose, h: Holding, swi
 // contact_conform lays IK `ik`'s joints below its tip (toes) on the ground as they near it, and
 // keeps them out of it, within their stops; the bones below each follow.
 @(private)
-contact_conform :: proc(rig: ^Rig, ik: RigIk) {
+contact_conform :: proc(rig: ^Rig, ik: RigIk, up: f32 = 0) {
   pose := rig_skeleton(rig)
   moved := make([]bool, len(rig.bones), context.temp_allocator)
   for cf in rig.conforms[ik.conform_first:][:ik.conform_count] {
@@ -332,6 +379,17 @@ contact_conform :: proc(rig: ^Rig, ik: RigIk) {
       c := (^Conforming)(data)
       return linalg.mul(conform_turn(c^, a), c.cf.down).y
     })
+    // following, the first of them stands `up` from level (tips up): turned the way that lifts its
+    // corner furthest out
+    if up != 0 && cf.bone == rig.conforms[ik.conform_first].bone {
+      far := cf.first
+      for k in cf.first ..< cf.first + cf.count do if linalg.length(rig.corners[k]) > linalg.length(rig.corners[far]) do far = k
+      tip :: proc(c: Conforming, a: f32, corner: [3]f32) -> f32 {
+        return linalg.mul(conform_turn(c, a), corner).y
+      }
+      way: f32 = 1 if tip(c, level + 0.01, rig.corners[far]) > tip(c, level - 0.01, rig.corners[far]) else -1
+      level = clamp(level + way * up, lo, hi)
+    }
     a := math.lerp(now, level, clamp(1 - conform_low(c, level) / cf.height, 0, 1))
     // never through the ground: the least turn that lifts it out, toward either stop
     if conform_low(c, a) < 0 {

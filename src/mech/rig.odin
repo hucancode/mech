@@ -53,7 +53,8 @@ RigDrive :: struct {
 // the ground by the contact rules (contact.odin): `end` and `pivot` are where it reaches with and
 // its first own joint, in its tip bone's frame, `reach` the way from its root to its end at rest,
 // `face` its tip bone's facing then and `own` its own joints' turns, `toes` the way from its pivot
-// to the joints below it (its frame; 0 for none), `roll` how far it rolls on an edge at most,
+// to the joints below it (its frame; 0 for none), `span` how far ahead of its end the first of
+// those is (level, at rest), `roll` how far it rolls on an edge at most,
 // `stretch` how far from its root its pivot is when its heel starts to lift and the furthest it reaches,
 // rig.corners[corners_first:][:corners_count] its own pieces' corners and
 // rig.conforms[conform_first:][:conform_count] the joints below it lying on the ground; otherwise
@@ -75,7 +76,7 @@ RigIk :: struct {
   length:                     f32,
   end, pivot, reach, toes:    [3]f32,
   face, own:                  quaternion128,
-  roll:                       f32,
+  roll, span:                 f32,
   stretch:                    [2]f32,
   corners_first, corners_count: int,
   conform_first, conform_count: int,
@@ -325,12 +326,13 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
       for b, k in chain do positions[k], rotations[k] = rig.positions[b], rig.rotations[b]
     }
     target := ik.rest + {c[0], c[1], c[2]}
+    toes: f32 // how far up its toes stand, following (contact_solve)
     place := rig.frames[ik.tip].place
     if ik.aim {
       // the tip looks from its frame's origin
       animation.aim_solve(pose, chain, linalg.mul(place.rotation, ik.look), place.position, target)
     } else if ik.holds && ik.turning < ik.count {
-      contact_solve(rig, ik, target, c[IK_SWIVEL], origin)
+      toes = contact_solve(rig, ik, target, {c[IK_TRAIL], c[IK_TRAIL + 1], c[IK_TRAIL + 2]}, {c[IK_TRAIL + 3], c[IK_TRAIL + 4], c[IK_TRAIL + 5]}, c[IK_SWIVEL], origin)
     } else {
       animation.ik_solve(pose, chain, {
         target      = target,
@@ -346,7 +348,7 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     slice.fill(moved, false)
     for b in chain do moved[b] = true
     animation.pose_propagate(pose, moved)
-    if ik.holds do contact_conform(rig, ik)
+    if ik.holds do contact_conform(rig, ik, toes)
   }
 }
 

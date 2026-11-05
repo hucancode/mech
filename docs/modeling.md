@@ -319,6 +319,16 @@ measured from its pieces; clips only move its target, and nothing names a heel o
 2. **It keeps its rest angle to the leg.** It faces as its own joints' channels turn it on the
    rest stance, swung as the line from the leg's root to the target swings from rest: a foot
    reaching ahead tips its toes up, one under the body stands flat, one behind tips them down.
+   Its ball and toes follow its heel on the ground, in every clip, as a tail's links follow
+   each other: clip_sample writes, per foot, where its target was through the follow-through
+   before (`FOLLOW`, a tenth of the clip's cycle) and the one before that, on average (a pose's
+   IK_TRAIL, keyed by nothing). The ball stands as high as the first, so as the heel rises the
+   toes stay flat on the ground (the foot rolling on its ball, as far as its toes can turn back)
+   before they follow it up; the toes turn as the foot turned the follow-through before, so as the
+   heel lands the foot lays down heel to ball while the toes still point up, settling after. Near
+   the ground the foot stands on whichever corner is down, heel or ball; once heel and ball stand
+   higher than its heel rolled on its ball (an eighth of a turn at most), the leg's pitch holds
+   again. A still pose has no trail: its feet keep the leg's pitch.
 3. **It rests on the ground.** It swings about its end only as far as no corner of it goes
    through the ground: coming down ahead it lands on its heel, toes up, and the ground lays it flat
    as the target comes down; planted, it stands flat, behind the body too: the share of the swing

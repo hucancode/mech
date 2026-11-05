@@ -248,9 +248,11 @@ ease :: proc(e: Ease, t: f32) -> f32 {
 }
 
 // Clips is an Animation compiled against a Model: names resolved to channel indices, on the
-// model's rest pose (`pose`, one value per channel). Rebuild it when either changes.
+// model's rest pose (`pose`, one value per channel); `iks` the placed IK targets (ik_count), whose
+// toes' trails clip_sample writes. Rebuild it when either changes.
 Clips :: struct {
   values:  int,
+  iks:     int,
   pose:    [dynamic]f32,
   clips:   [dynamic]ClipData,
 }
@@ -437,6 +439,7 @@ model_pose :: proc(m: ^Model, allocator := context.allocator) -> []f32 {
 
 clips_build :: proc(a: ^Animation, m: ^Model) -> (c: Clips) {
   c.values = model_channels(m)
+  c.iks = ik_count(m)
   pose := model_pose(m, context.temp_allocator)
   cs := channels_make(m)
   append(&c.pose, ..pose)
@@ -482,13 +485,49 @@ clip_duration :: proc(c: ^Clips, clip: int) -> f32 {
 }
 
 // clip_sample writes clip `clip` at `t` seconds into `out` (one value per channel): the rest
-// pose, then each motion adding its own. A clip index out of range gives the rest pose.
+// pose, then each motion adding its own; then each IK target's trail (IK_TRAIL), how far behind it
+// a foot's links follow it (clip_trail). A clip index out of range gives the rest pose.
 clip_sample :: proc(c: ^Clips, clip: int, t: f32, out: []f32) {
   copy(out, c.pose[:])
   if clip < 0 || clip >= len(c.clips) do return
   data := &c.clips[clip]
   x := t / data.duration if data.duration > 0 else 0
   for &mo in data.motions do motion_apply(&mo, x, out)
+  clip_trail(c, data, x, out)
+}
+
+// FOLLOW is how long a foot's links take to follow its heel, cycles of its clip a link (a tail's
+// spread, so a slow gait lags as a fast one does): its ball where its target was through the
+// FOLLOW before, its toes through the FOLLOW before that.
+FOLLOW :: 0.1
+// TRAIL_STEPS is how many times a link's FOLLOW is sampled, to average where its target was.
+TRAIL_STEPS :: 4
+
+// clip_trail writes the trail of every IK target of clip `data` at progress `x` into `out` (the
+// pose there): for each of a foot's links (IK_LINKS), how far behind the target it is, where the
+// target was through that link's FOLLOW, on average, so the links lag it and settle after it rather
+// than copy each jerk. Every clip alike; a clip's shapes repeat, so before its start is its last
+// cycle.
+@(private = "file")
+clip_trail :: proc(c: ^Clips, data: ^ClipData, x: f32, out: []f32) {
+  if c.iks == 0 || data.duration <= 0 do return
+  then := make([]f32, len(out), context.temp_allocator)
+  for link in 0 ..< IK_LINKS {
+    sum := make([][3]f32, c.iks, context.temp_allocator)
+    for j in 1 ..= TRAIL_STEPS {
+      copy(then, c.pose[:])
+      at := x - FOLLOW * (f32(link) + f32(j) / TRAIL_STEPS)
+      for &mo in data.motions do motion_apply(&mo, at, then)
+      for k in 0 ..< c.iks {
+        ch := ik_channel(nil, k)
+        sum[k] += {then[ch], then[ch + 1], then[ch + 2]}
+      }
+    }
+    for k in 0 ..< c.iks {
+      ch := ik_channel(nil, k)
+      for n in 0 ..< 3 do out[ch + IK_TRAIL + 3 * link + n] = sum[k][n] / TRAIL_STEPS - out[ch + n]
+    }
+  }
 }
 
 // motion_apply adds motion `mo` at clip progress `x` (0 to 1 over the clip) onto `out`: each move's
