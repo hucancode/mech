@@ -112,7 +112,7 @@ turning the next joint back by as much, so each segment heads as the shape says.
 
 A path in space is drawn, not keyed. An **arc** is the animation's, by name, shared by every
 clip: `"arcs": [{"name": "step", "points": [[x, y, z], ..]}]`, a smooth curve through its
-points (`mech.arc_at`, Catmull-Rom). A move puts a **position** on it by naming it in its `arcs`,
+points (mjolnir's `geometry.arc_sample`, Catmull-Rom). A move puts a **position** on it by naming it in its `arcs`,
 `"arcs": {"l_leg": "step"}` (an IK target or the root: a turn or a rotation is one value per axis,
 no path, so no arc moves it). The points are written as the position's own values are: offsets from
 where it is at rest (an IK target's tip, the model's origin), in the model's space. The move puts

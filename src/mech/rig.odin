@@ -49,37 +49,25 @@ RigDrive :: struct {
 }
 
 // RigIk: the chain's bones are chains[first:][:count], root first, down to the tip's own; IK reaches
-// with the first `turning`; when it `holds` (its end stands on the ground at rest: a foot), it meets
-// the ground by the contact rules (contact.odin): `end` and `pivot` are where it reaches with and
-// its first own joint, in its tip bone's frame, `reach` the way from its root to its end at rest,
-// `face` its tip bone's facing then and `own` its own joints' turns, `toes` the way from its pivot
-// to the joints below it (its frame; 0 for none), `span` how far ahead of its end the first of
-// those is (level, at rest), `roll` how far it rolls on an edge at most,
-// `stretch` how far from its root its pivot is when its heel starts to lift and the furthest it reaches,
-// rig.corners[corners_first:][:corners_count] its own pieces' corners and
-// rig.conforms[conform_first:][:conform_count] the joints below it lying on the ground; otherwise
+// with the first `turning`; how it bends, what it reaches with (`end`, in its tip bone's frame) and
+// its length are its `leg` (mjolnir's animation.LegRig, leg_measure); when it `holds` (its end
+// stands on the ground at rest: a foot), it meets the ground by the contact rules (contact.odin,
+// mjolnir's foot solve), as its `foot` (animation.FootRig) says: its corners in rig.corners, the
+// joints below it lying on the ground in rig.conforms; otherwise
 // (a hand, a gun) the tip's own joints keep their channels' turns. `tip` is the instance that reaches, with
 // its end (`point`, in its frame: ik_point); `channel` is the first of its values (IK_VALUES),
-// its target an offset from `rest`, where that end is at rest (in the frame node's space, lifted). `mid` is the chain's
-// middle joint (animation.ik_chain_middle; 0 for none), which bends toward a pole (ik_pole): `bend` is the way
-// its stops let it bend at rest, in the model's space, `line` the way from the joint above the
-// middle one to the tip at rest, and `length` the chain's, root to tip.
+// its target an offset from `rest`, where that end is at rest (in the frame node's space, lifted).
+// Its middle joint bends toward a pole (ik_pole, animation.leg_pole).
 // An aiming one (`aim`) turns its whole chain so the tip's `look` (a direction in its frame: ahead
 // at rest) points at the target, `rest` then being a point ahead of the tip.
 RigIk :: struct {
+  using leg:                  animation.LegRig,
   first, count, turning, tip: int,
   channel:                    int,
   aim, holds:                 bool,
-  mid:                        u32,
-  rest, bend, look, line:     [3]f32,
+  using foot:                 animation.FootRig,
+  rest, look:                 [3]f32,
   point:                      [3]f32,
-  length:                     f32,
-  end, pivot, reach, toes:    [3]f32,
-  face, own:                  quaternion128,
-  roll, span:                 f32,
-  stretch:                    [2]f32,
-  corners_first, corners_count: int,
-  conform_first, conform_count: int,
 }
 
 // Rig: per bone, its skeleton (parents first, as mjolnir's animation.Pose reads it: `parents`,
@@ -107,8 +95,8 @@ Rig :: struct {
   drives:    [dynamic]RigDrive,
   iks:       [dynamic]RigIk,
   chains:    [dynamic]u32,
-  corners:   [dynamic][3]f32, // contact corners (RigIk, RigConform), in their bones' frames
-  conforms:  [dynamic]RigConform,
+  corners:   [dynamic][3]f32, // contact corners (RigIk.foot, animation.FootConform), in their bones' frames
+  conforms:  [dynamic]animation.FootConform,
   lift:      f32,
 }
 
@@ -334,15 +322,7 @@ rig_solve :: proc(rig: ^Rig, values: []f32) {
     } else if ik.holds && ik.turning < ik.count {
       toes = contact_solve(rig, ik, target, {c[IK_TRAIL], c[IK_TRAIL + 1], c[IK_TRAIL + 2]}, {c[IK_TRAIL + 3], c[IK_TRAIL + 4], c[IK_TRAIL + 5]}, c[IK_SWIVEL], origin)
     } else {
-      animation.ik_solve(pose, chain, {
-        target      = target,
-        pole        = ik_pole(rig, ik, target, c[IK_SWIVEL], origin),
-        pole_weight = 1,
-        iterations  = 16,
-        end         = geometry.transform_point(place, ik.point),
-        ends        = u32(ik.count - ik.turning),
-        middle      = ik.mid,
-      })
+      animation.leg_reach(pose, chain, ik.leg, target, c[IK_SWIVEL], origin.rotation)
     }
     animation.pose_blend(pose, chain, positions, rotations, weight)
     slice.fill(moved, false)
@@ -489,10 +469,10 @@ ik_add :: proc(rig: ^Rig, k: IkPlace, n: int) {
   resize(&rig.chains, out.first)
 }
 
-// ik_rest finds, from the rest pose (the bones' pose, unlifted), where IK target ik's tip is, its chain's
-// middle joint and length, and the way the middle joint bends: the way it is bent at rest (a
-// strider's zigzag), or for a chain straight at rest, the side its stops let it (a knee forward, a
-// hock back). So a chain bends the way it is built with no pole given.
+// ik_rest finds, from the rest pose (the bones' pose, unlifted), where IK target ik's tip is, and
+// how its chain bends (animation.leg_measure: the way it is bent at rest, a strider's zigzag, or for
+// a chain straight at rest the side its stops let it, a knee forward, a hock back). So a chain bends
+// the way it is built with no pole given.
 @(private = "file")
 ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
   if !ik.aim do ik.point = ik_end(rig, ik^)
@@ -502,37 +482,11 @@ ik_rest :: proc(rig: ^Rig, ik: ^RigIk) {
     x := rig_frame(rig, ik.tip)
     ik.look = linalg.mul(linalg.quaternion_inverse(x.rotation), [3]f32{0, 0, 1})
     ik.rest += {0, 0, max(x.position.y, 1)}
-    ik.mid = 0
+    ik.leg = {}
     return
   }
   chain := rig.chains[ik.first:][:ik.count]
-  ik.mid = animation.ik_chain_middle(rig_skeleton(rig), chain, geometry.transform_point(rig.frames[ik.tip].place, ik.point), ik.turning)
-  ik.length = 0
-  for k in 1 ..< len(chain) do ik.length += linalg.length(rig.positions[chain[k]] - rig.positions[chain[k - 1]])
-  ik.length += linalg.length(ik.rest - rig.positions[chain[len(chain) - 1]])
-  if ik.mid == 0 do return
-  bone := int(chain[ik.mid])
-  turns, lo, hi := rig_turns(rig, bone)
-  at := rig.positions[bone]
-  above := rig.positions[chain[ik.mid - 1]]
-  line := linalg.normalize0(ik.rest - above)
-  ik.line = line
-  off := (at - above) - linalg.dot(at - above, line) * line
-  if linalg.length(off) > 1e-3 * ik.length {
-    ik.bend = linalg.normalize(off)
-    return
-  }
-  d := ik.rest - at
-  for axis in turns {
-    e: [3]f32
-    e[axis] = 1
-    a := linalg.mul(rig.rotations[bone], e)
-    if abs(linalg.dot(a, linalg.normalize0(d))) >= 0.7 do continue
-    // turning about a by +θ swings the tip along a × d, and the joint itself out the other way
-    side := f32(-1) if lo[axis] + hi[axis] < 0 else 1
-    ik.bend = -side * linalg.normalize(linalg.cross(a, d))
-    return
-  }
+  ik.leg = animation.leg_measure(rig_skeleton(rig), chain, geometry.transform_point(rig.frames[ik.tip].place, ik.point), u32(ik.count - ik.turning))
 }
 
 // ik_end is where IK ik reaches with, in its tip's frame: the end of the tip, as far along its last
@@ -575,13 +529,7 @@ ik_point :: proc(rig: ^Rig, ik: RigIk) -> [3]f32 {
 // above the middle one to the target: an elbow flared or rolled up, a knee swung out. The middle
 // joint goes round the circle its two segments allow, the tip staying on the target.
 ik_pole :: proc(rig: ^Rig, ik: RigIk, target: [3]f32, swivel: f32, origin: geometry.Transform) -> [3]f32 {
-  if ik.mid == 0 do return target
-  above := rig.positions[rig.chains[ik.first + int(ik.mid) - 1]]
-  bend := linalg.mul(origin.rotation, ik.bend)
-  from, to := linalg.mul(origin.rotation, ik.line), linalg.normalize0(target - above)
-  if linalg.dot(from, to) > -0.99 && to != 0 do bend = linalg.mul(linalg.quaternion_between_two_vector3(from, to), bend)
-  if swivel != 0 && to != 0 do bend = linalg.mul(linalg.quaternion_angle_axis(swivel, to), bend)
-  return (above + target) / 2 + bend * ik.length
+  return animation.leg_pole(ik.leg, rig_skeleton(rig), rig.chains[ik.first:][:ik.count], target, swivel, origin.rotation)
 }
 
 // joint_limit is a joint's stops on its bone: on each axis it turns (joint_turns), its range, turned

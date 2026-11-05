@@ -7,6 +7,7 @@ import "core:math"
 import "core:strings"
 import "../character"
 import "../mech"
+import "../mjolnir/geometry"
 import "../mjolnir/render"
 
 // Queries let the page ask the engine questions: what a clip gives at any time, where parts would
@@ -528,9 +529,10 @@ write_arc :: proc(b: ^strings.Builder, rig: ^mech.Rig, pose: []f32, c: mech.Chan
   }
   strings.write_string(b, `],"curve":[`)
   N :: 64
+  arc := geometry.Arc([3]f32){points = pts, sharp = sharp, knots = knots, closed = closed}
   for i in 0 ..< N {
     if i > 0 do strings.write_byte(b, ',')
-    point(b, (rest + mech.arc_at(pts, sharp, f32(i) / (N - 1), closed, knots) * flip) * s)
+    point(b, (rest + geometry.arc_sample(arc, f32(i) / (N - 1)) * flip) * s)
   }
   strings.write_string(b, "]}")
 }

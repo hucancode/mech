@@ -11,6 +11,7 @@ import "core:slice"
 import "core:strings"
 import "core:testing"
 import "../mjolnir/animation"
+import "../mjolnir/geometry"
 import "../mjolnir/world"
 
 @(private = "file")
@@ -705,7 +706,7 @@ test_ik_pole_sweep :: proc(t: ^testing.T) {
     values := make([]f32, len(pose))
     defer delete(values)
     for ik in rig.iks {
-      if ik.aim || ik.mid == 0 do continue
+      if ik.aim || ik.middle == 0 do continue
       c, _, _ := value_channel(m, ik.channel)
       leg := c.name
       if pose[ik.channel + IK_WEIGHT] < 1 do continue // only the IKs reaching at rest (the legs)
@@ -723,14 +724,14 @@ test_ik_pole_sweep :: proc(t: ^testing.T) {
           target := ik.rest + {values[ik.channel], values[ik.channel + 1], values[ik.channel + 2]}
           chain := rig.chains[ik.first:][:ik.count]
           if ik.holds && ik.turning < ik.count do target = rig.positions[chain[ik.turning]]
-          mid := rig.positions[chain[ik.mid]]
-          above := rig.positions[chain[ik.mid - 1]]
+          mid := rig.positions[chain[ik.middle]]
+          above := rig.positions[chain[ik.middle - 1]]
           along := linalg.normalize(target - above)
           off := (mid - above) - linalg.dot(mid - above, along) * along
           // a limb pulled straight (out of reach) lies on its line: within a few thousandths of
           // its length of it is on it
           testing.expectf(t, linalg.dot(off, ik.bend) > -3e-3 * ik.length, "%s %s at %v: bends the wrong way (%v)", name, leg, target, off)
-          if k > 0 && int(ik.mid) == ik.turning - 1 do testing.expectf(t, linalg.length(mid - last) < 0.15 * ik.length, "%s %s at %v: its middle joint jumps %v", name, leg, target, linalg.length(mid - last))
+          if k > 0 && int(ik.middle) == ik.turning - 1 do testing.expectf(t, linalg.length(mid - last) < 0.15 * ik.length, "%s %s at %v: its middle joint jumps %v", name, leg, target, linalg.length(mid - last))
           last = mid
         }
       }
@@ -786,35 +787,11 @@ test_twins :: proc(t: ^testing.T) {
   testing.expect(t, targets[moves[1].first].index == value_of(m, "r_leg") && targets[moves[1].first].value == -0.1)
 }
 
-// An arc: a path of points a move puts three channels on, by its shape. It passes through point k
-// at k / (n - 1), runs smooth between, and on along its ends' tangents past them (a shape settling
-// past 1 overshoots along the path). A WITH twin follows it mirrored, and it round-trips the file.
+// An arc: a path of points a move puts three channels on, by its shape (geometry.arc_sample; the
+// curve itself is tested in mjolnir's geometry/arc_test.odin). A WITH twin follows it mirrored, and
+// it round-trips the file.
 @(test)
 test_arc :: proc(t: ^testing.T) {
-  pts := [][3]f32{{0, 0, 0}, {0, 1, 1}, {1, 2, 1}, {2, 2, 0}}
-  for p, k in pts do testing.expectf(t, linalg.length(arc_at(pts, nil, f32(k) / 3) - p) < 1e-5, "point %d at %d/3: %v", k, k, arc_at(pts, nil, f32(k) / 3))
-  testing.expectf(t, linalg.length(arc_at(pts, nil, 1.1) - ({2, 2, 0} + 0.3 * ({2, 2, 0} - {1, 2, 1}))) < 1e-4, "past its end, on along it: %v", arc_at(pts, nil, 1.1))
-  mid := arc_at(pts, nil, 0.5)
-  testing.expectf(t, linalg.length(mid - ({0, 1, 1} + {1, 2, 1}) / 2) > 0.01, "between points it curves, not a straight line: %v", mid)
-  // between two corners it runs straight, at a steady speed (a foot on the ground)
-  sharp := []bool{false, true, true, false}
-  for s in ([]f32{0.4, 0.5, 0.6}) {
-    want := linalg.lerp([3]f32{0, 1, 1}, [3]f32{1, 2, 1}, s * 3 - 1)
-    testing.expectf(t, linalg.length(arc_at(pts, sharp, s) - want) < 1e-5, "between corners at %v, straight and steady: %v, want %v", s, arc_at(pts, sharp, s), want)
-  }
-  // a closed arc runs on from its last point back to its first, point k at k / n, smooth through
-  // its seam unless it is a corner, and round again past its end
-  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
-  for p, k in loop do testing.expectf(t, linalg.length(arc_at(loop, nil, f32(k) / 4, true) - p) < 1e-5, "closed: point %d at %d/4", k, k)
-  testing.expectf(t, linalg.length(arc_at(loop, nil, 1, true) - loop[0]) < 1e-5, "closed: back at its first point at 1")
-  testing.expectf(t, linalg.length(arc_at(loop, nil, 1.25, true) - loop[1]) < 1e-5, "closed: round again past 1")
-  e: f32 = 1e-3
-  into, leave := (loop[0] - arc_at(loop, nil, 1 - e, true)) / e, (arc_at(loop, nil, e, true) - loop[0]) / e
-  testing.expectf(t, linalg.length(into - leave) < 0.05 * linalg.length(leave), "smooth through the seam: in %v, out %v", into, leave)
-  corner := []bool{true, false, false, false}
-  into, leave = (loop[0] - arc_at(loop, corner, 1 - e, true)) / e, (arc_at(loop, corner, e, true) - loop[0]) / e
-  testing.expectf(t, linalg.dot(linalg.normalize(into), linalg.normalize(leave)) < 0.1, "a corner at the seam turns hard: in %v, out %v", into, leave)
-
   text := read(t, "mech.json")
   defer delete(text)
   m, a, ok := character_parse(text)
@@ -839,7 +816,7 @@ test_arc :: proc(t: ^testing.T) {
   r := [3]int{value_of(m, "r_leg"), value_of(m, "r_leg", 1), value_of(m, "r_leg", 2)}
   for x in ([]f32{0, 0.25, 0.5, 0.75}) {
     clip_sample(&clips, 0, x, values)
-    want := arc_at([][3]f32{{0, 0, 0}, {0.5, 1, 1}, {1, 2, 0}}, nil, x)
+    want := geometry.arc_sample(geometry.Arc([3]f32){points = [][3]f32{{0, 0, 0}, {0.5, 1, 1}, {1, 2, 0}}}, x)
     got := [3]f32{values[l[0]], values[l[1]], values[l[2]]} - {clips.pose[l[0]], clips.pose[l[1]], clips.pose[l[2]]}
     testing.expectf(t, linalg.length(got - want) < 1e-5, "at %v the foot's target is on its arc: %v, want %v", x, got, want)
     twin := [3]f32{values[r[0]], values[r[1]], values[r[2]]} - {clips.pose[r[0]], clips.pose[r[1]], clips.pose[r[2]]}
@@ -965,8 +942,8 @@ test_ik_swivel :: proc(t: ^testing.T) {
     c := values[ik.channel:]
     target := ik.rest + {c[0], c[1], c[2]}
     chain := rig.chains[ik.first:][:ik.count]
-    mid = rig.positions[chain[ik.mid]]
-    above := rig.positions[chain[ik.mid - 1]]
+    mid = rig.positions[chain[ik.middle]]
+    above := rig.positions[chain[ik.middle - 1]]
     along = linalg.normalize(target - above)
     off = (mid - above) - linalg.dot(mid - above, along) * along
     return off, along, linalg.length(ik_point(rig, ik) - target), mid
@@ -982,7 +959,7 @@ test_ik_swivel :: proc(t: ^testing.T) {
   }
   for c in ([]Case{{"l_leg", {0, 0.1, 0.15}}, {"r_leg", {-0.05, 0.2, 0.25}}}) {
     ik, found := find(rig, m, c.name)
-    if !testing.expectf(t, found && ik.mid > 0, "%s bends", c.name) do continue
+    if !testing.expectf(t, found && ik.middle > 0, "%s bends", c.name) do continue
     copy(values, pose)
     for k in 0 ..< 3 do values[ik.channel + k] = c.target[k] * ik.length
     values[ik.channel + IK_WEIGHT] = 1
@@ -1146,29 +1123,11 @@ test_references :: proc(t: ^testing.T) {
   }
 }
 
-// An arc's points can say where along it each is (Arc.at): a shape's value reaches point k at its
-// knot, however unevenly they are placed, so adding a point between two leaves every other where it
-// was along the arc (and the moves on it as timed); without them, the points are spread evenly.
-// Knots that don't rise, or don't fit the points, are errors.
+// An arc's points can say where along it each is (Arc.at, geometry.Arc.knots; how a curve meets
+// them is tested in mjolnir's geometry/arc_test.odin). Knots that don't rise, or don't fit the
+// points, are errors.
 @(test)
 test_arc_knots :: proc(t: ^testing.T) {
-  near :: proc(a, b: [3]f32) -> bool {return linalg.length(a - b) < 1e-5}
-  pts := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}}
-  // evenly, with no knots: point 1 halfway
-  testing.expect(t, near(arc_at(pts, nil, 0.5), pts[1]), "evenly spread without knots")
-  // unevenly: point 1 at 0.2
-  knots := []f32{0, 0.2, 1}
-  for p, k in pts do testing.expectf(t, near(arc_at(pts, nil, knots[k], false, knots), p), "point %d at its knot %v: %v", k, knots[k], arc_at(pts, nil, knots[k], false, knots))
-  // a point added between 1 and 2, at 0.6: the others stay where they were along it
-  more := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1.2, 0.5, 0}, {1, 1, 0}}
-  more_knots := []f32{0, 0.2, 0.6, 1}
-  for k in ([]int{0, 1, 3}) do testing.expectf(t, near(arc_at(more, nil, more_knots[k], false, more_knots), more[k]), "point %d where it was", k)
-  testing.expect(t, near(arc_at(more, nil, 0.6, false, more_knots), more[2]), "the new point at its own knot")
-  // closed: the last segment back to the first, at its knot plus one
-  loop := [][3]f32{{0, 0, 0}, {1, 0, 0}, {1, 1, 0}, {0, 1, 0}}
-  loop_knots := []f32{0, 0.1, 0.5, 0.6}
-  for p, k in loop do testing.expectf(t, near(arc_at(loop, nil, loop_knots[k], true, loop_knots), p), "closed: point %d at its knot", k)
-  testing.expect(t, near(arc_at(loop, nil, 1, true, loop_knots), loop[0]), "closed: back to the first a pass on")
   // the rules
   BAD :: `{"arcs": [{"name": "down", "points": [[0, 0, 0], [1, 0, 0], [2, 0, 0]], "at": [0, 0.7, 0.5]},
     {"name": "short", "points": [[0, 0, 0], [1, 0, 0]], "at": [0]},

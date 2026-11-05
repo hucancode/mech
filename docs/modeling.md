@@ -322,7 +322,7 @@ measured from its pieces; clips only move its target, and nothing names a heel o
    Its ball and toes follow its heel on the ground, in every clip, as a tail's links follow
    each other: clip_sample writes, per foot, where its target was through the follow-through
    before (`FOLLOW`, a tenth of the clip's cycle) and the one before that, on average (a pose's
-   IK_TRAIL, keyed by nothing). The ball stands as high as the first, so as the heel rises the
+   IK_TRAIL, keyed by nothing; read by mjolnir's lead/follow-through `animation.lag_sample`). The ball stands as high as the first, so as the heel rises the
    toes stay flat on the ground (the foot rolling on its ball, as far as its toes can turn back)
    before they follow it up; the toes turn as the foot turned the follow-through before, so as the
    heel lands the foot lays down heel to ball while the toes still point up, settling after. Near

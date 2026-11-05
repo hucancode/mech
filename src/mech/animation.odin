@@ -6,6 +6,8 @@ import "core:log"
 import "core:math"
 import "core:mem"
 import "core:slice"
+import "../mjolnir/animation"
+import "../mjolnir/geometry"
 
 // An Animation is a character's clips (the "animation" half of a character file). A clip is a
 // list of motions: shapes over time added onto channels. clips_build compiles an Animation against
@@ -41,7 +43,7 @@ Value :: union {
 // Arc is a named path in space, the animation's (Animation.arcs), for any clip's moves to put a
 // position on (an IK target, the root; a turn is one value per axis, no path): points
 // `[[x, y, z], ..]`, written as a [3]f32 value would be (an IK target's are offsets from where its
-// tip is at rest), and a smooth curve through them (arc_at). An open arc runs from its first point
+// tip is at rest), and a smooth curve through them (geometry.arc_sample). An open arc runs from its first point
 // to its last; a `closed` one on from its last back to its first (a foot's loop), each point
 // written once.
 // In a motion, a move naming it (Move.arcs) puts a position on it where the motion's shape says:
@@ -51,7 +53,7 @@ Value :: union {
 // with one per point, each where it says, rising (0 to 1, a closed arc's last below its first plus
 // 1), so adding or taking out a point leaves the others where they were along it, and every move
 // on it as timed (arc_knots).
-// It runs smooth through its points (arc_at), but for its `corners`, sharp points: a segment
+// It runs smooth through its points (geometry.arc_sample), but for its `corners`, sharp points: a segment
 // between two corners is a straight line run at a steady speed (a foot on the ground, a piston's
 // stroke, a punch driven straight), and a corner turns the path hard.
 Arc :: struct {
@@ -410,6 +412,7 @@ move_resolve :: proc(cs: ^Channels, mv: Move, targets: ^[dynamic]Target, moves: 
 
 // targets_spread delays `targets` (one move's) link by link (Move.spread): their channels in the
 // model's order, the k-th of n `spread * k / (n - 1)` cycles late.
+// (mjolnir's animation.Lag with step spread / (n - 1), on the shape's time.)
 targets_spread :: proc(cs: ^Channels, targets: []Target, spread: f32) {
   heads := make([dynamic]int, context.temp_allocator)
   for t in targets {
@@ -502,30 +505,37 @@ clip_sample :: proc(c: ^Clips, clip: int, t: f32, out: []f32) {
 FOLLOW :: 0.1
 // TRAIL_STEPS is how many times a link's FOLLOW is sampled, to average where its target was.
 TRAIL_STEPS :: 4
+// TRAIL is when a foot's links read its target (mjolnir's animation.Lag): link k through the FOLLOW
+// before the k-th FOLLOW back, on average.
+TRAIL :: animation.Lag{step = FOLLOW, window = FOLLOW, samples = TRAIL_STEPS}
 
 // clip_trail writes the trail of every IK target of clip `data` at progress `x` into `out` (the
 // pose there): for each of a foot's links (IK_LINKS), how far behind the target it is, where the
-// target was through that link's FOLLOW, on average, so the links lag it and settle after it rather
-// than copy each jerk. Every clip alike; a clip's shapes repeat, so before its start is its last
-// cycle.
+// target was when the link reads it (TRAIL, animation.lag_sample), so the links lag it and settle
+// after it rather than copy each jerk. Every clip alike; a clip's shapes repeat, so before its
+// start is its last cycle.
 @(private = "file")
 clip_trail :: proc(c: ^Clips, data: ^ClipData, x: f32, out: []f32) {
   if c.iks == 0 || data.duration <= 0 do return
-  then := make([]f32, len(out), context.temp_allocator)
+  // the clip's IK targets at a time, as a signal to read behind
+  Targets :: struct {
+    c:    ^Clips,
+    data: ^ClipData,
+    pose: []f32,
+  }
+  sample :: proc(data: rawptr, x: f32, out: []f32) {
+    s := (^Targets)(data)
+    copy(s.pose, s.c.pose[:])
+    for &mo in s.data.motions do motion_apply(&mo, x, s.pose)
+    for k in 0 ..< s.c.iks do copy(out[3 * k:][:3], s.pose[ik_channel(nil, k):][:3])
+  }
+  targets := Targets{c, data, make([]f32, len(out), context.temp_allocator)}
+  read := make([]f32, 3 * c.iks, context.temp_allocator)
   for link in 0 ..< IK_LINKS {
-    sum := make([][3]f32, c.iks, context.temp_allocator)
-    for j in 1 ..= TRAIL_STEPS {
-      copy(then, c.pose[:])
-      at := x - FOLLOW * (f32(link) + f32(j) / TRAIL_STEPS)
-      for &mo in data.motions do motion_apply(&mo, at, then)
-      for k in 0 ..< c.iks {
-        ch := ik_channel(nil, k)
-        sum[k] += {then[ch], then[ch + 1], then[ch + 2]}
-      }
-    }
+    animation.lag_sample(TRAIL, link, x, {&targets, sample}, read)
     for k in 0 ..< c.iks {
       ch := ik_channel(nil, k)
-      for n in 0 ..< 3 do out[ch + IK_TRAIL + 3 * link + n] = sum[k][n] / TRAIL_STEPS - out[ch + n]
+      for n in 0 ..< 3 do out[ch + IK_TRAIL + 3 * link + n] = read[3 * k + n] - out[ch + n]
     }
   }
 }
@@ -537,55 +547,16 @@ motion_apply :: proc(mo: ^MotionData, x: f32, out: []f32) {
     f := motion_move(mo, k, x)
     for target in mo.targets[mv.first:][:mv.count] do out[target.index] += target.value * (f if target.delay == 0 else motion_move(mo, k, x, target.delay))
     for a in mo.arcs[mv.arcs_first:][:mv.arcs_count] {
-      p := arc_at(mo.points[a.first:][:a.count], mo.sharp[a.first:][:a.count], f, a.closed, mo.knots[a.first:][:a.count])
+      p := geometry.arc_sample(motion_arc(mo, a), f)
       for ch, n in a.channels do out[ch] += p[n] * a.flip[n]
     }
   }
 }
 
-// arc_at is the arc through `points` at `s`: point k at s = knots[k] (arc_knots; none, or not one
-// per point: evenly, k / segments; a `closed` arc's last segment runs back to the first point, at
-// its knot plus 1), a cubic between each two
-// (Hermite). Each point's tangent is Catmull-Rom's, half the way from the point before it to the
-// one after, but where there is no point on one side (an open arc's ends) or it is a corner
-// (`sharp`, one per point; nil for none), each segment's own chord: so a segment between two
-// corners is straight, run at a steady speed. Past either end, an open arc runs on along its end's
-// tangent (a shape settling past 1 overshoots along the path, not off it); a closed one goes round
-// again.
-arc_at :: proc(points: [][3]f32, sharp: []bool, s: f32, closed := false, knots: []f32 = nil) -> [3]f32 {
-  n := len(points)
-  if n == 0 do return 0
-  if n == 1 do return points[0]
-  closed := closed && n > 2
-  segments := n if closed else n - 1
-  // the knot of point i (a closed arc's first again, a pass on, at i = n)
-  knot :: proc(knots: []f32, n, segments, i: int) -> f32 {
-    if len(knots) != n do return f32(i) / f32(segments)
-    return knots[i] if i < n else knots[0] + 1
-  }
-  first := knot(knots, n, segments, 0)
-  u := s
-  if closed do u = first + (s - first) - math.floor(s - first)
-  // the segment u is in: the last whose start is at or before it (the first before the arc)
-  k := 0
-  for i in 1 ..< segments do if knot(knots, n, segments, i) <= u do k = i
-  u0, u1 := knot(knots, n, segments, k), knot(knots, n, segments, k + 1)
-  t := (u - u0) / (u1 - u0) if u1 - u0 > 1e-6 else (0 if u < u1 else 1)
-  at :: proc(points: [][3]f32, i: int) -> [3]f32 {return points[(i + len(points)) % len(points)]}
-  // the tangent at point i: Catmull-Rom's, or the chord at an end or a corner
-  tangent :: proc(points: [][3]f32, sharp: []bool, i: int, closed: bool, chord: [3]f32) -> [3]f32 {
-    n := len(points)
-    if len(sharp) >= n && sharp[(i + n) % n] do return chord
-    if !closed && (i == 0 || i == n - 1) do return chord
-    return (at(points, i + 1) - at(points, i - 1)) / 2
-  }
-  p1, p2 := at(points, k), at(points, k + 1)
-  chord := p2 - p1
-  m1, m2 := tangent(points, sharp, k, closed, chord), tangent(points, sharp, k + 1, closed, chord)
-  if t < 0 do return p1 + m1 * t
-  if t > 1 do return p2 + m2 * (t - 1)
-  t2, t3 := t * t, t * t * t
-  return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (3 * t2 - 2 * t3) * p2 + (t3 - t2) * m2
+// motion_arc is arc `a` of motion `mo` as geometry.Arc: a view of the motion's points, corners and
+// knots.
+motion_arc :: proc(mo: ^MotionData, a: ArcData) -> geometry.Arc([3]f32) {
+  return {points = mo.points[a.first:][:a.count], sharp = mo.sharp[a.first:][:a.count], knots = mo.knots[a.first:][:a.count], closed = a.closed}
 }
 
 // motion_move is how much of its amounts move `k` of motion `mo` adds at clip progress `x`; of a

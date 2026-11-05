@@ -133,7 +133,7 @@ export class Curves {
 
   /**
    * the values of the shape that put the shown motion's arcs on their points (k / (n - 1) for an
-   * arc of n points, mech.arc_at), each labelled with its points: [v, label][]
+   * arc of n points, geometry.arc_sample), each labelled with its points: [v, label][]
    * @returns {[number, string][]}
    */
   arcLevels() {
