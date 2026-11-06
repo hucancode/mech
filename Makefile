@@ -1,7 +1,7 @@
 ODIN_ROOT := $(shell odin root)
 EDITOR := tools/character-editor
 # mjolnir's web flags (vendor/mjolnir/Makefile); linking needs wasm-ld (LLVM's lld)
-WASM_FLAGS := -target:js_wasm32 -define:RENDER_BACKEND=wgpu -target-features:"atomics,bulk-memory" \
+WASM_FLAGS := -target:js_wasm32 -define:RENDER_BACKEND=wgpu -define:RENDER_FPS=30 -target-features:"atomics,bulk-memory" \
 	-no-thread-local -extra-linker-flags:"--export-table"
 export PATH := $(HOME)/.local/llvm/bin:$(PATH)
 
