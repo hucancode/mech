@@ -35,7 +35,7 @@ value_of :: proc(m: ^Model, name: string, axis := 0) -> int {
 // real changes in a diff.
 @(test)
 test_files_round_trip :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "gecko"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -54,7 +54,7 @@ test_files_round_trip :: proc(t: ^testing.T) {
 @(test)
 test_shipped_clips :: proc(t: ^testing.T) {
   LOOPS :: []string{"idle", "combat_idle", "walk", "run", "slither"}
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "gecko"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -186,7 +186,7 @@ test_shape_stretch :: proc(t: ^testing.T) {
 // turned it by, within its stops, with every IK let go.
 @(test)
 test_rig_angles_are_drives :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "gecko"}) {
     text, _ := os.read_entire_file(fmt.tprint(#directory + "/../../assets/characters/", name, ".json", sep = ""), context.allocator)
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -1228,7 +1228,7 @@ test_motion_spread :: proc(t: ^testing.T) {
 // fighting the machine) are listed in the log, so their count stays visible.
 @(test)
 test_assets_check :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle"}) {
+  for name in ([]string{"mech", "dragon", "strider", "spider", "tiger", "eagle", "gecko"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)
@@ -1270,7 +1270,7 @@ contact_lows :: proc(rig: ^Rig, ik: RigIk) -> (own, toes: f32) {
 // lands on its heel, toes up, and one pushed back past its reach stands on its toes, heel up.
 @(test)
 test_ground_contact :: proc(t: ^testing.T) {
-  for name in ([]string{"mech", "strider", "spider", "tiger", "eagle"}) {
+  for name in ([]string{"mech", "strider", "spider", "tiger", "eagle", "gecko"}) {
     text := read(t, fmt.tprint(name, ".json", sep = ""))
     defer delete(text)
     m, a, ok := character_parse(text)

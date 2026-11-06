@@ -353,6 +353,9 @@ every frame of every clip against the reference in `bin/golden`.
 - `assets/characters/tiger.json`: `idle`, `combat_idle` (a low stalk), `walk` (a lateral sequence: a hind
   foot, then the fore foot on its side a quarter cycle later, the waist swaying smoothly), `run` (a trot, diagonal pairs landing together),
   `attack` (crouch and coil, then a pounce: the forelegs hand from IK to FK, the jaw snaps shut on `SETTLE`).
+- `assets/characters/gecko.json`: `idle` (head scanning in settling steps, tail swaying), `combat_idle` (head
+  raised, jaw part open), `walk` and `run` (a diagonal trot: the fore foot and the opposite hind foot land together,
+  on the closed arcs `step` and `stride`), `attack` (coil, then a lunge with the feet carried forward, the jaw snapping shut on `SETTLE`).
 - `assets/characters/eagle.json`: `idle` (perched, head scanning), `combat_idle` (wings half open),
   `walk` (a glide: one beat, then wings held, legs tucked), `run` (a fast flap, `SETTLE` beats with a spread down
   the wing's joints), `attack` (a dive, talons thrown forward, beak snap), `cast` (wings thrown wide and held).

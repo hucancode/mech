@@ -53,6 +53,7 @@ ASSETS := [?]struct {
   {"spider", "assets/characters/spider.json"},
   {"tiger", "assets/characters/tiger.json"},
   {"eagle", "assets/characters/eagle.json"},
+  {"gecko", "assets/characters/gecko.json"},
 }
 
 App :: struct {

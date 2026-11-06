@@ -510,6 +510,11 @@ One file is one character: `assets/characters/<name>.json`, holding its model an
   perch by IK and are swept back (weight 0, a `tuck` pose) in flight. The head is a block with a straight
   beak ending in a downturned hook, the lower beak on a `jaw` pin.
 
+- `assets/characters/gecko.json`: a sprawling lizard on a rigid box torso, four IK feet (`fore_leg`, `hind_leg`) from
+  mirrored `fore` and `hind` sockets, each leg the spider's pin stack (`swing`, `lift` twisted across it, `knee`,
+  `ankle`) with a round toe-pad foot. The head's neck is a BALL and aims by IK, with a pinned `jaw`; the tail is
+  the tiger's `lift` and `wag` pair, two more `wag` pins and a `curl` tip.
+
 ## Not supported yet
 
 - **Seeded variation.** The old code-built mech took a seed that varied its proportions and
